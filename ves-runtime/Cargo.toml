@@ -1,0 +1,11 @@
+[package]
+name = "ves-runtime"
+version = "0.1.0"
+authors = ["optimalstrategy <17456182+OptimalStrategy@users.noreply.github.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ves_cc = { package = "bacon_rajan_cc", git = "https://github.com/ves-lang/bacon-rajan-cc" }
+
