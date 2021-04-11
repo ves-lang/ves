@@ -47,7 +47,7 @@ impl PtrGuard {
     #[inline]
     pub fn get(self) -> Cc<HeapObject> {
         // Safety: In order to avoid a redundant clone, we skip the drop of the guard and directly instantiate the Cc.
-        // The result of from_raw() is immediately moved, while ManuallyDrop ensure that we don't decrease the refcount twice,
+        // The result of from_raw() is immediately moved, while ManuallyDrop ensures that we don't decrease the refcount twice,
         // thus making the operation safe.
         let this = std::mem::ManuallyDrop::new(self);
         unsafe { Cc::from_raw(this.0) }
@@ -69,12 +69,12 @@ impl Clone for PtrGuard {
 
 impl Drop for PtrGuard {
     fn drop(&mut self) {
-        // Safety: the other code guarantees that that ptr is never copied without upholding the invariants.
+        // Safety: the other code guarantees that that the pointer is never copied without upholding the invariants.
         std::mem::drop(unsafe { Cc::from_raw(self.0) });
     }
 }
 
-/// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference counted pointers.
+/// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
 #[derive(Debug, PartialEq)]
 pub enum Value {
@@ -122,7 +122,7 @@ impl Value {
 
 impl From<Cc<HeapObject>> for Value {
     fn from(cc: Cc<HeapObject>) -> Self {
-        // Safety: Value makes sure to call Cc::drop when it's dropped itself
+        // Safety: We immediately pass the leaked pointer to PtrGuard, which makes sure to properly deallocate it if needed.
         Self::Ptr(PtrGuard(unsafe { cc.leak() }))
     }
 }
@@ -133,7 +133,7 @@ impl Clone for Value {
             Value::Ptr(guard.clone())
         } else {
             unsafe {
-                // Safety: Num, Bool, and Nil are `Copy` while self is valid for reads, so this operation is safe.
+                // Safety: Num, Bool, and Nil are `Copy` while `self` is valid for reads, so this operation is safe.
                 std::ptr::read(self as *const _)
             }
         }
