@@ -8,4 +8,5 @@ edition = "2018"
 
 [dependencies]
 ves_cc = { package = "bacon_rajan_cc", git = "https://github.com/ves-lang/bacon-rajan-cc" }
+static_assertions = "1.1.0"
 
