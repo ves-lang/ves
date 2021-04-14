@@ -130,6 +130,7 @@ impl NanBox {
         }
     }
 
+    #[inline]
     fn box_ptr(ptr: VesPtr) -> Self {
         let raw = ptr.as_ptr() as u64;
         let masked = raw & PTR_MASK;
@@ -141,21 +142,22 @@ impl NanBox {
         Self(NONE_TAG)
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_num(&self) -> bool {
         (self.0 & QNAN) != QNAN
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_none(&self) -> bool {
         self.0 == NONE_TAG
     }
 
+    #[inline]
     pub fn is_bool(&self) -> bool {
         (self.0 & QNAN_TAG_MASK) == BOOL_TAG
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn is_ptr(&self) -> bool {
         (self.0 & QNAN_TAG_MASK) == PTR_TAG
     }
@@ -185,7 +187,7 @@ impl NanBox {
     }
 
     #[inline]
-    fn unbox(self) -> Value {
+    pub fn unbox(self) -> Value {
         if self.is_num() {
             Value::Num(unsafe { self.as_num_unchecked() })
         } else if self.is_none() {
