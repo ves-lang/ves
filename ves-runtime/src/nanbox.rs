@@ -210,11 +210,8 @@ impl NanBox {
 
 impl Clone for NanBox {
     fn clone(&self) -> Self {
-        self.try_access_pointer(|cc| {
-            let res = Self::box_ptr(unsafe { VesRef::clone(&cc).leak() });
-            res
-        })
-        .unwrap_or_else(|| Self(self.0))
+        self.try_access_pointer(|cc| Self::box_ptr(unsafe { VesRef::clone(&cc).leak() }))
+            .unwrap_or_else(|| Self(self.0))
     }
 }
 
