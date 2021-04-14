@@ -3,6 +3,10 @@ use std::ptr::NonNull;
 
 use ves_cc::{Cc, CcBox, Trace};
 
+pub type VesRef = Cc<HeapObject>;
+pub type VesPtr = NonNull<CcBox<HeapObject>>;
+pub type VesRawPtr = *mut CcBox<HeapObject>;
+
 /// QQQ: Should this be called HeapObject?
 #[derive(Debug, Clone)]
 pub enum HeapObject {
@@ -23,15 +27,15 @@ impl Trace for HeapObject {
 
 /// A guard that protects raw Cc pointers from being accidentally copied.
 #[repr(transparent)]
-#[derive(Debug, PartialEq, Hash)]
+#[derive(PartialEq, Hash)]
 // NOTE: the implementation must never copy the pointer without precautions.
-pub struct PtrGuard(NonNull<CcBox<HeapObject>>);
+pub struct PtrGuard(VesPtr);
 
 impl PtrGuard {
     #[inline]
     pub fn with<T, F>(&self, f: F) -> T
     where
-        F: Fn(&Cc<HeapObject>) -> T,
+        F: Fn(&VesRef) -> T,
     {
         unsafe {
             // Safety: we uphold the invariants by immediately leaking the reconstructed Cc; at the same time,
@@ -45,7 +49,7 @@ impl PtrGuard {
 
     /// Consumes the guard and returns the inner pointer.
     #[inline]
-    pub fn get(self) -> Cc<HeapObject> {
+    pub fn get(self) -> VesRef {
         // Safety: In order to avoid a redundant clone, we skip the drop of the guard and directly instantiate the Cc.
         // The result of from_raw() is immediately moved, while ManuallyDrop ensures that we don't decrease the refcount twice,
         // thus making the operation safe.
@@ -57,6 +61,20 @@ impl PtrGuard {
     #[inline]
     pub fn ref_count(&self) -> usize {
         self.with(|cc| cc.strong_count())
+    }
+
+    /// Returns the inner pointer without any safety checks.
+    /// The caller must make sure that the pointer is reconstructed into a Cc to avoid memory leaks.
+    #[inline]
+    pub unsafe fn get_unchecked(self) -> VesPtr {
+        let this = std::mem::ManuallyDrop::new(self);
+        this.0
+    }
+
+    /// Creates a new [`PtrGuard`] using the given [`VesPtr`]. The caller must increment the pointer's refcount
+    /// before passing it to this function.
+    pub unsafe fn new_unchecked(ptr: VesPtr) -> Self {
+        Self(ptr)
     }
 }
 
@@ -74,6 +92,21 @@ impl Drop for PtrGuard {
     }
 }
 
+impl std::fmt::Debug for PtrGuard {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if f.alternate() {
+            let ptr = self.0;
+            write!(
+                f,
+                "{}",
+                self.with(|cc| format!("PtrGuard(ptr = {:#p}, obj = {:?})", ptr, cc))
+            )
+        } else {
+            write!(f, "PtrGuard({:#p})", self.0)
+        }
+    }
+}
+
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
 #[derive(Debug, PartialEq)]
@@ -82,8 +115,8 @@ pub enum Value {
     Num(f64),
     /// A boolean value.
     Bool(bool),
-    /// A nil value.
-    Nil,
+    /// A null/none value.
+    None,
     /// A reference-counted pointer to a heap-allocated Ves object.
     Ptr(PtrGuard),
 }
@@ -101,7 +134,7 @@ impl Value {
 
     /// Returns the inner pointer as a freshly allocated Cc instance.
     #[inline]
-    pub fn as_ptr(&self) -> Option<Cc<HeapObject>> {
+    pub fn as_ptr(&self) -> Option<VesRef> {
         if let Value::Ptr(ptr) = self {
             Some(ptr.clone().get())
         } else {
@@ -120,8 +153,8 @@ impl Value {
     }
 }
 
-impl From<Cc<HeapObject>> for Value {
-    fn from(cc: Cc<HeapObject>) -> Self {
+impl From<VesRef> for Value {
+    fn from(cc: VesRef) -> Self {
         // Safety: We immediately pass the leaked pointer to PtrGuard, which makes sure to properly deallocate it if needed.
         Self::Ptr(PtrGuard(unsafe { cc.leak() }))
     }
@@ -150,11 +183,11 @@ mod tests {
     fn test_primitive_clones() {
         let num = Value::Num(std::f64::consts::PI);
         let r#bool = Value::Bool(true);
-        let nil = Value::Nil;
+        let none = Value::None;
 
         assert_eq!(num.clone(), Value::Num(std::f64::consts::PI));
         assert_eq!(r#bool.clone(), Value::Bool(true));
-        assert_eq!(nil.clone(), Value::Nil);
+        assert_eq!(none.clone(), Value::None);
     }
 
     #[test]
