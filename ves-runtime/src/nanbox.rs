@@ -75,24 +75,24 @@
 //!                                                                      ~10 Variant Bits are 10 = err~
 //! ```
 //!
-//! ## 011, 100, 101 - ptr
+//! ## 101, 110, 111 - ptr
 //! Encodes a pointer: either a normal a pointer (011), a pointer behind an Ok (100), or a pointer behind an Err (101).
 //!
 //! ```text,ignore
-//!      Tag = 011      A regular pointer
-//!  ┌───────────────┐ ┌───────────────────────────────────────────────────┐
-//! ┌▼──────────────▼▼─▼───────────────────────────────────────────────────▼┐
-//! │01111111_11111111_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
-//! └───────────────────────────────────────────────────────────────────────┘
-//!      Tag = 100      A pointer wrapped in an ok
-//!  ┌───────────────┐ ┌───────────────────────────────────────────────────┐
-//! ┌▼──────────────▼▼─▼───────────────────────────────────────────────────▼┐
-//! │11111111_11111100_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
-//! └───────────────────────────────────────────────────────────────────────┘
-//!      Tag = 101      A pointer wrapped in an err
+//!      Tag = 101      A regular pointer
 //!  ┌───────────────┐ ┌───────────────────────────────────────────────────┐
 //! ┌▼──────────────▼▼─▼───────────────────────────────────────────────────▼┐
 //! │11111111_11111101_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
+//! └───────────────────────────────────────────────────────────────────────┘
+//!      Tag = 110      A pointer wrapped in an ok
+//!  ┌───────────────┐ ┌───────────────────────────────────────────────────┐
+//! ┌▼──────────────▼▼─▼───────────────────────────────────────────────────▼┐
+//! │11111111_11111110_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
+//! └───────────────────────────────────────────────────────────────────────┘
+//!      Tag = 111      A pointer wrapped in an err
+//!  ┌───────────────┐ ┌───────────────────────────────────────────────────┐
+//! ┌▼──────────────▼▼─▼───────────────────────────────────────────────────▼┐
+//! │11111111_11111111_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
 //! └───────────────────────────────────────────────────────────────────────┘
 //! ```
 
@@ -113,7 +113,16 @@ const PTR_MASK: u64 = (1 << TAG_SHIFT) - 1;
 pub const NUM_TAG: u64 = 0;
 pub const NONE_TAG: u64 = QNAN ^ (0b01 << TAG_SHIFT);
 pub const BOOL_TAG: u64 = QNAN ^ (0b10 << TAG_SHIFT);
-pub const PTR_TAG: u64 = QNAN ^ (0b11 << TAG_SHIFT);
+pub const PTR_TAG: u64 = HIGH_BIT | QNAN ^ (0b01 << TAG_SHIFT);
+pub const PTR_OK_TAG: u64 = HIGH_BIT | QNAN ^ (0b10 << TAG_SHIFT);
+pub const PTR_ERR_TAG: u64 = HIGH_BIT | QNAN ^ (0b11 << TAG_SHIFT);
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NanBoxVariant {
+    Value,
+    Ok,
+    Err,
+}
 
 #[derive(PartialEq)]
 pub struct NanBox(u64);
@@ -130,11 +139,34 @@ impl NanBox {
         }
     }
 
+    pub fn with_variant(ptr: Value, variant: NanBoxVariant) -> Self {
+        match ptr {
+            Value::Ptr(ptr) => {
+                let raw = unsafe { ptr.get_unchecked() }.as_ptr() as u64;
+                let masked = raw & PTR_MASK;
+                let tag = match variant {
+                    NanBoxVariant::Value => PTR_TAG,
+                    NanBoxVariant::Ok => PTR_OK_TAG,
+                    NanBoxVariant::Err => PTR_ERR_TAG,
+                };
+                NanBox(tag | masked)
+            }
+            // NOTE: We could consider eliminating this branch entirely with std::hint::unreachable() in release builds,
+            //       although actually hitting it would then be UB.
+            _ => panic!("Only pointers support variants"),
+        }
+    }
+
     #[inline]
     fn box_ptr(ptr: VesPtr) -> Self {
         let raw = ptr.as_ptr() as u64;
         let masked = raw & PTR_MASK;
         NanBox(PTR_TAG | masked)
+    }
+
+    #[inline]
+    fn masked(&self) -> u64 {
+        self.0 & QNAN_TAG_MASK
     }
 
     #[inline]
@@ -154,12 +186,33 @@ impl NanBox {
 
     #[inline]
     pub fn is_bool(&self) -> bool {
-        (self.0 & QNAN_TAG_MASK) == BOOL_TAG
+        self.masked() == BOOL_TAG
     }
 
     #[inline]
     pub fn is_ptr(&self) -> bool {
-        (self.0 & QNAN_TAG_MASK) == PTR_TAG
+        self.masked() >= PTR_TAG
+    }
+
+    #[inline]
+    pub fn is_normal_ptr(&self) -> bool {
+        self.masked() == PTR_TAG
+    }
+
+    #[inline]
+    pub fn is_ok(&self) -> bool {
+        self.masked() == PTR_OK_TAG
+    }
+
+    #[inline]
+    pub fn is_err(&self) -> bool {
+        self.masked() == PTR_ERR_TAG
+    }
+
+    #[inline]
+    pub fn is_result_variant(&self) -> bool {
+        let masked = self.masked();
+        masked == PTR_OK_TAG || masked == PTR_ERR_TAG
     }
 
     pub fn try_access_pointer<T, F>(&self, f: F) -> Option<T>
@@ -188,23 +241,46 @@ impl NanBox {
 
     #[inline]
     pub fn unbox(self) -> Value {
+        self.unbox_with_variant().0
+    }
+
+    #[inline]
+    pub fn unbox_with_variant(self) -> (Value, NanBoxVariant) {
         if self.is_num() {
-            Value::Num(unsafe { self.as_num_unchecked() })
+            (
+                Value::Num(unsafe { self.as_num_unchecked() }),
+                NanBoxVariant::Value,
+            )
         } else if self.is_none() {
-            Value::None
-        } else if self.is_ptr() {
-            let this = std::mem::ManuallyDrop::new(self);
-            let ptr = (this.0 & PTR_MASK) as VesRawPtr;
-            debug_assert!(!ptr.is_null());
-            // Safety: We make sure to avoid calling the drop impl for this nanbox, thus avoiding decrementing the refcount,
-            //         while transferring the ownership of the CC to the guard (which correctly handles the refcount semantics).
-            Value::Ptr(unsafe { PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)) })
+            (Value::None, NanBoxVariant::Value)
         } else if self.is_bool() {
-            Value::Bool(self.0 & 1 == 1)
+            debug_assert!(self.is_bool());
+            (Value::Bool(self.0 & 1 == 1), NanBoxVariant::Value)
         } else {
-            // TODO: this
-            unimplemented!("Ok/Err ptr wrapping is not implemented yet")
+            unsafe { self.unbox_pointer() }
         }
+    }
+
+    #[allow(unused_unsafe)]
+    pub unsafe fn unbox_pointer(self) -> (Value, NanBoxVariant) {
+        debug_assert!(self.is_ptr());
+
+        let masked = self.masked();
+        let this = std::mem::ManuallyDrop::new(self);
+        let ptr = (this.0 & PTR_MASK) as VesRawPtr;
+        debug_assert!(!ptr.is_null());
+        // Safety: We make sure to avoid calling the drop impl for this nanbox, thus avoiding decrementing the refcount,
+        //         while transferring the ownership of the CC to the guard (which correctly handles the refcount semantics).
+        let ptr = Value::Ptr(unsafe { PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)) });
+        let variant = match masked {
+            PTR_TAG => NanBoxVariant::Value,
+            PTR_OK_TAG => NanBoxVariant::Ok,
+            _ => {
+                debug_assert_eq!(masked, PTR_ERR_TAG);
+                NanBoxVariant::Err
+            }
+        };
+        (ptr, variant)
     }
 }
 
@@ -255,7 +331,17 @@ impl std::fmt::Debug for NanBox {
                     unimplemented!()
                 }
             )?;
-            writeln!(f, "    variant = {}", "N/A")?;
+            writeln!(
+                f,
+                "    variant = {}",
+                if self.is_ok() {
+                    "OK"
+                } else if self.is_err() {
+                    "ERR"
+                } else {
+                    "N/A"
+                }
+            )?;
             writeln!(
                 f,
                 "    value   = {}",
@@ -297,7 +383,15 @@ mod tests {
         );
         assert_eq!(
             PTR_TAG,
-            0b01111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000
+            0b11111111_11111101_00000000_00000000_00000000_00000000_00000000_00000000
+        );
+        assert_eq!(
+            PTR_OK_TAG,
+            0b11111111_11111110_00000000_00000000_00000000_00000000_00000000_00000000
+        );
+        assert_eq!(
+            PTR_ERR_TAG,
+            0b11111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000
         );
     }
 
@@ -345,6 +439,8 @@ mod tests {
         assert!(!val.is_none());
         assert!(!val.is_bool());
         assert!(val.is_ptr());
+        assert!(!val.is_ok());
+        assert!(!val.is_err());
 
         val.try_access_pointer(|cc| {
             assert_eq!(cc.strong_count(), 1);
@@ -359,5 +455,18 @@ mod tests {
 
         std::mem::drop(val);
         clone.try_access_pointer(|cc| assert_eq!(cc.strong_count(), 1));
+
+        let unboxed = clone.unbox();
+        let ok = NanBox::with_variant(unboxed, NanBoxVariant::Ok);
+        assert!(ok.is_ptr());
+        assert!(ok.is_ok());
+        assert!(!ok.is_err());
+        println!("{:#?}", ok);
+
+        let (unboxed, _) = ok.unbox_with_variant();
+        let err = NanBox::with_variant(unboxed, NanBoxVariant::Err);
+        assert!(err.is_ptr());
+        assert!(!err.is_ok());
+        assert!(err.is_err());
     }
 }
