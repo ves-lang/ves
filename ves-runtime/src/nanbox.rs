@@ -226,7 +226,7 @@ impl NanBox {
         debug_assert!(!ptr.is_null());
 
         // Safety: We make sure to construct and leak the pointer without incrementing or decrementing the ref count.
-        //         Additionally, no Ves reference can be null when, so the unchecked call is safe.
+        //         Additionally, no Ves reference can be null, so the unchecked call is safe.
         let cc = unsafe { VesRef::from_raw(NonNull::new_unchecked(ptr)) };
         let result = f(&cc);
         let _ = unsafe { VesRef::leak(cc) };
