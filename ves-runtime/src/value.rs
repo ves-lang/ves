@@ -64,15 +64,19 @@ impl PtrGuard {
     }
 
     /// Returns the inner pointer without any safety checks.
-    /// The caller must make sure that the pointer is reconstructed into a Cc to avoid memory leaks.
+    ///
+    /// # Safety
+    /// The caller must ensure that the pointer is reconstructed into a Cc to avoid memory leaks.
     #[inline]
     pub unsafe fn get_unchecked(self) -> VesPtr {
         let this = std::mem::ManuallyDrop::new(self);
         this.0
     }
 
-    /// Creates a new [`PtrGuard`] using the given [`VesPtr`]. The caller must increment the pointer's refcount
-    /// before passing it to this function.
+    /// Creates a new [`PtrGuard`] using the given [`VesPtr`].
+    ///
+    /// # Safety
+    /// The caller must increment the pointer's refcount before passing it to this function.
     pub unsafe fn new_unchecked(ptr: VesPtr) -> Self {
         Self(ptr)
     }

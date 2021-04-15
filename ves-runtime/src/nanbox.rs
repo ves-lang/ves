@@ -37,7 +37,7 @@
 //! 6. 101 - ptr (err)
 //!
 //! ## Not a QNaN - num
-//! A regular 63-bit floating point number. The tag bits must be 0.
+//! A regular 63-bit floating point number.
 //!
 //! ```text,ignore
 //!   Tag = Not a QNAN
@@ -131,7 +131,7 @@ impl NanBox {
     pub fn new(value: Value) -> NanBox {
         match value {
             // Safety: Floats are stored as themselves so the transmute is perfectly safe
-            Value::Num(n) => NanBox(unsafe { std::mem::transmute(n) }),
+            Value::Num(n) => NanBox(n.to_bits()),
             Value::Bool(b) => NanBox(b as u64 | BOOL_TAG),
             Value::None => Self::none(),
             // Safety: The nanbox's drop makes sure to decrement the refcount.
@@ -234,16 +234,27 @@ impl NanBox {
         Some(result)
     }
 
+    /// Unboxes the boxed value into a raw f64.
+    ///
+    /// # Safety
+    /// The caller must ensure that the boxed value is an f64. Failure to do so will result in a NaN
+    /// being returned.
     #[inline(always)]
     pub unsafe fn as_num_unchecked(&self) -> f64 {
-        std::mem::transmute(self.0)
+        f64::from_bits(self.0)
     }
 
+    /// Unboxes the nanbox into a Value, without cloning and re-recreating the wrapper valued.
+    /// This means that if the object is a pointer, its ref count will not be changed.
+    /// Also see [`Self::unbox_with_variant`].
     #[inline]
     pub fn unbox(self) -> Value {
         self.unbox_with_variant().0
     }
 
+    /// Unboxes the nanbox into a tuple `(Value, NanBoxVariant)`, without cloning or re-creating the wrapped value.
+    /// The variant is guaranteed to be `NanBoxVariant::Value` for all primitive types, but may additionally be
+    /// `Ok` or `Err` if the value is a pointer.
     #[inline]
     pub fn unbox_with_variant(self) -> (Value, NanBoxVariant) {
         if self.is_num() {
@@ -261,6 +272,12 @@ impl NanBox {
         }
     }
 
+    /// Unboxes the nanbox into a tuple (Value::Ptr, NanBoxVariant), without cloning or re-rcreating the wrapped value.
+    /// This function doesn't perform any safety or type checks in release mode, and therefore, is unsafe.
+    ///
+    /// # Safety
+    /// The caller must ensure that the nanbox contains a pointer. Failure to do so will result into executing
+    /// operations such on completely random memory.
     #[allow(unused_unsafe)]
     pub unsafe fn unbox_pointer(self) -> (Value, NanBoxVariant) {
         debug_assert!(self.is_ptr());
