@@ -14,7 +14,10 @@ All benchmarks currently listed were run on a 6-core i7-8700K (max clock 4.7GHz)
     |----------------------------------|--------|--------------|-----------|
     | Enum Opcodes: fib-iterative(200) | 10.381 | us 10.470 us | 10.594 us |
     | Byte opcodes: fib-iterative(200) | 11.083 | us 11.157 us | 11.248 us |
-
+    
+    # TODOs
+    1. Check if this holds for bigger opcode sizes (e.g. 4 bytes).
+    2. Is there a way to hack variable-length opcodes into the enum representation?
 
 2. Field lookups: linear search vs hash functions (benched: sip13, fnv, ahash). See the `hashes` benchmark.
     Linear search with direct manual string comparisons (i.e. `==`) is faster than all hashmaps if the number of elements < 10. With 10+ items, ahash beats
