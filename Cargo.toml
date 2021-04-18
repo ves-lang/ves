@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "ves-runtime",
+    "experiments"
 ]
 

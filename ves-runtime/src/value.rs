@@ -1,5 +1,5 @@
 //! Contains the implementation of the Ves [`Value`] type.
-use std::ptr::NonNull;
+use std::{borrow::Cow, ptr::NonNull};
 
 use ves_cc::{Cc, CcBox, Trace};
 
@@ -12,8 +12,9 @@ pub type VesRawPtr = *mut CcBox<HeapObject>;
 pub enum HeapObject {
     /// XXX: Will be replaced with a native string type later on
     Str(String),
+    /// A temporary stub for testing purposes.
+    Obj(std::collections::HashMap<Cow<'static, str>, Value>),
 }
-
 impl Trace for HeapObject {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
         match self {
@@ -21,6 +22,20 @@ impl Trace for HeapObject {
                 // This does nothing, but we're keeping it to force us to fix the trace call when the str type get replaced
                 s.trace(tracer)
             }
+            HeapObject::Obj(o) => {
+                o.values().for_each(|v| v.trace(tracer));
+            }
+        }
+    }
+}
+
+impl Trace for Value {
+    fn trace(&self, tracer: &mut ves_cc::Tracer) {
+        match self {
+            Value::Ptr(p) => {
+                p.with(|cc| cc.trace(tracer));
+            }
+            _ => (),
         }
     }
 }
@@ -33,9 +48,9 @@ pub struct PtrGuard(VesPtr);
 
 impl PtrGuard {
     #[inline]
-    pub fn with<T, F>(&self, f: F) -> T
+    pub fn with<T, F>(&self, mut f: F) -> T
     where
-        F: Fn(&VesRef) -> T,
+        F: FnMut(&VesRef) -> T,
     {
         unsafe {
             // Safety: we uphold the invariants by immediately leaking the reconstructed Cc; at the same time,
@@ -164,6 +179,18 @@ impl From<VesRef> for Value {
     }
 }
 
+impl From<f64> for Value {
+    fn from(f: f64) -> Self {
+        Value::Num(f)
+    }
+}
+
+impl From<bool> for Value {
+    fn from(b: bool) -> Self {
+        Value::Bool(b)
+    }
+}
+
 impl Clone for Value {
     fn clone(&self) -> Self {
         if let Value::Ptr(guard) = self {
@@ -217,6 +244,7 @@ mod tests {
             HeapObject::Str(s) => {
                 assert_eq!(s, "a string");
             }
+            HeapObject::Obj(_) => unreachable!(),
         }
 
         assert_eq!(ctx.number_of_roots_buffered(), 1);

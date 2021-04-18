@@ -170,8 +170,18 @@ impl NanBox {
     }
 
     #[inline]
+    pub fn raw_bits(&self) -> u64 {
+        self.0
+    }
+
+    #[inline]
     pub fn none() -> Self {
         Self(NONE_TAG)
+    }
+
+    #[inline]
+    pub fn num(n: f64) -> Self {
+        Self(n.to_bits())
     }
 
     #[inline]
@@ -244,6 +254,17 @@ impl NanBox {
         f64::from_bits(self.0)
     }
 
+    /// Unboxes the boxed value into a raw f64, consuming the nanbox.
+    ///
+    /// # Safety
+    /// The caller must ensure that the boxed value is an f64. Failure to do so may result in a memory leak
+    /// and a NaN being returned.
+    #[inline(always)]
+    pub unsafe fn into_num_unchecked(self) -> f64 {
+        let this = std::mem::ManuallyDrop::new(self);
+        f64::from_bits(this.0)
+    }
+
     /// Unboxes the nanbox into a Value, without cloning and re-recreating the wrapper valued.
     /// This means that if the object is a pointer, its ref count will not be changed.
     /// Also see [`Self::unbox_with_variant`].
@@ -259,7 +280,7 @@ impl NanBox {
     pub fn unbox_with_variant(self) -> (Value, NanBoxVariant) {
         if self.is_num() {
             (
-                Value::Num(unsafe { self.as_num_unchecked() }),
+                Value::Num(unsafe { self.into_num_unchecked() }),
                 NanBoxVariant::Value,
             )
         } else if self.is_none() {
@@ -268,7 +289,8 @@ impl NanBox {
             debug_assert!(self.is_bool());
             (Value::Bool(self.0 & 1 == 1), NanBoxVariant::Value)
         } else {
-            unsafe { self.unbox_pointer() }
+            let res = unsafe { self.unbox_pointer() };
+            (Value::Ptr(res.0), res.1)
         }
     }
 
@@ -279,7 +301,7 @@ impl NanBox {
     /// The caller must ensure that the nanbox contains a pointer. Failure to do so will result into executing
     /// operations such on completely random memory.
     #[allow(unused_unsafe)]
-    pub unsafe fn unbox_pointer(self) -> (Value, NanBoxVariant) {
+    pub unsafe fn unbox_pointer(self) -> (PtrGuard, NanBoxVariant) {
         debug_assert!(self.is_ptr());
 
         let masked = self.masked();
@@ -288,7 +310,7 @@ impl NanBox {
         debug_assert!(!ptr.is_null());
         // Safety: We make sure to avoid calling the drop impl for this nanbox, thus avoiding decrementing the refcount,
         //         while transferring the ownership of the CC to the guard (which correctly handles the refcount semantics).
-        let ptr = Value::Ptr(unsafe { PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)) });
+        let ptr = unsafe { PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)) };
         let variant = match masked {
             PTR_TAG => NanBoxVariant::Value,
             PTR_OK_TAG => NanBoxVariant::Ok,
@@ -318,6 +340,13 @@ impl Drop for NanBox {
                 std::mem::drop(PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)));
             }
         }
+    }
+}
+
+impl From<NanBox> for Value {
+    #[inline]
+    fn from(b: NanBox) -> Self {
+        b.unbox()
     }
 }
 
