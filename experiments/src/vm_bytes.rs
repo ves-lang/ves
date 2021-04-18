@@ -55,12 +55,13 @@ impl VmBytes {
             self.ip += 1;
             let inst = self.instructions[self.ip - 1];
 
-            #[cfg(debug_assertions)]
-            {
-                let symbol = unsafe { std::mem::transmute::<u8, Inst>(inst) };
-                debug_assert!(inst <= Inst::Return as u8);
-                println!("ip={:03} {:#?} {:#?}", self.ip, symbol, self.stack);
-            }
+            // #[cfg(debug_assertions)]
+            // {
+            //     let symbol = unsafe { std::mem::transmute::<u8, Inst>(inst) };
+            //     debug_assert!(inst <= Inst::Return as u8);
+            //     println!("ip={:03} {:#?} {:#?}", self.ip, symbol, self.stack);
+            // }
+
             match inst {
                 0x00 /* Inst::Const(u8) */ => {
                     let c = self.read_u8();
