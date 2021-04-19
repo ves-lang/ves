@@ -516,5 +516,7 @@ mod tests {
         assert!(err.is_ptr());
         assert!(!err.is_ok());
         assert!(err.is_err());
+
+        ctx.collect_cycles();
     }
 }
