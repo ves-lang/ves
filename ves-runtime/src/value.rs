@@ -33,11 +33,8 @@ impl Trace for HeapObject {
 
 impl Trace for Value {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        match self {
-            Value::Ptr(p) => {
-                p.with(|cc| cc.trace(tracer));
-            }
-            _ => (),
+        if let Value::Ptr(p) = self {
+            p.with(|cc| cc.trace(tracer));
         }
     }
 }
