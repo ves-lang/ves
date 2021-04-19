@@ -20,10 +20,7 @@ pub enum HeapObject {
 impl Trace for HeapObject {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
         match self {
-            HeapObject::Str(s) => {
-                // This does nothing, but we're keeping it to force us to fix the trace call when the str type get replaced
-                s.trace(tracer)
-            }
+            HeapObject::Str(s) => s.trace(tracer),
             HeapObject::Obj(o) => {
                 o.values().for_each(|v| v.trace(tracer));
             }

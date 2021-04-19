@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 ves_cc = { package = "bacon_rajan_cc", git = "https://github.com/ves-lang/bacon-rajan-cc", features = ["auto_gc", "gc_placement_cc_alloc", "gc_placement_cc_cycle_marked"]}
+
 static_assertions = "1.1.0"
 hashbrown = { version  = "0.11.2", features = ["nightly"] }
 ahash = "0.7.2"

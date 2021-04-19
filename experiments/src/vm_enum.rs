@@ -147,7 +147,7 @@ impl VmEnum<'static> {
                 r.with(|right| match (&**left, &**right) {
                     (HeapObject::Str(l), HeapObject::Str(r)) => {
                         self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
-                            VesStr::on_heap(&self.heap, l.clone_inner() + &r[..]),
+                            VesStr::on_heap(&self.heap, l.clone_inner().into_owned() + &r[..]),
                         )))))
                     }
                     _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),

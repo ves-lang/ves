@@ -37,8 +37,8 @@ impl VesStr {
     }
 
     #[inline]
-    pub fn clone_inner(&self) -> String {
-        self.s.clone().into_owned()
+    pub fn clone_inner(&self) -> Cow<'static, str> {
+        self.s.clone()
     }
 }
 
@@ -68,6 +68,12 @@ impl Trace for VesStr {
 
 #[derive(Debug, Clone)]
 pub struct VesStrView(Cc<VesStr>);
+
+impl Trace for VesStrView {
+    fn trace(&self, tracer: &mut ves_cc::Tracer) {
+        self.0.trace(tracer)
+    }
+}
 
 impl std::cmp::PartialEq for VesStrView {
     fn eq(&self, other: &Self) -> bool {

@@ -194,7 +194,7 @@ impl VmBytes {
                 r.with(|right| match (&**left, &**right) {
                     (HeapObject::Str(l), HeapObject::Str(r)) => {
                         self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
-                            VesStr::on_heap(&self.heap, l.clone_inner() + &r[..]),
+                            VesStr::on_heap(&self.heap, l.clone_inner().into_owned() + &r[..]),
                         )))))
                     }
                     _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
@@ -273,7 +273,7 @@ impl VmBytes {
         let id = self.read_u8() as usize;
         let name = self.constants[id].clone().unbox().as_ptr().unwrap();
         let name = match *name {
-            HeapObject::Str(ref s) => std::borrow::Cow::Owned(s.clone_inner()),
+            HeapObject::Str(ref s) => s.clone_inner(),
             HeapObject::Obj(_) => unreachable!(),
         };
         let mut obj = unsafe { obj.unbox_pointer() }.0.get();
@@ -296,7 +296,7 @@ impl VmBytes {
         let id = self.read_u8() as usize;
         let name = self.constants[id].clone().unbox().as_ptr().unwrap();
         let name = match *name {
-            HeapObject::Str(ref s) => std::borrow::Cow::Borrowed(&s[..]),
+            HeapObject::Str(ref s) => s.clone_inner(),
             HeapObject::Obj(_) => unreachable!(),
         };
         let obj = unsafe { obj.unbox_pointer() }.0.get();
@@ -374,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vm_bytes_opcodes() {
+    fn test_vm_byte_opcodes_fib() {
         let ctx = CcContext::new();
         let mut vm = VmBytes::new(
             ctx.clone(),
@@ -449,5 +449,7 @@ mod tests {
             }
             _ => unreachable!(),
         }
+
+        ctx.collect_cycles();
     }
 }
