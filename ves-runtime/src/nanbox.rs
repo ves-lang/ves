@@ -478,7 +478,9 @@ mod tests {
         }
 
         let ctx = CcContext::new();
-        let ptr = ctx.cc(super::super::value::HeapObject::Str("a string".into()));
+        let ptr = ctx.cc(super::super::value::HeapObject::Str(
+            super::super::ves_str::VesStr::on_heap(&ctx, "a string"),
+        ));
         let val = Value::from(ptr);
         let val = NanBox::new(val);
         assert!(!val.is_num());

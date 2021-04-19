@@ -3,6 +3,8 @@ use std::{borrow::Cow, ptr::NonNull};
 
 use ves_cc::{Cc, CcBox, Trace};
 
+use crate::ves_str::VesStr;
+
 pub type VesRef = Cc<HeapObject>;
 pub type VesPtr = NonNull<CcBox<HeapObject>>;
 pub type VesRawPtr = *mut CcBox<HeapObject>;
@@ -10,11 +12,11 @@ pub type VesRawPtr = *mut CcBox<HeapObject>;
 /// QQQ: Should this be called HeapObject?
 #[derive(Debug, Clone)]
 pub enum HeapObject {
-    /// XXX: Will be replaced with a native string type later on
-    Str(String),
+    Str(Cc<VesStr>),
     /// A temporary stub for testing purposes.
     Obj(std::collections::HashMap<Cow<'static, str>, Value>),
 }
+
 impl Trace for HeapObject {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
         match self {
@@ -225,7 +227,7 @@ mod tests {
     fn test_rc_pointer_clones() {
         let ctx = CcContext::new();
 
-        let ptr = ctx.cc(HeapObject::Str("a string".into()));
+        let ptr = ctx.cc(HeapObject::Str(ctx.cc("a string".into())));
         assert_eq!(ptr.strong_count(), 1);
         assert_eq!(ptr.weak_count(), 0);
 
@@ -242,7 +244,7 @@ mod tests {
 
         match &*cloned.as_ptr().map(|cc| cc).unwrap() {
             HeapObject::Str(s) => {
-                assert_eq!(s, "a string");
+                assert_eq!(&***s, "a string");
             }
             HeapObject::Obj(_) => unreachable!(),
         }
