@@ -2,7 +2,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use experiments::{vm_bytes, vm_enum};
 use ves_cc::CcContext;
-use ves_runtime::nanbox::NanBox;
+use ves_runtime::{nanbox::NanBox, ves_str::VesStr};
 
 fn get_enum_vm() -> vm_enum::VmEnum<'static> {
     use vm_enum::Inst;
@@ -57,9 +57,9 @@ fn get_byte_vm() -> vm_bytes::VmBytes {
             NanBox::num(0.0),
             NanBox::num(1.0),
             NanBox::num(200.0),
-            NanBox::new(ves_runtime::Value::from(
-                ctx.cc(ves_runtime::value::HeapObject::Str("fib".to_string())),
-            )),
+            NanBox::new(ves_runtime::Value::from(ctx.cc(
+                ves_runtime::value::HeapObject::Str(VesStr::on_heap(&ctx, "fib")),
+            ))),
         ],
         vec![
             Inst::Const as _,

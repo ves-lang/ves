@@ -26,8 +26,19 @@ impl VesStr {
         }
     }
 
+    #[inline]
     pub fn on_heap<S: Into<Cow<'static, str>>>(ctx: &CcContext, s: S) -> Cc<Self> {
         ctx.cc(Self::new(s.into()))
+    }
+
+    #[inline]
+    pub fn inner(&self) -> &Cow<'static, str> {
+        &self.s
+    }
+
+    #[inline]
+    pub fn clone_inner(&self) -> String {
+        self.s.clone().into_owned()
     }
 }
 

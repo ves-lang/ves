@@ -1,5 +1,5 @@
 use ves_cc::CcContext;
-use ves_runtime::{nanbox::NanBox, value::HeapObject, Value};
+use ves_runtime::{nanbox::NanBox, value::HeapObject, ves_str::VesStr, Value};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -192,9 +192,11 @@ impl VmBytes {
         match (left.unbox(), right.unbox()) {
             (Value::Ptr(l), Value::Ptr(r)) => l.with(|left| {
                 r.with(|right| match (&**left, &**right) {
-                    (HeapObject::Str(l), HeapObject::Str(r)) => self.push(NanBox::new(
-                        Value::from(self.heap.cc(HeapObject::Str(l.to_owned() + &r[..]))),
-                    )),
+                    (HeapObject::Str(l), HeapObject::Str(r)) => {
+                        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
+                            VesStr::on_heap(&self.heap, l.clone_inner() + &r[..]),
+                        )))))
+                    }
                     _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
                 })
             }),
@@ -216,7 +218,7 @@ impl VmBytes {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot subtract objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -234,7 +236,7 @@ impl VmBytes {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot multiply objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -256,7 +258,7 @@ impl VmBytes {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot divide objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -271,7 +273,7 @@ impl VmBytes {
         let id = self.read_u8() as usize;
         let name = self.constants[id].clone().unbox().as_ptr().unwrap();
         let name = match *name {
-            HeapObject::Str(ref s) => std::borrow::Cow::Owned(s.clone()),
+            HeapObject::Str(ref s) => std::borrow::Cow::Owned(s.clone_inner()),
             HeapObject::Obj(_) => unreachable!(),
         };
         let mut obj = unsafe { obj.unbox_pointer() }.0.get();
@@ -281,7 +283,6 @@ impl VmBytes {
             }
             HeapObject::Str(_) => {
                 self.error("Strings do not support field assignment".to_string());
-                return;
             }
         }
     }
@@ -306,7 +307,6 @@ impl VmBytes {
             },
             HeapObject::Str(_) => {
                 self.error("Strings do not support field access".to_string());
-                return;
             }
         }
     }
@@ -384,7 +384,7 @@ mod tests {
                 NanBox::num(1.0),
                 NanBox::num(100.0),
                 NanBox::new(ves_runtime::Value::from(
-                    ctx.cc(ves_runtime::value::HeapObject::Str("fib".to_string())),
+                    ctx.cc(HeapObject::Str(VesStr::on_heap(&ctx, "fib"))),
                 )),
             ],
             vec![

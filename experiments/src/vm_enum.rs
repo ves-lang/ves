@@ -1,5 +1,5 @@
 use ves_cc::CcContext;
-use ves_runtime::{nanbox::NanBox, value::HeapObject, Value};
+use ves_runtime::{nanbox::NanBox, value::HeapObject, ves_str::VesStr, Value};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Inst<'a> {
@@ -52,7 +52,7 @@ impl VmEnum<'static> {
     pub fn run(&mut self) -> Result<NanBox, String> {
         while self.ip < self.instructions.len() {
             self.ip += 1;
-            let inst = self.instructions[self.ip - 1].clone();
+            let inst = self.instructions[self.ip - 1];
             // println!("ip={:03} {:#?} {:#?}", self.ip - 1, inst, self.stack);
             match inst {
                 Inst::Const(c) => {
@@ -145,9 +145,11 @@ impl VmEnum<'static> {
         match (left.unbox(), right.unbox()) {
             (Value::Ptr(l), Value::Ptr(r)) => l.with(|left| {
                 r.with(|right| match (&**left, &**right) {
-                    (HeapObject::Str(l), HeapObject::Str(r)) => self.push(NanBox::new(
-                        Value::from(self.heap.cc(HeapObject::Str(l.to_owned() + &r[..]))),
-                    )),
+                    (HeapObject::Str(l), HeapObject::Str(r)) => {
+                        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
+                            VesStr::on_heap(&self.heap, l.clone_inner() + &r[..]),
+                        )))))
+                    }
                     _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
                 })
             }),
@@ -169,7 +171,7 @@ impl VmEnum<'static> {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot subtract objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -187,7 +189,7 @@ impl VmEnum<'static> {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot multiply objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -209,7 +211,7 @@ impl VmEnum<'static> {
         }
 
         self.error(format!(
-            "Cannot add objects `{:?}` and `{:?}`",
+            "Cannot divide objects `{:?}` and `{:?}`",
             left.unbox(),
             right.unbox()
         ))
@@ -228,7 +230,6 @@ impl VmEnum<'static> {
             }
             HeapObject::Str(_) => {
                 self.error("Strings do not support field assignment".to_string());
-                return;
             }
         }
     }
@@ -247,7 +248,6 @@ impl VmEnum<'static> {
             },
             HeapObject::Str(_) => {
                 self.error("Strings do not support field access".to_string());
-                return;
             }
         }
     }
