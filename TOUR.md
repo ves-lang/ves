@@ -23,10 +23,11 @@ false
 f"1 + 1 is {1 + 1}"
 
 // dictionary
-{ key0: value0, key1: value1 }
-{ [f"computed key"]: value }
-// duplicate keys are a compile-time error
-// { key: value, key: value }
+{ "key0": value0, "key1": value1 }
+// 
+{ expression(): value }
+// duplicate (constant) keys are a compile-time error
+// { "key": value, "key": value }
 
 // array
 [0, 1, 2, expr(), "asdf"]
@@ -87,10 +88,18 @@ optional?.access // returns `none` if anything in the chain is `none`
 
 ### Control flow
 ```rust
-// if/else if/else is an expression which implicitly evaluates to 'none'
+// if/else if/else is an expression
+// it evaluates to the result of the chosen branch block
 let v = if condition { ... }
 else if condition { ... }
 else { ... }
+// the last expression in an if expression block is 'none' if there is no other expression
+let v = if condition {
+    if condition2 {
+        expression()
+    }
+    none // this is implicit
+}
 
 // infinite loop
 loop { ... }
@@ -110,6 +119,7 @@ return;
 return expression();
 
 // a `do` block evaluates to the last expression in the block
+// the last expression is 'none' if there is no other expression
 let v = do { expression() };
 
 // a `try` expression simplifies error propagation
@@ -133,8 +143,13 @@ fn name(arg) {
 fn name(a, b, c) {
     /* ... */
 }
+// varargs
 fn name(a, b, ...args) {
     /* ... */
+}
+// default parameter - must not be followed by non-defaulted parameter
+fn name(a, b, c = none) {
+
 }
 
 // shorthand syntax
@@ -161,7 +176,8 @@ print closure.get(); // still 100
 
 ### Structs
 ```rust
-struct Type(field) {
+struct Type(field, defaulted = none) {
+    init { /* initializer */ }
     method() { print self.field }
     shorthand() => self.field
     static field = none
@@ -174,4 +190,8 @@ print v.shorthand() // 50
 print Type.field // none
 Type.field = 10
 Type.static_method() // 10
+
+// struct fields cannot be added or removed
+// v.nonexistent = "test"; // error
+print v.nonexistent; // none
 ```
