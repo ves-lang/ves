@@ -1,5 +1,5 @@
 use ves_cc::CcContext;
-use ves_runtime::{nanbox::NanBox, value::HeapObject, ves_str::VesStr, Value};
+use ves_runtime::{nanbox::NanBox, value::VesObject, ves_str::VesStr, Value};
 
 #[derive(Debug, Clone, Copy)]
 pub enum Inst<'a> {
@@ -106,9 +106,10 @@ impl VmEnum<'static> {
     }
 
     fn alloc(&mut self) {
-        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Obj(
-            std::collections::HashMap::with_capacity(3),
-        )))));
+        self.push(NanBox::new(Value::from(
+            self.heap
+                .cc(VesObject::Obj(std::collections::HashMap::with_capacity(3))),
+        )));
     }
 
     fn jz(&mut self, offset: i16) {
@@ -145,8 +146,8 @@ impl VmEnum<'static> {
         match (left.unbox(), right.unbox()) {
             (Value::Ptr(l), Value::Ptr(r)) => l.with(|left| {
                 r.with(|right| match (&**left, &**right) {
-                    (HeapObject::Str(l), HeapObject::Str(r)) => {
-                        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
+                    (VesObject::Str(l), VesObject::Str(r)) => {
+                        self.push(NanBox::new(Value::from(self.heap.cc(VesObject::Str(
                             VesStr::on_heap(&self.heap, l.clone_inner().into_owned() + &r[..]),
                         )))))
                     }
@@ -225,10 +226,10 @@ impl VmEnum<'static> {
         }
         let mut obj = unsafe { obj.unbox_pointer() }.0.get();
         match unsafe { obj.deref_mut() } {
-            HeapObject::Obj(obj) => {
+            VesObject::Obj(obj) => {
                 obj.insert(std::borrow::Cow::Borrowed(n), self.pop().unbox());
             }
-            HeapObject::Str(_) => {
+            VesObject::Str(_) => {
                 self.error("Strings do not support field assignment".to_string());
             }
         }
@@ -242,11 +243,11 @@ impl VmEnum<'static> {
         }
         let obj = unsafe { obj.unbox_pointer() }.0.get();
         match &*obj {
-            HeapObject::Obj(obj) => match obj.get(n) {
+            VesObject::Obj(obj) => match obj.get(n) {
                 Some(r#ref) => self.push(NanBox::new(r#ref.clone())),
                 None => self.error(format!("Object is missing the field `{}`.", n)),
             },
-            HeapObject::Str(_) => {
+            VesObject::Str(_) => {
                 self.error("Strings do not support field access".to_string());
             }
         }
@@ -340,10 +341,10 @@ mod tests {
 
         let value: Value = vm.run().unwrap().unbox();
         value.as_ptr_guard().unwrap().with(|cc| match &**cc {
-            HeapObject::Obj(obj) => {
+            VesObject::Obj(obj) => {
                 assert_eq!(obj.get("fib"), Some(&Value::Num(354224848179262000000.0)));
             }
-            HeapObject::Str(_) => unreachable!(),
+            VesObject::Str(_) => unreachable!(),
         });
     }
 }

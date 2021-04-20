@@ -2,10 +2,11 @@
 extern crate static_assertions as sa;
 extern crate ves_cc;
 
-pub mod nanbox;
-pub mod value;
-pub mod ves_str;
-pub mod ves_struct;
+pub mod objects;
+
+pub use self::objects::nanbox;
+pub use self::objects::value;
+pub use self::objects::ves_object;
 
 pub use value::Value;
 

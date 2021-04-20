@@ -1,5 +1,5 @@
 use ves_cc::CcContext;
-use ves_runtime::{nanbox::NanBox, value::HeapObject, ves_str::VesStr, Value};
+use ves_runtime::{nanbox::NanBox, value::VesObject, ves_str::VesStr, Value};
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy)]
@@ -148,9 +148,10 @@ impl VmBytes {
     }
 
     fn alloc(&mut self) {
-        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Obj(
-            std::collections::HashMap::with_capacity(3),
-        )))));
+        self.push(NanBox::new(Value::from(
+            self.heap
+                .cc(VesObject::Obj(std::collections::HashMap::with_capacity(3))),
+        )));
     }
 
     fn jz(&mut self) {
@@ -192,8 +193,8 @@ impl VmBytes {
         match (left.unbox(), right.unbox()) {
             (Value::Ptr(l), Value::Ptr(r)) => l.with(|left| {
                 r.with(|right| match (&**left, &**right) {
-                    (HeapObject::Str(l), HeapObject::Str(r)) => {
-                        self.push(NanBox::new(Value::from(self.heap.cc(HeapObject::Str(
+                    (VesObject::Str(l), VesObject::Str(r)) => {
+                        self.push(NanBox::new(Value::from(self.heap.cc(VesObject::Str(
                             VesStr::on_heap(&self.heap, l.clone_inner().into_owned() + &r[..]),
                         )))))
                     }
@@ -273,15 +274,15 @@ impl VmBytes {
         let id = self.read_u8() as usize;
         let name = self.constants[id].clone().unbox().as_ptr().unwrap();
         let name = match *name {
-            HeapObject::Str(ref s) => s.clone_inner(),
-            HeapObject::Obj(_) => unreachable!(),
+            VesObject::Str(ref s) => s.clone_inner(),
+            VesObject::Obj(_) => unreachable!(),
         };
         let mut obj = unsafe { obj.unbox_pointer() }.0.get();
         match unsafe { obj.deref_mut() } {
-            HeapObject::Obj(obj) => {
+            VesObject::Obj(obj) => {
                 obj.insert(name, self.pop().unbox());
             }
-            HeapObject::Str(_) => {
+            VesObject::Str(_) => {
                 self.error("Strings do not support field assignment".to_string());
             }
         }
@@ -296,16 +297,16 @@ impl VmBytes {
         let id = self.read_u8() as usize;
         let name = self.constants[id].clone().unbox().as_ptr().unwrap();
         let name = match *name {
-            HeapObject::Str(ref s) => s.clone_inner(),
-            HeapObject::Obj(_) => unreachable!(),
+            VesObject::Str(ref s) => s.clone_inner(),
+            VesObject::Obj(_) => unreachable!(),
         };
         let obj = unsafe { obj.unbox_pointer() }.0.get();
         match &*obj {
-            HeapObject::Obj(obj) => match obj.get(&*name) {
+            VesObject::Obj(obj) => match obj.get(&*name) {
                 Some(r#ref) => self.push(NanBox::new(r#ref.clone())),
                 None => self.error(format!("Object is missing the field `{}`.", name)),
             },
-            HeapObject::Str(_) => {
+            VesObject::Str(_) => {
                 self.error("Strings do not support field access".to_string());
             }
         }
@@ -384,7 +385,7 @@ mod tests {
                 NanBox::num(1.0),
                 NanBox::num(100.0),
                 NanBox::new(ves_runtime::Value::from(
-                    ctx.cc(HeapObject::Str(VesStr::on_heap(&ctx, "fib"))),
+                    ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "fib"))),
                 )),
             ],
             vec![
@@ -444,7 +445,7 @@ mod tests {
         let res = vm.run().unwrap().unbox();
         let obj = res.as_ptr().unwrap();
         match &*obj {
-            HeapObject::Obj(obj) => {
+            VesObject::Obj(obj) => {
                 assert_eq!(obj.get("fib"), Some(&Value::Num(354224848179262000000.0)));
             }
             _ => unreachable!(),

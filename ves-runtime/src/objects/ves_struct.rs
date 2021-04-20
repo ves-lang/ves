@@ -2,7 +2,7 @@ use ahash::RandomState;
 use hashbrown::HashMap;
 use ves_cc::{proxy_allocator::ProxyAllocator, Cc, Trace};
 
-use crate::{ves_str::VesStrView, Value};
+use super::{ves_str::VesStrView, Value};
 
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;

@@ -58,7 +58,7 @@ fn get_byte_vm() -> vm_bytes::VmBytes {
             NanBox::num(1.0),
             NanBox::num(200.0),
             NanBox::new(ves_runtime::Value::from(ctx.cc(
-                ves_runtime::value::HeapObject::Str(VesStr::on_heap(&ctx, "fib")),
+                ves_runtime::value::VesObject::Str(VesStr::on_heap(&ctx, "fib")),
             ))),
         ],
         vec![

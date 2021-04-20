@@ -98,9 +98,7 @@
 
 use std::ptr::NonNull;
 
-use crate::value::{PtrGuard, VesPtr, VesRawPtr, VesRef};
-
-use super::value::Value;
+use super::{ptr_guard::PtrGuard, value::Value, ves_object::*};
 
 // The size of a pointer on 64-bit systems.
 const TAG_SHIFT: u64 = 48;
@@ -478,9 +476,7 @@ mod tests {
         }
 
         let ctx = CcContext::new();
-        let ptr = ctx.cc(super::super::value::HeapObject::Str(
-            super::super::ves_str::VesStr::on_heap(&ctx, "a string"),
-        ));
+        let ptr = ctx.cc(VesObject::new_str(&ctx, "a string"));
         let val = Value::from(ptr);
         let val = NanBox::new(val);
         assert!(!val.is_num());
