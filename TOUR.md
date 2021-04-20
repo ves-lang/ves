@@ -1,5 +1,5 @@
 
-**Literals**
+### Literals
 ```rust
 // special value equivalent to 'nil' or 'null' in other languages
 none
@@ -36,7 +36,7 @@ ok "success"
 err "failure"
 ```
 
-**Variables**
+### Variables
 ```rust
 // not re-assignable
 let x = 10;
@@ -57,7 +57,7 @@ let x = 10;
 { let x = x; } // valid
 ```
 
-**Operators**
+### Operators
 ```rust
 - 1
 ! 1
@@ -85,7 +85,7 @@ optional?.access // returns `none` if anything in the chain is `none`
 ...spread
 ```
 
-**Control flow**
+### Control flow
 ```rust
 // if/else if/else is an expression which implicitly evaluates to 'none'
 let v = if condition { ... }
@@ -122,7 +122,7 @@ let v = do { expression() };
 let v = try fallible()
 ```
 
-**Functions**
+### Functions
 ```rust
 fn name() {
     /* ... */
@@ -159,7 +159,7 @@ closure.set(150);
 print closure.get(); // still 100
 ```
 
-**Structs**
+### Structs
 ```rust
 struct Type(field) {
     method() { print self.field }
