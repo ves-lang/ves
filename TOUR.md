@@ -172,6 +172,22 @@ let closure = make_closure(100);
 print closure.get(); // 100
 closure.set(150);
 print closure.get(); // still 100
+
+// you can wrap your value in an object to imitate capture by variable semantics:
+fn wrap(value) {
+    return { "value": value }
+}
+fn make_closure2(value) {
+    let wrapper = wrap(value)
+    return {
+        get: fn() => wrapper.value
+        set: fn(v) => wrapper.value = v
+    }
+}
+let closure = make_closure2(100);
+print closure.get(); // 100
+closure.set(150);
+print closure.get(); // 150
 ```
 
 ### Structs
