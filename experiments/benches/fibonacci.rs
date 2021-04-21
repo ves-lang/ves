@@ -2,12 +2,17 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use experiments::{vm_bytes, vm_enum};
 use ves_cc::CcContext;
-use ves_runtime::{nanbox::NanBox, ves_str::VesStr};
+use ves_runtime::{
+    nanbox::NanBox,
+    objects::ves_str::{StrCcExt, VesStr},
+    Value, VesObject,
+};
 
-fn get_enum_vm() -> vm_enum::VmEnum<'static> {
+fn get_enum_vm() -> vm_enum::VmEnum {
     use vm_enum::Inst;
+    let heap = CcContext::new();
     return vm_enum::VmEnum::new(
-        CcContext::new(),
+        heap.clone(),
         vec![
             NanBox::none(),
             NanBox::num(0.0),
@@ -40,7 +45,9 @@ fn get_enum_vm() -> vm_enum::VmEnum<'static> {
             Inst::Pop,
             Inst::GetLocal(1),
             Inst::GetLocal(0),
-            Inst::SetField("fib"),
+            Inst::SetField(Value::from(
+                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "fib").view())),
+            )),
             Inst::GetLocal(0),
             Inst::Return,
         ],
@@ -57,9 +64,9 @@ fn get_byte_vm() -> vm_bytes::VmBytes {
             NanBox::num(0.0),
             NanBox::num(1.0),
             NanBox::num(200.0),
-            NanBox::new(ves_runtime::Value::from(ctx.cc(
-                ves_runtime::value::VesObject::Str(VesStr::on_heap(&ctx, "fib")),
-            ))),
+            NanBox::new(ves_runtime::Value::from(
+                ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "fib").view())),
+            )),
         ],
         vec![
             Inst::Const as _,
@@ -119,28 +126,20 @@ fn get_byte_vm() -> vm_bytes::VmBytes {
 
 fn bench_fibonacci(c: &mut Criterion) {
     let mut group = c.benchmark_group("fibonacci");
-    group.bench_with_input(
-        "<enum opcodes: fib-iterative(200)>",
-        &get_enum_vm(),
-        move |b, vm| {
-            let mut vm = vm.clone();
-            b.iter(|| {
-                vm.reset();
-                black_box(vm.run().unwrap())
-            })
-        },
-    );
-    group.bench_with_input(
-        "<byte opcodes: fib-iterative(200)>",
-        &get_byte_vm(),
-        move |b, vm| {
-            let mut vm = vm.clone();
-            b.iter(|| {
-                vm.reset();
-                black_box(vm.run().unwrap())
-            })
-        },
-    );
+    group.bench_function("<enum opcodes: fib-iterative(200)>", move |b| {
+        let mut vm = get_enum_vm();
+        b.iter(|| {
+            vm.reset();
+            black_box(vm.run().unwrap())
+        })
+    });
+    group.bench_function("<byte opcodes: fib-iterative(200)>", move |b| {
+        let mut vm = get_byte_vm();
+        b.iter(|| {
+            vm.reset();
+            black_box(vm.run().unwrap())
+        })
+    });
 }
 
 criterion_group!(benches, bench_fibonacci);

@@ -37,8 +37,8 @@ impl Trace for VesObject {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
         match self {
             VesObject::Str(s) => s.trace(tracer),
-            VesObject::Instance(i) => i.trace(tracer),
-            VesObject::Struct(s) => s.trace(tracer),
+            VesObject::Instance(i) => Trace::trace(i, tracer),
+            VesObject::Struct(s) => Trace::trace(s, tracer),
         }
     }
 }

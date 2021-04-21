@@ -109,6 +109,6 @@ impl std::fmt::Debug for PtrGuard {
 
 impl Trace for PtrGuard {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        self.with(|cc| cc.trace(tracer))
+        self.with(|cc| Trace::trace(cc, tracer))
     }
 }

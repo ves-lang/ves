@@ -1,3 +1,9 @@
+use std::{
+    borrow::Cow,
+    hash::{BuildHasher, Hasher},
+};
+
+use ahash::RandomState;
 use ves_cc::{Cc, Trace};
 
 use super::VesStr;
@@ -5,9 +11,16 @@ use super::VesStr;
 #[derive(Debug, Clone)]
 pub struct VesStrView(pub(super) Cc<VesStr>);
 
+impl VesStrView {
+    #[inline]
+    pub fn str(&self) -> &Cow<'static, str> {
+        self.0.inner()
+    }
+}
+
 impl Trace for VesStrView {
     fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        self.0.trace(tracer)
+        Trace::trace(&self.0, tracer)
     }
 }
 
@@ -41,8 +54,22 @@ impl std::hash::Hash for VesStrView {
         if let Some(hash) = self.hash.get() {
             state.write_u64(hash)
         } else {
-            self.s.hash(state);
-            self.hash.set(Some(state.finish()));
+            let hash = hash(&self.s);
+            self.hash.set(Some(hash));
+            state.write_u64(hash);
         }
     }
+}
+
+fn hash(s: &str) -> u64 {
+    use std::hash::Hash;
+    let mut r = RandomState::with_seeds(
+        const_random::const_random!(u64),
+        const_random::const_random!(u64),
+        const_random::const_random!(u64),
+        const_random::const_random!(u64),
+    )
+    .build_hasher();
+    s.hash(&mut r);
+    r.finish()
 }
