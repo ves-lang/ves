@@ -22,7 +22,7 @@ false
 // f-string
 f"1 + 1 is {1 + 1}"
 
-// dictionary
+// map
 { "key0": value0, "key1": value1 }
 // 
 { expression(): value }
@@ -75,7 +75,7 @@ let x = 10;
 1 < 1
 1 > 1
 "test" in thing // property existence check
-"test" is Type // with built-ins 'dict', 'list', 'num', 'str', 'bool', 'none', 'some'
+"test" is Type // with built-ins 'map', 'array', 'num', 'str', 'bool', 'none', 'some'
 ("grouping")
 index[10]
 index["test"]
@@ -127,7 +127,7 @@ print closure.get(); // 100
 closure.set(150);
 print closure.get(); // still 100
 
-// you can wrap your value in an object to imitate capture by variable semantics:
+// you can wrap your value in a map to imitate capture by variable semantics:
 fn wrap(value) {
     return { "value": value }
 }
@@ -135,7 +135,7 @@ fn make_closure2(value) {
     let wrapper = wrap(value)
     return {
         // these closures will capture `wrapper`, 
-        // which is a reference to the object containing `value`
+        // which is a reference to the map containing `value`
         // meaning it can be modified as such:
         get: fn() => wrapper.value
         set: fn(v) => wrapper.value = v
@@ -151,10 +151,14 @@ print closure.get(); // 150
 ```rust
 struct Type(field, defaulted = none) {
     init { /* initializer */ }
-    method() { print self.field }
-    shorthand() => self.field
-    static field = none
-    static static_method() { print Type.field }
+    // instance methods
+    // declared with `self` as first parameter
+    method(self) { print self.field }
+    shorthand(self) => self.field
+    // static fields
+    field = none
+    // static methods (= without `self`)
+    static_method() { print Type.field }
 }
 let v = Type("test")
 v.method() // "test"
@@ -181,7 +185,7 @@ let v = if condition {
     if condition2 {
         expression()
     }
-    none // this is implicit
+    // none // this is implicit
 }
 
 // infinite loop
