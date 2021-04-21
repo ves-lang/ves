@@ -151,10 +151,14 @@ print closure.get(); // 150
 ```rust
 struct Type(field, defaulted = none) {
     init { /* initializer */ }
-    method() { print self.field }
-    shorthand() => self.field
-    static field = none
-    static static_method() { print Type.field }
+    // instance methods
+    // declared with `self` as first parameter
+    method(self) { print self.field }
+    shorthand(self) => self.field
+    // static fields
+    field = none
+    // static methods (= without `self`)
+    static_method() { print Type.field }
 }
 let v = Type("test")
 v.method() // "test"
