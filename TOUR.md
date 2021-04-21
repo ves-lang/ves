@@ -185,7 +185,7 @@ let v = if condition {
     if condition2 {
         expression()
     }
-    none // this is implicit
+    // none // this is implicit
 }
 
 // infinite loop
