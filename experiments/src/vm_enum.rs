@@ -43,7 +43,7 @@ pub struct VmEnum {
 impl VmEnum {
     pub fn new(heap: CcContext, constants: Vec<NanBox>, instructions: Vec<Inst>) -> Self {
         let mut fields = VesHashMap::new_in(heap.proxy_allocator());
-        fields.insert(VesStr::on_heap(&heap, "fib").clone().view(), 0);
+        fields.insert(VesStr::on_heap(&heap, "fib").view(), 0);
         let ty = heap.cc(VesStruct::new(
             fields,
             VesHashMap::new_in(heap.proxy_allocator()),

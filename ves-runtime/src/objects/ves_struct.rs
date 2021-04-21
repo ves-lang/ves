@@ -28,7 +28,7 @@ impl VesStruct {
         fields: VesHashMap<VesStrView, u8>,
         methods: VesHashMap<VesStrView, Cc<Function>>,
     ) -> Self {
-        Self { fields, methods }
+        Self { methods, fields }
     }
 }
 
