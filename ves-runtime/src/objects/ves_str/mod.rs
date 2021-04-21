@@ -18,7 +18,7 @@ pub trait StrCcExt<T> {
 
 impl StrCcExt<VesStrView> for Cc<VesStr> {
     fn view(&self) -> VesStrView {
-        VesStrView(self.clone())
+        VesStrView(Cc::clone(self))
     }
 }
 

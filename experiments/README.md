@@ -5,16 +5,13 @@ All benchmarks currently listed were run on a 6-core i7-8700K (max clock 4.7GHz)
 ## Current Findings
 1. `enum` opcodes vs byte opcodes. See the `fibonacci` benchmark.
     It appears that enum opcodes are similar to or slightly faster than byte opcodes, while byte opcodes are more memory-efficient. Although, larger benchmarks are required to determine this confidently.
-    | Benchmark                        | Lo        | Md        | Hi        |
-    |----------------------------------|-----------|-----------|-----------|
-    | Enum Opcodes: fib-iterative(200) | 13.326 us | 13.383 us | 13.451 us |
-    | Byte opcodes: fib-iterative(200) | 13.875 us | 13.986 us | 14.098 us |
 
-    | Benchmark (unchecked accesses)   | Lo     | Md           | Hi        |
-    |----------------------------------|--------|--------------|-----------|
-    | Enum Opcodes: fib-iterative(200) | 10.381 | us 10.470 us | 10.594 us |
-    | Byte opcodes: fib-iterative(200) | 11.083 | us 11.157 us | 11.248 us |
-    
+    | Benchmark (unchecked accesses)         | Lo        | Md        | Hi        |
+    |----------------------------------------|-----------|-----------|-----------|
+    | Byte opcodes: fib-iterative(200)       | 77.876 us | 78.332 us | 78.855 us |
+    | Enum Opcodes: fib-iterative(200)       | 75.002 us | 75.833 us | 76.941 us |
+    | Enum Opcodes w/ IC: fib-iterative(200) | 52.626 us | 53.014 us | 53.555 us |
+
     ### TODOs
     1. Check if this holds for bigger opcode sizes (e.g. 4 bytes).
     2. Is there a way to hack variable-length opcodes into the enum representation?

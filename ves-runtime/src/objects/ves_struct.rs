@@ -62,17 +62,24 @@ impl VesInstance {
     }
 
     #[inline]
+    pub fn ty(&self) -> &Cc<VesStruct> {
+        &self.ty
+    }
+
+    #[inline]
+    pub fn get_property_slot(&self, name: &VesStrView) -> Option<u8> {
+        self.ty.fields.get(name).copied()
+    }
+
+    #[inline]
     pub fn get_property(&self, name: &VesStrView) -> Option<&Value> {
-        self.ty
-            .fields
-            .get(name)
-            .copied()
+        self.get_property_slot(name)
             .map(|slot| &self.fields[slot as usize])
     }
 
     #[inline]
     pub fn get_property_mut(&mut self, name: &VesStrView) -> Option<&mut Value> {
-        let slot = self.ty.fields.get(name).copied();
+        let slot = self.get_property_slot(name);
         if let Some(slot) = slot {
             Some(self.fields.get_mut(slot as usize).unwrap())
         } else {
@@ -83,6 +90,18 @@ impl VesInstance {
     #[inline]
     pub fn get_by_slot_index(&self, slot: usize) -> Option<&Value> {
         self.fields.get(slot)
+    }
+
+    #[inline]
+    pub fn get_by_slot_index_unchecked(&self, slot: usize) -> &Value {
+        debug_assert!(slot < self.fields.len());
+        unsafe { self.fields.get_unchecked(slot) }
+    }
+
+    #[inline]
+    pub fn get_by_slot_index_unchecked_mut(&mut self, slot: usize) -> &mut Value {
+        debug_assert!(slot < self.fields.len());
+        unsafe { self.fields.get_unchecked_mut(slot) }
     }
 
     #[inline]

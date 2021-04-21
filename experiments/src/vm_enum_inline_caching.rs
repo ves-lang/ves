@@ -5,6 +5,7 @@ use ves_runtime::{
         ves_str::{StrCcExt, VesStr},
         ves_struct::{VesHashMap, VesInstance, VesStruct},
     },
+    runtime::inline_cache::InlineCache,
     Value, VesObject,
 };
 
@@ -35,6 +36,7 @@ pub struct VmEnum {
     constants: Vec<NanBox>,
     heap: CcContext,
     instructions: Vec<Inst>,
+    ic: InlineCache,
     /// The type used by the Alloc instruction
     ty: Cc<VesStruct>,
     err: Option<String>,
@@ -50,21 +52,26 @@ impl VmEnum {
             fields,
             VesHashMap::new_in(heap.proxy_allocator()),
         ));
+        let ic = InlineCache::new(instructions.len());
         Self {
             ip: 0,
             stack: Vec::with_capacity(256),
             heap,
             constants,
             instructions,
+            ic,
             ty,
             err: None,
         }
     }
 
     pub fn reset(&mut self) {
-        self.stack.clear();
+        let cap = self.stack.capacity();
+        self.stack = std::mem::replace(&mut self.stack, Vec::with_capacity(cap));
+
         self.ip = 0;
         self.err = None;
+        self.ic = InlineCache::new(self.instructions.len());
     }
 
     pub fn run(&mut self) -> Result<NanBox, String> {
@@ -73,7 +80,9 @@ impl VmEnum {
             let inst = self.instructions[self.ip - 1].clone();
             // println!("ip={:03} {:#?} {:#?}", self.ip - 1, inst, self.stack);
             match inst {
-                Inst::Const(c) => self.push(self.constants[c as usize].clone()),
+                Inst::Const(c) => {
+                    self.push(self.constants[c as usize].clone());
+                }
                 Inst::Pop => {
                     self.pop();
                 }
@@ -236,24 +245,41 @@ impl VmEnum {
             self.error(format!("{:?} is not an object", obj.unbox()));
             return;
         }
-        let name = n.unbox().as_ptr().unwrap();
-        let name = match *name {
-            VesObject::Str(ref s) => s,
-            VesObject::Instance(_) => unreachable!(),
-            VesObject::Struct(_) => unreachable!(),
-        };
         let mut obj = unsafe { obj.unbox_pointer() }.0.get();
-        match unsafe { obj.deref_mut() } {
-            VesObject::Instance(obj) => unsafe {
-                *obj.deref_mut().get_property_mut(name).unwrap() = self.pop().unbox();
-            },
-            VesObject::Struct(_) => {
-                self.error("Structs do not support field assignment".to_string());
+        if let VesObject::Instance(instance) = unsafe { obj.deref_mut() } {
+            // Fast path
+            if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty()) {
+                unsafe {
+                    *instance.deref_mut().get_by_slot_index_unchecked_mut(slot) =
+                        self.pop().unbox();
+                }
+                return;
             }
-            VesObject::Str(_) => {
-                self.error("Strings do not support field assignment".to_string());
+
+            let name = n.unbox().as_ptr().unwrap();
+            let name = match *name {
+                VesObject::Str(ref s) => s,
+                VesObject::Instance(_) => unreachable!(),
+                VesObject::Struct(_) => unreachable!(),
+            };
+            let slot = match instance.get_property_slot(name) {
+                Some(slot) => slot,
+                None => {
+                    return self.error(format!("Object is missing the field `{}`.", name.str()))
+                }
+            } as usize;
+
+            unsafe {
+                *instance.deref_mut().get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
             }
+            self.ic
+                .update_property_cache(self.ip - 1, slot, instance.ty().clone());
+            return;
         }
+        self.error(format!(
+            "Object `{:?}` does not support field assignment",
+            obj
+        ));
     }
 
     fn get_field(&mut self, n: NanBox) {
@@ -262,25 +288,40 @@ impl VmEnum {
             self.error(format!("{:?} is not an object", obj.unbox()));
             return;
         }
-        let name = n.unbox().as_ptr().unwrap();
-        let name = match *name {
-            VesObject::Str(ref s) => s,
-            VesObject::Instance(_) => unreachable!(),
-            VesObject::Struct(_) => unreachable!(),
-        };
         let obj = unsafe { obj.unbox_pointer() }.0.get();
-        match &*obj {
-            VesObject::Instance(instance) => match instance.get_property(name) {
-                Some(r#ref) => self.push(NanBox::new(r#ref.clone())),
-                None => self.error(format!("Object is missing the field `{}`.", name.str())),
-            },
-            VesObject::Struct(_) => {
-                self.error("Structs do not support field access (?)".to_string());
+        if let VesObject::Instance(instance) = &*obj {
+            // Fast path
+            if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty()) {
+                self.push(NanBox::new(
+                    instance.get_by_slot_index_unchecked(slot).clone(),
+                ));
+                return;
             }
-            VesObject::Str(_) => {
-                self.error("Strings do not support field access".to_string());
-            }
+
+            let name = n.unbox().as_ptr().unwrap();
+            let name = match *name {
+                VesObject::Str(ref s) => s,
+                VesObject::Instance(_) => unreachable!(),
+                VesObject::Struct(_) => unreachable!(),
+            };
+            let slot = match instance.get_property_slot(name) {
+                Some(slot) => slot,
+                None => {
+                    return self.error(format!("Object is missing the field `{}`.", name.str()))
+                }
+            } as usize;
+
+            let value = NanBox::new(instance.get_by_slot_index_unchecked(slot).clone());
+            self.ic
+                .update_property_cache(self.ip - 1, slot, instance.ty().clone());
+            self.push(value);
+            return;
         }
+
+        self.error(format!(
+            "Object `{:?}` does not support field accesses",
+            obj
+        ));
     }
 
     fn error(&mut self, e: String) {
@@ -328,7 +369,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_vm_enum_opcodes() {
+    fn test_vm_enum_opcodes_inline_caching() {
         let heap = CcContext::new();
         let mut vm = VmEnum::new(
             heap.clone(),
@@ -346,52 +387,53 @@ mod tests {
                     heap.cc(VesObject::Str(VesStr::on_heap(&heap, "n").view())),
                 )),
             ],
-            vec![
-                Inst::Alloc, // 0 = obj
-                Inst::Const(0),
-                Inst::GetLocal(0),
-                Inst::SetField(5), // n = 100
-                Inst::Const(1),
-                Inst::GetLocal(0),
-                Inst::SetField(3), // a = 0
-                Inst::Const(2),
-                Inst::GetLocal(0),
-                Inst::SetField(4), // b = 1
-                Inst::GetLocal(0),
-                Inst::GetField(5),
-                Inst::Const(1),
-                Inst::Neq,
-                Inst::Jz(19),
-                Inst::Pop,
-                Inst::GetLocal(0),
-                Inst::GetField(4), // tmp = b
-                Inst::GetLocal(0),
-                Inst::GetField(4),
-                Inst::GetLocal(0),
-                Inst::GetField(3),
-                Inst::Add,
-                Inst::GetLocal(0),
-                Inst::SetField(4), // b = a + b
-                Inst::GetLocal(0),
-                Inst::SetField(3), // a = tmp
-                Inst::GetLocal(0),
-                Inst::GetField(5), // n - 1
-                Inst::Const(2),
-                Inst::Sub,
-                Inst::GetLocal(0),
-                Inst::SetField(5),
-                Inst::Jmp(-24),
-                Inst::Pop,
-                Inst::GetLocal(0),
-                Inst::GetField(3),
-                Inst::Return,
-            ],
+            {
+                vec![
+                    Inst::Alloc, // 0 = obj
+                    Inst::Const(0),
+                    Inst::GetLocal(0),
+                    Inst::SetField(5), // n = 100
+                    Inst::Const(1),
+                    Inst::GetLocal(0),
+                    Inst::SetField(3), // a = 0
+                    Inst::Const(2),
+                    Inst::GetLocal(0),
+                    Inst::SetField(4), // b = 1
+                    Inst::GetLocal(0),
+                    Inst::GetField(5),
+                    Inst::Const(1),
+                    Inst::Neq,
+                    Inst::Jz(19),
+                    Inst::Pop,
+                    Inst::GetLocal(0),
+                    Inst::GetField(4), // tmp = b
+                    Inst::GetLocal(0),
+                    Inst::GetField(4),
+                    Inst::GetLocal(0),
+                    Inst::GetField(3),
+                    Inst::Add,
+                    Inst::GetLocal(0),
+                    Inst::SetField(4), // b = a + b
+                    Inst::GetLocal(0),
+                    Inst::SetField(3), // a = tmp
+                    Inst::GetLocal(0),
+                    Inst::GetField(5), // n - 1
+                    Inst::Const(2),
+                    Inst::Sub,
+                    Inst::GetLocal(0),
+                    Inst::SetField(5),
+                    Inst::Jmp(-24),
+                    Inst::Pop,
+                    Inst::GetLocal(0),
+                    Inst::GetField(3),
+                    Inst::Return,
+                ]
+            },
         );
 
+        vm.reset();
         let res = vm.run().unwrap().unbox();
         assert_eq!(res, Value::Num(354224848179262000000.0));
-
-        std::mem::drop(res);
         std::mem::drop(vm);
         heap.collect_cycles();
     }

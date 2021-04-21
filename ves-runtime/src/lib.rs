@@ -3,6 +3,7 @@ extern crate static_assertions as sa;
 extern crate ves_cc;
 
 pub mod objects;
+pub mod runtime;
 
 pub use self::objects::nanbox;
 pub use self::objects::value;

@@ -45,7 +45,9 @@ pub struct VmBytes {
 impl VmBytes {
     pub fn new(heap: CcContext, constants: Vec<NanBox>, instructions: Vec<u8>) -> Self {
         let mut fields = VesHashMap::new_in(heap.proxy_allocator());
-        fields.insert(VesStr::on_heap(&heap, "fib").view(), 0);
+        fields.insert(VesStr::on_heap(&heap, "n").view(), 0);
+        fields.insert(VesStr::on_heap(&heap, "a").view(), 1);
+        fields.insert(VesStr::on_heap(&heap, "b").view(), 2);
         let ty = heap.cc(VesStruct::new(
             fields,
             VesHashMap::new_in(heap.proxy_allocator()),
@@ -411,81 +413,96 @@ mod tests {
         let mut vm = VmBytes::new(
             ctx.clone(),
             vec![
-                NanBox::none(),
+                NanBox::num(100.0),
                 NanBox::num(0.0),
                 NanBox::num(1.0),
-                NanBox::num(100.0),
                 NanBox::new(ves_runtime::Value::from(
-                    ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "fib").view())),
+                    ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "a").view())),
+                )),
+                NanBox::new(ves_runtime::Value::from(
+                    ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "b").view())),
+                )),
+                NanBox::new(ves_runtime::Value::from(
+                    ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "n").view())),
                 )),
             ],
             vec![
-                Inst::Const as _,
-                0, // 0 = obj
-                Inst::Const as _,
-                1, // 1 = a
-                Inst::Const as _,
-                2, // 2 = b
-                Inst::Const as _,
-                3, // 3 = n
                 Inst::Alloc as _,
-                Inst::SetLocal as _,
-                0,
-                Inst::GetLocal as _,
-                3,
                 Inst::Const as _,
-                1,
-                Inst::Neq as _,
-                Inst::Jz as _,
-                (24i16 << 8) as u8,
-                24 & 0xFF,
-                Inst::Pop as _,
+                0, // load 100.0
                 Inst::GetLocal as _,
-                2, // 4 = tmp
-                Inst::GetLocal as _,
-                2,
-                Inst::GetLocal as _,
-                1,
-                Inst::Add as _,
-                Inst::SetLocal as _,
-                2,
-                Inst::SetLocal as _,
-                1, // a = tmp
-                Inst::GetLocal as _,
-                3,
-                Inst::Const as _,
-                2,
-                Inst::Sub as _,
-                Inst::SetLocal as _,
-                3, // n -= 1
-                Inst::Jmp as _,
-                unsafe { std::mem::transmute((-28i16 << 8) as i8) },
-                unsafe { std::mem::transmute((-28i16 & 0xFF) as i8) },
-                Inst::Pop as _,
-                Inst::GetLocal as _,
-                1,
-                Inst::GetLocal as _,
-                0,
+                0, // load obj
                 Inst::SetField as _,
-                4,
+                5, // set obj.n = 100
+                Inst::Const as _,
+                1, // load 0.0
                 Inst::GetLocal as _,
-                0,
+                0, // load obj
+                Inst::SetField as _,
+                3, // set obj.a = 0
+                Inst::Const as _,
+                2, // load 1.0
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::SetField as _,
+                4, // set obj.b = 1
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                5, // get obj.n
+                Inst::Const as _,
+                1,              // load 0
+                Inst::Neq as _, // obj.n != 0
+                Inst::Jz as _,  // jz (obj.n == 0)
+                (39i16 << 8) as u8,
+                39 & 0xFF,
+                Inst::Pop as _,
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                4, // tmp = obj.b
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                4, // get obj.b
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                3,              // get obj.a
+                Inst::Add as _, // a + b
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::SetField as _,
+                4, // set obj.b = a + b
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::SetField as _,
+                3, // set obj.a = tmp
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                5, // get obj.n
+                Inst::Const as _,
+                2,              // load 1.0
+                Inst::Sub as _, // n - 1
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::SetField as _,
+                5, // set obj.n = obj.n - 1
+                Inst::Jmp as _,
+                unsafe { std::mem::transmute((-44i16 << 8) as i8) },
+                unsafe { std::mem::transmute((-44i16 & 0xFF) as i8) },
+                Inst::Pop as _,
+                Inst::GetLocal as _,
+                0, // load obj
+                Inst::GetField as _,
+                3, // get obj.a
                 Inst::Return as _,
             ],
         );
         let res = vm.run().unwrap().unbox();
-        let obj = res.as_ptr().unwrap();
-        match &*obj {
-            VesObject::Instance(instance) => {
-                assert_eq!(
-                    instance.get_by_slot_index(0),
-                    Some(&Value::Num(354224848179262000000.0))
-                );
-            }
-            _ => unreachable!(),
-        }
+        assert_eq!(res, Value::Num(354224848179262000000.0));
 
-        std::mem::drop(obj);
         std::mem::drop(res);
         std::mem::drop(vm);
 
