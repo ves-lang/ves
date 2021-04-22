@@ -122,12 +122,12 @@ pub enum TokenKind<'a> {
     /// Interpolated string
     ///
     /// e.g. `f"fragment {expr}"` `f"\{escaped}"`
-    #[regex(r#"f"([^"\\\\]|\\\\.)*""#, interpolated_string)]
-    #[regex(r#"f'([^'\\\\]|\\\\.)*'"#, interpolated_string)]
+    #[regex("f\"([^\"\\\\]|\\\\.)*\"", interpolated_string)]
+    #[regex("f'([^'\\\\]|\\\\.)*'", interpolated_string)]
     InterpolatedString(Vec<Frag<'a>>),
     /// String literal
-    #[regex(r#""([^"\\\\]|\\\\.)*""#)]
-    #[regex(r#"'([^'\\\\]|\\\\.)*'"#)]
+    #[regex("\"([^\"\\\\]|\\\\.)*\"")]
+    #[regex("'([^'\\\\]|\\\\.)*'")]
     String,
     /// Floating point (IEEE754) numeric literal
     /// TODO: ignore underscores
@@ -332,11 +332,13 @@ fn interpolated_string<'a>(
                     end: global_start + i - 1, // exclude the escape
                 };
 
-                frags.push(Frag::Str(Token::new(
-                    &source[span.clone()],
-                    span,
-                    TokenKind::String,
-                )));
+                if source[span.clone()].len() != 0 {
+                    frags.push(Frag::Str(Token::new(
+                        &source[span.clone()],
+                        span,
+                        TokenKind::String,
+                    )));
+                }
                 prev_fragment_end = i;
             }
         }
@@ -352,7 +354,7 @@ fn interpolated_string<'a>(
             &source[span.clone()],
             span,
             TokenKind::String,
-        )))
+        )));
     }
 
     Ok(frags)
@@ -558,7 +560,9 @@ mod tests {
             test_tokenize(SOURCE),
             vec![
                 TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(
-                    vec![Frag::Str(Token::new(r#"\{escaped}"#, 0..1, TokenKind::String))]
+                    vec![
+                        Frag::Str(Token::new(r#"{escaped}"#, 0..1, TokenKind::String))
+                    ]
                 )))
             ]
         );
