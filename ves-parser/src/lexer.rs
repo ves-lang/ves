@@ -401,7 +401,6 @@ mod tests {
 
     #[test]
     fn arithmetic() {
-        use TokenKind::*;
         const SOURCE: &str = r#"+-*/%**"#;
         assert_eq!(
             test_tokenize(SOURCE),
@@ -414,7 +413,6 @@ mod tests {
 
     #[test]
     fn boolean() {
-        use TokenKind::*;
         const SOURCE: &str = r#"! < > == != <= >="#;
         assert_eq!(
             test_tokenize(SOURCE),
@@ -428,7 +426,6 @@ mod tests {
 
     #[test]
     fn dot_tokens() {
-        use TokenKind::*;
         const SOURCE: &str = r#"ident.ident ident?.ident 0..0 0..=0 ...ident"#;
         assert_eq!(
             test_tokenize(SOURCE),
@@ -443,7 +440,6 @@ mod tests {
 
     #[test]
     fn field_access_range() {
-        use TokenKind::*;
         const SOURCE: &str = r#"ident.ident..ident.ident"#;
         assert_eq!(
             test_tokenize(SOURCE),
@@ -457,7 +453,6 @@ mod tests {
 
     #[test]
     fn float_range() {
-        use TokenKind::*;
         const SOURCE: &str = r#"0.0..1.0"#;
         assert_eq!(
             test_tokenize(SOURCE),
@@ -469,7 +464,6 @@ mod tests {
 
     #[test]
     fn simple_range() {
-        use TokenKind::*;
         const SOURCE: &str = r#"0..1"#;
         assert_eq!(
             test_tokenize(SOURCE),
