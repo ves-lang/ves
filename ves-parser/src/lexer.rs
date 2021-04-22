@@ -1,4 +1,6 @@
-use logos::{Logos, Span};
+use logos::Logos;
+
+pub use logos::Span;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
@@ -191,7 +193,7 @@ pub enum TokenKind<'a> {
     /// Defer call until end of current block scope
     #[token("defer")]
     Defer,
-    /// Print values
+    /// Print
     #[token("print")]
     Print,
     /// Function
@@ -200,7 +202,9 @@ pub enum TokenKind<'a> {
     /// Struct
     #[token("struct")]
     Struct,
-
+    /// The reserved self identifier.
+    #[token("self")]
+    Self_,
     // Whitespace or ignored tokens
     #[regex("//[^\n]*")]
     Comment,
@@ -211,7 +215,6 @@ pub enum TokenKind<'a> {
     Whitespace,
     #[error]
     Error,
-    //EOF,
 }
 
 fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> bool {

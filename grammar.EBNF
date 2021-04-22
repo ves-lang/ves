@@ -27,7 +27,7 @@ loop_stmt = ( label ":" )? (
 label = "@" IDENTIFIER ;
 for_stmt = ( for_each | for_loop );
 for_each = "for" IDENTIFIER "in" ( for_range | expression ) block ; 
-for_loop = "for" binding? ";" expression? ";" expression blcok ;
+for_loop = "for" binding* ";" expression? ";" expression blcok ;
 range = call ( ".." | "..=" ) call ( "," experssion )? ;
 
 while_stmt = "while" expression block ;
@@ -57,7 +57,7 @@ static_method  =  IDENTIFIER param_pack fn_body ;
 fn_decl = "fn" IDENTIFIER param_pack fn_body ;
 fn_body =  ("=>" expression | block ) ;
 param_pack = "(" params? ")" ;
-params = names? default_params? rest_params ;
+params = names? default_params? rest_params? ;
 defualt_params = IDENTIFIER "=" expression | ( "," IDENTIFIER "=" expression )* ;
 rest_params = "..." IDENTIFIER ;
 
@@ -76,7 +76,7 @@ dec = "--" call | call "--" ;
 
 logic_or       = logic_and ( "||" logic_and )* ;
 logic_and      = equality ( "&&" equality )* ;
-equality       = comparison ( ( "==" | "!=" | "is" ) comparison )* ;
+equality       = comparison ( ( "==" | "!=" | "is" | "in" ) comparison )* ;
 comparison     = addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
 addition       = multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication = exponentiation ( ("/" | "*" | "%" ) exponentiation )* ;
