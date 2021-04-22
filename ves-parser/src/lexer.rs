@@ -24,10 +24,8 @@ pub trait NextTokenExt<'a> {
 
 impl<'a> NextTokenExt<'a> for logos::Lexer<'a, TokenKind<'a>> {
     fn next_token(&mut self) -> Option<Token<'a>> {
-        match self.next() {
-            Some(next) => Some(Token::new(self.slice(), self.span(), next)),
-            None => None,
-        }
+        self.next()
+            .map(|next| Token::new(self.slice(), self.span(), next))
     }
 }
 
@@ -335,7 +333,7 @@ fn interpolated_string<'a>(
                     end: global_start + i - 1, // exclude the escape
                 };
 
-                if source[span.clone()].len() != 0 {
+                if !source[span.clone()].is_empty() {
                     frags.push(Frag::Str(Token::new(
                         &source[span.clone()],
                         span,
