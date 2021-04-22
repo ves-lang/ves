@@ -16,6 +16,19 @@ impl<'a> Token<'a> {
     }
 }
 
+pub trait NextTokenExt<'a> {
+    fn next_token(&mut self) -> Option<Token<'a>>;
+}
+
+impl<'a> NextTokenExt<'a> for logos::Lexer<'a, TokenKind<'a>> {
+    fn next_token(&mut self) -> Option<Token<'a>> {
+        match self.next() {
+            Some(next) => Some(Token::new(self.slice(), self.span(), next)),
+            None => None,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Logos)]
 pub enum TokenKind<'a> {
     #[token("+")]
@@ -375,11 +388,11 @@ mod tests {
         }
     }
 
-    fn tokenize<'a>(src: &'a str) -> Vec<TestToken<'a>> {
+    fn test_tokenize<'a>(src: &'a str) -> Vec<TestToken<'a>> {
         let mut out = Vec::new();
         let mut lex = TokenKind::lexer(src);
-        while let Some(token) = lex.next() {
-            out.push(Token::new(lex.slice(), lex.span(), token).into());
+        while let Some(token) = lex.next_token() {
+            out.push(token.into());
         }
         out
     }
@@ -392,7 +405,7 @@ mod tests {
         use TokenKind::*;
         const SOURCE: &str = r#"+-*/%**"#;
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Plus, "+"), token!(Minus, "-"), token!(Star, "*"),
                 token!(Slash, "/"), token!(Percent, "%"), token!(Power, "**")
@@ -405,7 +418,7 @@ mod tests {
         use TokenKind::*;
         const SOURCE: &str = r#"! < > == != <= >="#;
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Bang, "!"), token!(Less, "<"), token!(More, ">"),
                 token!(EqualEqual, "=="), token!(BangEqual, "!="),
@@ -419,7 +432,7 @@ mod tests {
         use TokenKind::*;
         const SOURCE: &str = r#"ident.ident ident?.ident 0..0 0..=0 ...ident"#;
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Identifier, "ident"), token!(Dot, "."), token!(Identifier, "ident"),
                 token!(Identifier, "ident"), token!(MaybeDot, "?."), token!(Identifier, "ident"),
@@ -434,7 +447,7 @@ mod tests {
         use TokenKind::*;
         const SOURCE: &str = r#"ident.ident..ident.ident"#;
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Identifier, "ident"), token!(Dot, "."), token!(Identifier, "ident"),
                 token!(Range, ".."),
@@ -448,7 +461,7 @@ mod tests {
         use TokenKind::*;
         const SOURCE: &str = r#"0.0..1.0"#;
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Number, "0.0"), token!(Range, ".."), token!(Number, "1.0")
             ]
@@ -461,7 +474,7 @@ mod tests {
         const SOURCE: &str = r#"0..1"#;
         let actual = TokenKind::lexer(SOURCE).collect::<Vec<TokenKind<'_>>>();
         assert_eq!(
-            tokenize(SOURCE),
+            test_tokenize(SOURCE),
             vec![
                 token!(Range, "0..1")
             ]
