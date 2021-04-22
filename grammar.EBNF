@@ -1,0 +1,117 @@
+program = line* EOF ;
+
+line = statement EOL ;
+
+statement = var_decl
+    | block
+    | print_stmt
+    | loop_stmt
+    | control_stmt
+    | defer_stmt
+    | expr_stmt
+    ;
+
+block = "{" line* "}" ;
+print_stmt = "print" comma ;
+
+var_decl = let_decl | mut_decl ;
+let_decl = "let" binding ("," binding )* ;
+mut_decl = "mut" IDENTIFIER ("=" expression)? ("," IDENTIFIER ("=" expression)? )* ;
+binding = IDENTIFIER "=" expression ;
+
+loop_stmt = ( label ":" )? (
+    for_stmt
+    | while_stmt
+    | loop_stmt
+);
+label = "@" IDENTIFIER ;
+for_stmt = ( for_each | for_loop );
+for_each = "for" IDENTIFIER "in" ( for_range | expression ) block ; 
+for_loop = "for" binding? ";" expression? ";" expression blcok ;
+range = call ( ".." | "..=" ) call ( "," experssion )? ;
+
+while_stmt = "while" expression block ;
+loop_stmt = "loop" block ;
+
+control_stmt = ( "break" | "continue" ) label ;
+
+defer_stmt = "defer" ( block | call );
+expr_stmt = comma ( ";" comma )* ;
+
+comma = expression ( "," expression )* ;
+
+expression = struct_decl 
+    | fn_decl 
+    | if_expr
+    | do_block
+    | assignment
+    ;
+
+struct_decl = "struct" IDENTIFIER param_pack "{" struct_body "}" ;
+struct_doby = init_block | binding | instance_method | static_method ;
+init_block  = "init" block ;
+instance_method  =  IDENTIFIER "(" "self" ( ", " params? )? ")" fn_body ;
+static_method  =  IDENTIFIER param_pack fn_body ;
+
+fn_decl = "fn" IDENTIFIER param_pack fn_body ;
+fn_body =  ("=>" expression | block ) ;
+param_pack = "(" params? ")" ;
+params = IDENTIFIER ("," IDENTIFIER)* ","? ;
+
+if_expr = "if" expression block ( "else" ( if_expr | block ) )? ;
+
+do_block = "do" block ;
+
+assignment = call ( assignment_op expression )?
+    | inc
+    | dec
+    | logic_or 
+    ;
+assignment_op = "+=" | "-=" | "*=" | "/=" | "**=" | "%="  "||=" | "&&=" ;
+inc = "++" call | call "++" ;
+dec = "--" call | call "--" ;
+
+logic_or       = logic_and ( "||" logic_and )* ;
+logic_and      = equality ( "&&" equality )* ;
+equality       = comparison ( ( "==" | "!=" | "is" ) comparison )* ;
+comparison     = addition ( ( ">" | ">=" | "<" | "<=" ) addition )* ;
+addition       = multiplication ( ( "-" | "+" ) multiplication )* ;
+multiplication = exponentiation ( ("/" | "*" | "%" ) exponentiation )* ;
+exponentiation = unary ( ( "**" ) exponentiation )* ;
+unary          = ( "!" | "-" | "try" | "ok" | "err" ) unary 
+    | call
+    ;
+
+call = primary ( 
+    "(" arguments? ")" 
+    | "." IDENTIFIER
+    | "[" expression "]"
+)* ;
+
+arguments = expression ( "," expression )* ;
+
+primary = "ture" | "false" | "none" | "self" 
+    | NUMBER 
+    | STRING
+    | array_literal
+    | map_literal
+    | grouping
+    ;
+
+array_literal = "[" args? "]" ;
+map_literal = "{" pairs? "}" ;
+pairs = pair ( "," pair ) ","? ;
+pair = expression ":" expression ;
+grouping = "(" comma ")" ;
+
+NUMBER = -?(((((([0-9]|([0-9][0-9]|_[0-9]))+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf)) ;
+
+STRING = INTEPROLATED_STRING | NORMAL_STRING ;
+
+INTEPROLATED_STRING = "f" QUOTE INTERP_FRAGMENT* QUOTE ;
+
+INTERP_FRAGMENT = "{" expression "}" | "\{" UTF8 "}" | UTF8 ;
+
+NORMAL_STRING = QUOTE UTF8* QUOTE ;
+
+QUOTE = "'" | '"' ;
