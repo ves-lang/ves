@@ -1,3 +1,28 @@
+use logos::{Logos, Span};
+
+pub struct Token<'a> {
+    /// Slice of the source from which this token was parsed
+    pub lexeme: &'a str,
+    /// Start+end range of this token in the line where it was parsed
+    pub span: Span,
+    /// Line in the source where this token was parsed
+    ///
+    /// Line starts at 1
+    pub line: usize,
+    pub kind: TokenKind,
+}
+
+impl<'a> Token<'a> {
+    pub fn new(lexeme: &'a str, span: Span, line: usize, kind: TokenKind) -> Token<'a> {
+        Token {
+            lexeme,
+            span,
+            line,
+            kind,
+        }
+    }
+}
+
 pub enum TokenKind {
     // Simple (1 char) tokens
     Plus,         // +
@@ -99,11 +124,12 @@ pub enum TokenKind {
     Struct,
 
     // Whitespace or ignored tokens
-    Comment, // //[^\n]*
+    Comment,    // //[^\n]*
     // TODO: multi-line comments
     // They should be nestable, e.g. /*/**/*/
     // MultiLineComment,
-    Whitespace,
+    EOL,        // \n
+    Whitespace, // space, \n, \r, \t, \f
     Error,
     EOF,
 }
