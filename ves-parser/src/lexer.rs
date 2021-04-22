@@ -218,8 +218,7 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> bool {
     // how many characters we went through
     let mut n = 0;
     // how many multi-line comment opening tokens we found
-    // this starts at one, because the initial /* causes this
-    // function to be called
+    // this starts at one, because the initial /* is already consumed
     let mut opening_count = 1;
     let mut previous_was_star = false;
     for ch in lex.remainder().bytes() {
@@ -244,7 +243,7 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> bool {
     }
 
     if opening_count == 0 {
-        lex.bump(n - 1);
+        lex.bump(n);
         true
     } else {
         false
@@ -397,7 +396,7 @@ mod tests {
         out
     }
     macro_rules! token {
-        ($kind:ident, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, TokenKind::$kind)))
+        ($kind:ident, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, TokenKind::$kind)));
     }
 
     #[test]
@@ -472,7 +471,6 @@ mod tests {
     fn simple_range() {
         use TokenKind::*;
         const SOURCE: &str = r#"0..1"#;
-        let actual = TokenKind::lexer(SOURCE).collect::<Vec<TokenKind<'_>>>();
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
@@ -481,4 +479,55 @@ mod tests {
         );
     }
 
+    #[test]
+    fn comment() {
+        use TokenKind::*;
+        const SOURCE: &str = "// asdfasdfasdfasdfasdfasdfasdf\nident";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(Comment, "// asdfasdfasdfasdfasdfasdfasdf"),
+                token!(Identifier, "ident")
+            ]
+        );
+    }
+
+    #[test]
+    fn multi_comment() {
+        use TokenKind::*;
+        const SOURCE: &str = "/* */ /* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ */ ident";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(MultiLineComment, "/* */"),
+                token!(MultiLineComment, "/* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ */"),
+                token!(Identifier, "ident")
+            ]
+        );
+    }
+
+    #[test]
+    fn labeled_loop() {
+        use TokenKind::*;
+        const SOURCE: &str = "@label: loop {}";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(At, "@"), token!(Identifier, "label"), token!(Colon, ":"),
+                token!(Loop, "loop"), token!(LeftBracket, "{"), token!(RightBracket, "}"),
+            ]
+        );
+    }
+
+    #[test]
+    fn bad_tokens() {
+        use TokenKind::*;
+        const SOURCE: &str = "ß$÷×";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(Error, "ß"), token!(Error, "$"), token!(Error, "÷"), token!(Error, "×")
+            ]
+        );
+    }
 }
