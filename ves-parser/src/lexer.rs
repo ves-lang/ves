@@ -376,6 +376,11 @@ mod tests {
             &self.0
         }
     }
+    impl<'a> std::ops::DerefMut for TestToken<'a> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
     impl<'a> PartialEq<TestToken<'a>> for TestToken<'a> {
         fn eq(&self, other: &TestToken<'a>) -> bool {
             self.0.kind == other.0.kind && self.0.lexeme == other.0.lexeme
@@ -387,13 +392,15 @@ mod tests {
         }
     }
 
-    fn test_tokenize<'a>(src: &'a str) -> Vec<TestToken<'a>> {
+    fn test_tokenize_inner<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Vec<TestToken<'a>> {
         let mut out = Vec::new();
-        let mut lex = TokenKind::lexer(src);
         while let Some(token) = lex.next_token() {
             out.push(token.into());
         }
         out
+    }
+    fn test_tokenize<'a>(src: &'a str) -> Vec<TestToken<'a>> {
+        test_tokenize_inner(&mut TokenKind::lexer(src))
     }
     macro_rules! token {
         ($kind:ident, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, TokenKind::$kind)));
@@ -475,7 +482,6 @@ mod tests {
 
     #[test]
     fn comment() {
-        use TokenKind::*;
         const SOURCE: &str = "// asdfasdfasdfasdfasdfasdfasdf\nident";
         assert_eq!(
             test_tokenize(SOURCE),
@@ -488,7 +494,6 @@ mod tests {
 
     #[test]
     fn multi_comment() {
-        use TokenKind::*;
         const SOURCE: &str = "/* */ /* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ */ ident";
         assert_eq!(
             test_tokenize(SOURCE),
@@ -502,7 +507,6 @@ mod tests {
 
     #[test]
     fn labeled_loop() {
-        use TokenKind::*;
         const SOURCE: &str = "@label: loop {}";
         assert_eq!(
             test_tokenize(SOURCE),
@@ -515,12 +519,47 @@ mod tests {
 
     #[test]
     fn bad_tokens() {
-        use TokenKind::*;
         const SOURCE: &str = "ß$÷×";
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
                 token!(Error, "ß"), token!(Error, "$"), token!(Error, "÷"), token!(Error, "×")
+            ]
+        );
+    }
+
+    #[test]
+    fn string_interpolation() {
+        const SOURCE: &str = r#"f"1 + 1 = {1 + 1}""#;
+        let mut actual = test_tokenize(SOURCE);
+        assert_eq!(actual.len(), 1);
+        if let TokenKind::InterpolatedString(fragments) = &mut actual[0].kind {
+            assert_eq!(fragments.len(), 2);
+            if let Frag::Str(token) = &fragments[0] {
+                assert_eq!(TestToken(token.clone()), token!(String, "1 + 1 = "));
+            }
+            if let Frag::Sublexer(lex) = &mut fragments[1] {
+                assert_eq!(
+                    test_tokenize_inner(lex),
+                    vec![
+                        token!(Number, "1"), token!(Plus, "+"), token!(Number, "1"),
+                    ]
+                );
+            }
+        } else {
+            assert_eq!("TokenKind was not InterpolatedString", "");
+        }
+    }
+
+    #[test]
+    fn string_interpolation_escape() {
+        const SOURCE: &str = r#"f"\{escaped}""#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(
+                    vec![Frag::Str(Token::new(r#"\{escaped}"#, 0..1, TokenKind::String))]
+                )))
             ]
         );
     }
