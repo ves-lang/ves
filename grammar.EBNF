@@ -47,7 +47,8 @@ expression = struct_decl
     | assignment
     ;
 
-struct_decl = "struct" IDENTIFIER param_pack "{" struct_body "}" ;
+struct_decl = "struct" IDENTIFIER names "{" struct_body "}" ;
+names = IDENTIFIER ("," IDENTIFIER)* ","? ;
 struct_doby = init_block | binding | instance_method | static_method ;
 init_block  = "init" block ;
 instance_method  =  IDENTIFIER "(" "self" ( ", " params? )? ")" fn_body ;
@@ -56,7 +57,9 @@ static_method  =  IDENTIFIER param_pack fn_body ;
 fn_decl = "fn" IDENTIFIER param_pack fn_body ;
 fn_body =  ("=>" expression | block ) ;
 param_pack = "(" params? ")" ;
-params = IDENTIFIER ("," IDENTIFIER)* ","? ;
+params = names? default_params? rest_params ;
+defualt_params = IDENTIFIER "=" expression | ( "," IDENTIFIER "=" expression )* ;
+rest_params = "..." IDENTIFIER ;
 
 if_expr = "if" expression block ( "else" ( if_expr | block ) )? ;
 
@@ -83,12 +86,13 @@ unary          = ( "!" | "-" | "try" | "ok" | "err" ) unary
     ;
 
 call = primary ( 
-    "(" arguments? ")" 
-    | "." IDENTIFIER
+    "(" args? ")" 
+    | ( "." | "?." ) IDENTIFIER
     | "[" expression "]"
 )* ;
 
-arguments = expression ( "," expression )* ;
+args = spread_expr ( "," spread_expr )* ","? ;
+spread_expr = "..."? expression ;
 
 primary = "ture" | "false" | "none" | "self" 
     | NUMBER 
