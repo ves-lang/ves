@@ -254,6 +254,29 @@ fn bench_fibonacci(c: &mut Criterion) {
             black_box(vm.run().unwrap())
         })
     });
+    group.bench_function("<rust: fib-iterative(200)>", move |b| {
+        let input = black_box(200.0);
+        b.iter(|| fib_rust(input))
+    });
+}
+
+fn fib_rust(n: f64) -> f64 {
+    struct Fib {
+        n: f64,
+        a: f64,
+        b: f64,
+    }
+
+    let mut fib = Fib { n, a: 0.0, b: 1.0 };
+
+    while fib.n != 0.0 {
+        let tmp = fib.b;
+        fib.b += fib.a;
+        fib.a = tmp;
+        fib.n -= 1.0;
+    }
+
+    fib.a
 }
 
 criterion_group!(benches, bench_fibonacci);
