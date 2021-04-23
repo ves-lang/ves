@@ -1,4 +1,7 @@
-use logos::Logos;
+use logos::{
+    internal::{CallbackResult, LexerInternal},
+    Logos,
+};
 use std::borrow::Cow;
 use std::convert::Into;
 
@@ -223,7 +226,32 @@ pub enum TokenKind<'a> {
     Error,
 }
 
-fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> bool {
+#[derive(Debug, Clone, Copy)]
+pub enum SkipOnSuccess {
+    Success,
+    Error,
+}
+
+impl<'a> CallbackResult<'a, (), TokenKind<'a>> for SkipOnSuccess {
+    fn construct<Constructor>(self, _: Constructor, lex: &mut logos::Lexer<'a, TokenKind<'a>>)
+    where
+        Constructor: Fn(()) -> TokenKind<'a>,
+    {
+        match self {
+            SkipOnSuccess::Success => {
+                // Taken from the callback for Filter::Skip
+                lex.trivia();
+                TokenKind::lex(lex);
+            }
+            SkipOnSuccess::Error => {
+                // Taken from the callback for bool
+                lex.set(TokenKind::ERROR)
+            }
+        }
+    }
+}
+
+fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> SkipOnSuccess {
     // how many characters we went through
     let mut n = 0;
     // how many multi-line comment opening tokens we found
@@ -253,9 +281,9 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> bool {
 
     if opening_count == 0 {
         lex.bump(n);
-        true
+        SkipOnSuccess::Success
     } else {
-        false
+        SkipOnSuccess::Error
     }
 }
 
@@ -415,7 +443,9 @@ mod tests {
     }
     macro_rules! token {
         ($kind:ident, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, TokenKind::$kind)));
+        ($kind:expr, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, $kind)));
     }
+
 
     #[test]
     fn arithmetic() {
@@ -509,8 +539,19 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(MultiLineComment, "/* */"),
-                token!(MultiLineComment, "/* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ */"),
+                token!(Identifier, "ident")
+            ]
+        );
+    }
+
+    #[test]
+    fn unterminated_multi_comment() {
+        const SOURCE: &str = "/* /* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ ident";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(TokenKind::Error, "/*"),
+                token!(TokenKind::Error, "/*"),
                 token!(Identifier, "ident")
             ]
         );
