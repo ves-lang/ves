@@ -110,6 +110,8 @@ pub enum TokenKind<'a> {
     /// Function shorthand syntax
     #[token("=>")]
     Arrow,
+    // TODO: unicode identifiers
+    // after we've identified whether or not it will heavily bring down performance
     /// ASCII identifier
     ///
     /// May contain numbers except for the first character
