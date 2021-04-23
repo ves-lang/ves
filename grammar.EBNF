@@ -94,7 +94,7 @@ call = primary (
 args = spread_expr ( "," spread_expr )* ","? ;
 spread_expr = "..."? expression ;
 
-primary = "ture" | "false" | "none" | "self" 
+primary = "true" | "false" | "none" | "self" 
     | NUMBER 
     | STRING
     | array_literal
@@ -107,6 +107,8 @@ map_literal = "{" pairs? "}" ;
 pairs = pair ( "," pair ) ","? ;
 pair = expression ":" expression ;
 grouping = "(" comma ")" ;
+
+IDENTIFIER = [a-zA-Z_][a-zA-Z0-9_]* ;
 
 NUMBER = -?(((((([0-9]|([0-9][0-9]|_[0-9]))+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf)) ;
 

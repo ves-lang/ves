@@ -39,9 +39,9 @@ pub enum BinOpKind {
     Rem,
     /// The `**` operator (exponentiation)
     Pow,
-    /// The `and` operator (logical and)
+    /// The `&&` operator (logical and)
     And,
-    /// The `or` operator (logical or)
+    /// The `||` operator (logical or)
     Or,
     /// The `==` operator (equality)
     Eq,

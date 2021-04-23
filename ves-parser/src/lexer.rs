@@ -1,11 +1,13 @@
 use logos::Logos;
+use std::borrow::Cow;
+use std::convert::Into;
 
 pub use logos::Span;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     /// Slice of the source from which this token was parsed
-    pub lexeme: &'a str,
+    pub lexeme: Cow<'a, str>,
     /// Start+end range of this token in the line where it was parsed
     pub span: Span,
     /// The token kind which optionally also contains extra
@@ -13,8 +15,12 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    pub fn new(lexeme: &'a str, span: Span, kind: TokenKind<'a>) -> Token<'a> {
-        Token { lexeme, span, kind }
+    pub fn new<S: Into<Cow<'a, str>>>(lexeme: S, span: Span, kind: TokenKind<'a>) -> Token<'a> {
+        Token {
+            lexeme: lexeme.into(),
+            span,
+            kind,
+        }
     }
 }
 
@@ -110,6 +116,8 @@ pub enum TokenKind<'a> {
     /// Function shorthand syntax
     #[token("=>")]
     Arrow,
+    // TODO: unicode identifiers
+    // after we've identified whether or not it will heavily bring down performance
     /// ASCII identifier
     ///
     /// May contain numbers except for the first character
@@ -565,6 +573,17 @@ mod tests {
                         Frag::Str(Token::new(r#"{escaped}"#, 0..1, TokenKind::String))
                     ]
                 )))
+            ]
+        );
+    }
+
+    #[test]
+    fn unicode_string() {
+        const SOURCE: &str = r#""😂""#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(String, "\"😂\"")
             ]
         );
     }
