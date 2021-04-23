@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use codespan_reporting::{
     diagnostic::Diagnostic,
-    files::{self, SimpleFiles},
+    files::{self, Files, SimpleFiles},
     term::{
         termcolor::{ColorChoice, StandardStream, WriteColor},
         Config,
@@ -42,6 +42,18 @@ impl<'a> VesFileDatabase<'a> {
     /// Adds the given config to the database.
     pub fn with_config(self, config: Config) -> Self {
         Self { config, ..self }
+    }
+
+    /// Returns a tuple of (line, column) for the given span and file id.
+    ///
+    /// # Panics
+    /// Panics if the given file id is not present in the database.
+    pub fn location(&self, id: FileId, span: &crate::Span) -> (usize, usize) {
+        let line = self
+            .line_index(id, span.start)
+            .expect("Attempted to query an nonexistent file.");
+        let column = self.column_number(id, line, span.start).unwrap();
+        (line + 1, column)
     }
 
     /// Adds a new file to the database.
@@ -211,4 +223,36 @@ fn hash(source: &str) -> blake2s_simd::Hash {
     blake2s_simd::Params::new()
         .hash_length(8)
         .hash(source.as_bytes())
+}
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+    use crate::Span;
+
+    #[test]
+    fn test_line_queries() {
+        let mut db = VesFileDatabase::new();
+        let id = db.add_snippet(
+            r#"line 1
+        line 2
+        line 3
+        line 4"#
+                .into(),
+        );
+
+        assert_eq!(db.location(id, &Span { start: 0, end: 0 }), (1, 1));
+        assert_eq!(db.location(id, &Span { start: 5, end: 10 }), (1, 6));
+        assert_eq!(db.location(id, &Span { start: 15, end: 25 }), (2, 9));
+        assert_eq!(
+            db.location(
+                id,
+                &Span {
+                    start: 1000,
+                    end: 3000
+                }
+            ),
+            (4, 15)
+        );
+    }
 }
