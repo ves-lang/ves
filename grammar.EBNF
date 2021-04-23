@@ -94,7 +94,7 @@ call = primary (
 args = spread_expr ( "," spread_expr )* ","? ;
 spread_expr = "..."? expression ;
 
-primary = "ture" | "false" | "none" | "self" 
+primary = "true" | "false" | "none" | "self" 
     | NUMBER 
     | STRING
     | array_literal
