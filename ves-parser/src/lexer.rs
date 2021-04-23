@@ -1,11 +1,12 @@
 use logos::Logos;
+use std::borrow::Cow;
 
 pub use logos::Span;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     /// Slice of the source from which this token was parsed
-    pub lexeme: &'a str,
+    pub lexeme: Cow<'a, str>,
     /// Start+end range of this token in the line where it was parsed
     pub span: Span,
     /// The token kind which optionally also contains extra
@@ -14,7 +15,11 @@ pub struct Token<'a> {
 
 impl<'a> Token<'a> {
     pub fn new(lexeme: &'a str, span: Span, kind: TokenKind<'a>) -> Token<'a> {
-        Token { lexeme, span, kind }
+        Token {
+            lexeme: lexeme.into(),
+            span,
+            kind,
+        }
     }
 }
 
