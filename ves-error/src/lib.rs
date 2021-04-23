@@ -16,6 +16,14 @@ pub struct ErrCtx {
 }
 
 impl ErrCtx {
+    /// Creates a new error context
+    pub fn new() -> ErrCtx {
+        ErrCtx {
+            errors: vec![],
+            warnings: vec![],
+        }
+    }
+
     /// Adds a new error or warning to the context.
     pub fn record(&mut self, e: VesError) {
         if e.kind == VesErrorKind::Warning {
@@ -132,9 +140,12 @@ fn test() {
 "#;
         let mut db = VesFileDatabase::default();
         let id = db.add_snippet(source.into());
-        let error =
-            VesError::resolution_wildcard("Variable `lol_no_type_system` is never used", 21..39, id)
-                .with_function("test");
+        let error = VesError::resolution_wildcard(
+            "Variable `lol_no_type_system` is never used",
+            21..39,
+            id,
+        )
+        .with_function("test");
 
         let result = db.report_one_to_string(&error).unwrap();
         assert_eq!(
