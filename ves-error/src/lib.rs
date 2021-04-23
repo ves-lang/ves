@@ -133,13 +133,13 @@ fn test() {
         let mut db = VesFileDatabase::default();
         let id = db.add_snippet(source.into());
         let error =
-            VesError::resolution_wildcard("Variable `lol_yes_generics` is never used", 21..39, id)
+            VesError::resolution_wildcard("Variable `lol_no_type_system` is never used", 21..39, id)
                 .with_function("test");
 
         let result = db.report_one_to_string(&error).unwrap();
         assert_eq!(
             result,
-            r#"error[ in test() ]: Variable `lol_yes_generics` is never used
+            r#"error[ in test() ]: Variable `lol_no_type_system` is never used
   ┌─ <source: #4c49791bbec20ffa>:3:9
   │
 3 │     mut lol_no_type_system = 75
