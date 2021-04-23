@@ -1,5 +1,6 @@
 use logos::Logos;
 use std::borrow::Cow;
+use std::convert::Into;
 
 pub use logos::Span;
 
@@ -14,7 +15,7 @@ pub struct Token<'a> {
 }
 
 impl<'a> Token<'a> {
-    pub fn new(lexeme: &'a str, span: Span, kind: TokenKind<'a>) -> Token<'a> {
+    pub fn new<S: Into<Cow<'a, str>>>(lexeme: S, span: Span, kind: TokenKind<'a>) -> Token<'a> {
         Token {
             lexeme: lexeme.into(),
             span,
