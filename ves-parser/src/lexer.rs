@@ -446,7 +446,9 @@ mod tests {
     }
     macro_rules! token {
         ($kind:ident, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, TokenKind::$kind)));
+        ($kind:expr, $lexeme:literal) => (TestToken(Token::new($lexeme, 0..1, $kind)));
     }
+
 
     #[test]
     fn arithmetic() {
@@ -539,6 +541,18 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
+                token!(Identifier, "ident")
+            ]
+        );
+    }
+
+    #[test]
+    fn unterminated_multi_comment() {
+        const SOURCE: &str = "/* /* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ ident";
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(TokenKind::Error, "/*"),
                 token!(Identifier, "ident")
             ]
         );
