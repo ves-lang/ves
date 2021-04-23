@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     fn unterminated_multi_comment() {
-        const SOURCE: &str = "/* /* /* /* /******afhišuhůů§ßß×××$$ůĐ[đĐ[đĐ[đ*/ */ */ ident";
+        const SOURCE: &str = "/* ident";
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
