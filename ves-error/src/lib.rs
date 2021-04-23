@@ -27,13 +27,13 @@ impl ErrCtx {
     /// Returns `true` if the error context has at least one error.
     #[inline]
     pub fn had_error(&self) -> bool {
-        self.errors.len() > 0
+        !self.errors.is_empty()
     }
 
     /// Returns `true` if the error context has at least one warning.
     #[inline]
     pub fn had_warning(&self) -> bool {
-        self.warnings.len() > 0
+        !self.warnings.is_empty()
     }
 }
 
@@ -124,7 +124,7 @@ mod tests {
     use crate::db::VesFileDatabase;
 
     #[test]
-    fn test_diagnostics() {
+    fn test_resolution_wildcard_diagnostic() {
         let source = r#"
 fn test() {
     mut lol_no_type_system = 75

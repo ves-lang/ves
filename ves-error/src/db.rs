@@ -207,7 +207,7 @@ impl<'a> Default for VesFileDatabase<'a> {
 }
 
 /// Computes a 64-bit BLAKE hash of the given source file.
-fn hash(source: &Cow<'_, str>) -> blake2s_simd::Hash {
+fn hash(source: &str) -> blake2s_simd::Hash {
     blake2s_simd::Params::new()
         .hash_length(8)
         .hash(source.as_bytes())
