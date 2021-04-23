@@ -9,14 +9,14 @@ pub type Span = std::ops::Range<usize>;
 /// A context for errors, warnings, and suggestions.
 #[derive(Debug, Clone)]
 pub struct ErrCtx {
-    /// The list of the errors that have occurred so far in this context.
+    /// The list of the errors that have been recorded so far.
     pub errors: Vec<VesError>,
-    /// The list of the warnings that have occurred os far in this context.
+    /// The list of the warnings that have been issued so far.
     pub warnings: Vec<VesError>,
 }
 
 impl ErrCtx {
-    /// Adds a new error or warnings to the context.
+    /// Adds a new error or warning to the context.
     pub fn record(&mut self, e: VesError) {
         if e.kind == VesErrorKind::Warning {
             self.warnings.push(e)
@@ -25,13 +25,13 @@ impl ErrCtx {
         }
     }
 
-    /// Returns `true` if the error context has at least one error.
+    /// Returns `true` if the context has at least one error.
     #[inline]
     pub fn had_error(&self) -> bool {
         !self.errors.is_empty()
     }
 
-    /// Returns `true` if the error context has at least one warning.
+    /// Returns `true` if the context has at least one warning.
     #[inline]
     pub fn had_warning(&self) -> bool {
         !self.warnings.is_empty()
@@ -48,20 +48,19 @@ pub enum VesErrorKind {
     Compile,
     /// Represents a resolution error.
     Resolution,
-    /// Represents a resolution error that
-    /// suggests to use a wildcard as a variable name.
+    /// Represents a resolution error that suggests to use a wildcard as a variable name.
     ResolutionSuggestWildcard,
-    /// Represents an error occurred at runtime.
+    /// Represents an error that has occurred at runtime.
     Runtime,
     /// A runtime panic.
     Panic,
-    /// Represents a warning that does not prevent the program from running.
+    /// Represents a warning that doesn't prevent the program from running.
     Warning,
     /// Represents a part of a traceback.
     Traceback,
 }
 
-/// A ves error. Contains the span, message, source file id.
+/// A ves error. Contains the span, message, and source file id.
 #[derive(Debug, Clone)]
 pub struct VesError {
     /// The span of the error as a byte range in the source code.
