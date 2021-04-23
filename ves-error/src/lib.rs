@@ -1,7 +1,8 @@
-use db::FileId;
-
 pub mod db;
 pub mod diagnostics;
+
+pub use db::FileId;
+pub use db::VesFileDatabase;
 
 pub type Span = std::ops::Range<usize>;
 
