@@ -295,6 +295,8 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> SkipOnSu
 pub enum Frag<'a> {
     /// A string fragment.
     Str(Token<'a>),
+    /// An unterminated interpolation fragment.
+    UnterminatedFragment(Token<'a>),
     /// An executable interpolated fragment.
     Sublexer(logos::Lexer<'a, TokenKind<'a>>),
 }
@@ -305,7 +307,7 @@ impl<'a> std::fmt::Debug for Frag<'a> {
             f,
             "{}",
             match self {
-                Self::Str(tok) =>
+                Self::Str(tok) | Self::UnterminatedFragment(tok) =>
                     if f.alternate() {
                         format!("{:#?}", tok)
                     } else {
@@ -321,14 +323,13 @@ impl<'a> PartialEq for Frag<'a> {
     fn eq(&self, other: &Frag<'a>) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.lexeme == r.lexeme,
-            _ => false,
+            (Self::UnterminatedFragment(l), Self::UnterminatedFragment(r)) => l.lexeme == r.lexeme,
+            (_, _) => true,
         }
     }
 }
 
-fn interpolated_string<'a>(
-    lex: &mut logos::Lexer<'a, TokenKind<'a>>,
-) -> Result<Vec<Frag<'a>>, String> {
+fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Vec<Frag<'a>> {
     let global_start = lex.span().start;
     let source = lex.source();
 
@@ -358,12 +359,24 @@ fn interpolated_string<'a>(
                 while i < bytes.len() && bytes[i] != b'}' {
                     i += 1;
                 }
+
                 let span = Span {
                     start: global_start + frag_start,
                     end: global_start + i,
                 };
 
-                frags.push(Frag::Sublexer(TokenKind::lexer(&source[span])));
+                if i == bytes.len() && bytes[i - 1] != b'}' {
+                    frags.push(Frag::UnterminatedFragment(Token::new(
+                        &source[Span {
+                            start: span.start - 1, // include the opening bracket
+                            end: span.end - 1,     // exclude the closing quote
+                        }],
+                        span,
+                        TokenKind::Error,
+                    )))
+                } else {
+                    frags.push(Frag::Sublexer(TokenKind::lexer(&source[span])));
+                }
 
                 prev_fragment_end = i + 1;
             } else {
@@ -397,7 +410,7 @@ fn interpolated_string<'a>(
         )));
     }
 
-    Ok(frags)
+    frags
 }
 
 #[rustfmt::skip]
@@ -613,6 +626,22 @@ mod tests {
                 TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(
                     vec![
                         Frag::Str(Token::new(r#"{escaped}"#, 0..1, TokenKind::String))
+                    ]
+                )))
+            ]
+        );
+    }
+
+    #[test]
+    fn bad_string_interpolation() {
+        const SOURCE: &str = r#"f"an {unterminated fragment""#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                TestToken(Token::new(r#"f"an {unterminated fragment""#, 0..28, TokenKind::InterpolatedString(
+                    vec![
+                        Frag::Str(Token::new(r#"an "#, 2..5, TokenKind::String)),
+                        Frag::UnterminatedFragment(Token::new(r#"{unterminated fragment"#, 6..28, TokenKind::Error))
                     ]
                 )))
             ]
