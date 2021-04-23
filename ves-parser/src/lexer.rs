@@ -568,4 +568,15 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn unicode_string() {
+        const SOURCE: &str = r#""😂""#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(String, "\"😂\"")
+            ]
+        );
+    }
 }
