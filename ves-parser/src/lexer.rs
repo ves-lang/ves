@@ -5,12 +5,15 @@ use logos::{
 use std::borrow::Cow;
 use std::convert::Into;
 
+use ast2str::AstToStr;
+
 pub use logos::Span;
 
 pub type Lexer<'a> = logos::Lexer<'a, TokenKind<'a>>;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, AstToStr)]
 pub struct Token<'a> {
+    #[forward]
     /// Slice of the source from which this token was parsed
     pub lexeme: Cow<'a, str>,
     /// Start+end range of this token in the line where it was parsed

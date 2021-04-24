@@ -8,6 +8,8 @@ edition = "2018"
 [dependencies]
 logos = "0.12.0"
 ves_error = { package = "ves-error", path = "../ves-error" }
+plain-msgbox = { git = "https://github.com/optimalstrategy/plain-msgbox" }
+ast2str = { git = "https://github.com/optimalstrategy/ast2str" }
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"
