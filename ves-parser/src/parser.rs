@@ -57,29 +57,35 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        #[allow(clippy::if_same_then_else)]
         if self.match_(&TokenKind::LeftBrace) {
             self.block()
-        }
-        // TODO: this
-        /* else if self.match_(&Print) {
-            self.print_statement()
-        }
-        else if self.match_(&Loop) {
-            self.loop_statement();
-        } else if self.match_(&For) {
-            self.for_statement();
-        } else if self.match_(&While) {
-            self.while_statement();
-        } else if self.match_(&Break) {
-            self.break_statement();
-        } else if self.match_(&Continue) {
-            self.continue_statement();
-        } else if self.match_(&Defer) {
-            self.defer_statement();
-        } else if self.match_(&Return) {
-            self.return_statement();
-        }*/
-        else {
+            // TODO: this
+        } else if self.match_(&TokenKind::Print) {
+            unimplemented!()
+            //self.print_statement()
+        } else if self.match_(&TokenKind::Loop) {
+            unimplemented!()
+            //self.loop_statement();
+        } else if self.match_(&TokenKind::For) {
+            unimplemented!()
+            //self.for_statement();
+        } else if self.match_(&TokenKind::While) {
+            unimplemented!()
+            //self.while_statement();
+        } else if self.match_(&TokenKind::Break) {
+            unimplemented!()
+            //self.break_statement();
+        } else if self.match_(&TokenKind::Continue) {
+            unimplemented!()
+            //self.continue_statement();
+        } else if self.match_(&TokenKind::Defer) {
+            unimplemented!()
+            //self.defer_statement();
+        } else if self.match_(&TokenKind::Return) {
+            unimplemented!()
+            //self.return_statement();
+        } else {
             self.expr_stmt()
         }
     }
