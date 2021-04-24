@@ -1,10 +1,9 @@
 use crate::{
     ast::{self, StmtKind, AST},
-    lexer::{Lexer, NextTokenExt, Token, TokenKind},
+    lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
-use logos::Lexer as RawLexer;
 use std::convert::Into;
-use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
+use ves_error::{ErrCtx, FileId, VesError};
 
 /// Creates an AST literal node from the provided LitValue
 macro_rules! literal {
@@ -21,12 +20,24 @@ macro_rules! literal {
 
 /// Creates an AST binary expression
 macro_rules! binary {
-    ($left:ident, $op:ident, $right:ident) => {
+    ($left:ident, $op:ident, $right:expr) => {{
+        let l = $left;
+        let r = $right;
         ast::Expr {
-            span: $left.span.start..$right.span.end,
-            kind: ast::ExprKind::Binary(ast::BinOpKind::$op, box $left, box $right),
+            span: l.span.start..r.span.end,
+            kind: ast::ExprKind::Binary(ast::BinOpKind::$op, box l, box r),
         }
-    };
+    }};
+}
+
+macro_rules! unary {
+    ($op:ident, $operand:expr, $t:ident) => {{
+        let operand = $operand;
+        ast::Expr {
+            span: $t.span.start..operand.span.end,
+            kind: ast::ExprKind::Unary(ast::UnOpKind::$op, box operand),
+        }
+    }};
 }
 
 type ParseResult<T> = std::result::Result<T, VesError>;
@@ -123,10 +134,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.consume(
-            &TokenKind::RightBracket,
-            "Expected closing '}' after a block",
-        )?;
+        self.consume(&TokenKind::RightBracket, "Expected '}' after a block")?;
 
         let span_end = self.current.span.end;
         Ok(ast::Stmt {
@@ -167,11 +175,11 @@ impl<'a> Parser<'a> {
     }
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
-        match &self.current.kind {
-            &TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
-            &TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
-            &TokenKind::If => unimplemented!(),     /* self.if_expr() */
-            &TokenKind::Do => unimplemented!(),     /* self.do_block() */
+        match self.current.kind {
+            TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
+            TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
+            TokenKind::If => unimplemented!(),     /* self.if_expr() */
+            TokenKind::Do => unimplemented!(),     /* self.do_block() */
             _ => self.assignment(),
         }
     }
@@ -179,7 +187,6 @@ impl<'a> Parser<'a> {
     // TODO: is precedence wrong?
     fn assignment(&mut self) -> ParseResult<ast::Expr<'a>> {
         let expr = self.or()?;
-
         if self.match_any(&[
             TokenKind::Equal,
             TokenKind::OrEqual,
@@ -193,9 +200,9 @@ impl<'a> Parser<'a> {
         ]) {
             let operator = self.previous.clone();
             let span_start = self.current.span.start;
-            return Ok(match &expr.kind {
+            return Ok(match expr.kind {
                 // x = <expr>
-                &ast::ExprKind::Variable(ref token) => ast::Expr {
+                ast::ExprKind::Variable(ref token) => ast::Expr {
                     kind: ast::ExprKind::Assignment(box ast::Assignment {
                         name: token.clone(),
                         value: desugar_assignment(operator, expr.clone(), self.assignment()?),
@@ -203,20 +210,20 @@ impl<'a> Parser<'a> {
                     span: span_start..self.current.span.end,
                 },
                 // x[<expr>] = <expr>
-                &ast::ExprKind::GetItem(ref node, ref key) => ast::Expr {
+                ast::ExprKind::GetItem(ref get) => ast::Expr {
                     kind: ast::ExprKind::SetItem(box ast::SetItem {
-                        node: (*node.clone()),
-                        key: (*key.clone()),
+                        node: get.node.clone(),
+                        key: get.key.clone(),
                         value: desugar_assignment(operator, expr.clone(), self.assignment()?),
                     }),
                     span: span_start..self.current.span.end,
                 },
                 // x.key = <expr>
                 // except x?.key = <expr>
-                &ast::ExprKind::GetProp(ref prop) if !prop.is_optional => ast::Expr {
+                ast::ExprKind::GetProp(ref get) if !get.is_optional => ast::Expr {
                     kind: ast::ExprKind::SetProp(box ast::SetProp {
-                        node: prop.node.clone(),
-                        field: prop.field.clone(),
+                        node: get.node.clone(),
+                        field: get.field.clone(),
                         value: desugar_assignment(operator, expr.clone(), self.assignment()?),
                     }),
                     span: span_start..self.current.span.end,
@@ -225,70 +232,262 @@ impl<'a> Parser<'a> {
                     return Err(VesError::parse(
                         "Invalid assignment target",
                         span_start..self.current.span.end,
-                        self.fid.clone(),
+                        self.fid,
                     ))
                 }
             });
         }
-
         Ok(expr)
     }
 
     fn or(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.and()?;
-        if self.match_(&TokenKind::Or) {
-            let op = self.previous.clone();
-            let right = self.and()?;
-            return Ok(binary!(expr, Or, right));
+        let mut expr = self.and()?;
+        // expr || expr
+        while self.match_(&TokenKind::Or) {
+            expr = binary!(expr, Or, self.and()?);
         }
-
         Ok(expr)
     }
 
     fn and(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.equality()?;
-
+        let mut expr = self.equality()?;
+        // expr && expr
+        while self.match_(&TokenKind::And) {
+            expr = binary!(expr, And, self.equality()?);
+        }
         Ok(expr)
     }
 
     fn equality(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.comparison()?;
-
+        let mut expr = self.comparison()?;
+        // expr != expr
+        // expr == expr
+        while self.match_any(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
+            expr = match self.previous.kind {
+                TokenKind::EqualEqual => binary!(expr, Eq, self.comparison()?),
+                TokenKind::BangEqual => binary!(expr, Ne, self.comparison()?),
+                _ => unreachable!(),
+            };
+        }
         Ok(expr)
     }
 
     fn comparison(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.term()?;
-
+        let mut expr = self.term()?;
+        // expr > expr
+        // expr < expr
+        // expr >= expr
+        // expr <= expr
+        while self.match_any(&[
+            TokenKind::More,
+            TokenKind::Less,
+            TokenKind::MoreEqual,
+            TokenKind::LessEqual,
+        ]) {
+            expr = match self.previous.kind {
+                TokenKind::More => binary!(expr, Gt, self.comparison()?),
+                TokenKind::Less => binary!(expr, Lt, self.comparison()?),
+                TokenKind::MoreEqual => binary!(expr, Ge, self.comparison()?),
+                TokenKind::LessEqual => binary!(expr, Le, self.comparison()?),
+                _ => unreachable!(),
+            };
+        }
         Ok(expr)
     }
 
     fn term(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.factor()?;
-
+        let mut expr = self.factor()?;
+        // expr - expr
+        // expr + expr
+        while self.match_any(&[TokenKind::Minus, TokenKind::Plus]) {
+            expr = match self.previous.kind {
+                TokenKind::Minus => binary!(expr, Sub, self.factor()?),
+                TokenKind::Plus => binary!(expr, Add, self.factor()?),
+                _ => unreachable!(),
+            };
+        }
         Ok(expr)
     }
 
     fn factor(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.power()?;
-
+        let mut expr = self.power()?;
+        // expr * expr
+        // expr / expr
+        while self.match_any(&[TokenKind::Star, TokenKind::Slash]) {
+            expr = match self.previous.kind {
+                TokenKind::Star => binary!(expr, Mul, self.power()?),
+                TokenKind::Slash => binary!(expr, Div, self.power()?),
+                _ => unreachable!(),
+            }
+        }
         Ok(expr)
     }
 
     fn power(&mut self) -> ParseResult<ast::Expr<'a>> {
-        let expr = self.unary()?;
-
+        let mut expr = self.unary()?;
+        // expr ** expr
+        while self.match_(&TokenKind::Power) {
+            expr = binary!(expr, Pow, self.power()?);
+        }
         Ok(expr)
     }
 
     fn unary(&mut self) -> ParseResult<ast::Expr<'a>> {
+        if self.match_any(&[
+            TokenKind::Bang,
+            TokenKind::Minus,
+            TokenKind::Try,
+            TokenKind::Ok,
+            TokenKind::Err,
+            TokenKind::Increment,
+            TokenKind::Decrement,
+            TokenKind::Ellipsis,
+        ]) {
+            let op = self.previous.clone();
+            return Ok(match self.previous.kind {
+                // !<expr>
+                TokenKind::Bang => unary!(Not, self.unary()?, op),
+                // -<expr>
+                TokenKind::Minus => unary!(Neg, self.unary()?, op),
+                // try <expr>
+                TokenKind::Try => unary!(Try, self.unary()?, op),
+                // ok <expr>
+                TokenKind::Ok => unary!(Ok, self.unary()?, op),
+                // err <expr>
+                TokenKind::Err => unary!(Err, self.unary()?, op),
+                // ++<expr>
+                TokenKind::Increment => {
+                    let expr = self.unary()?;
+                    ast::Expr {
+                        span: op.span.start..expr.span.end,
+                        kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
+                            expr,
+                            kind: ast::IncDecKind::Increment,
+                        }),
+                    }
+                }
+                // --<expr>
+                TokenKind::Decrement => {
+                    let expr = self.unary()?;
+                    ast::Expr {
+                        span: op.span.start..expr.span.end,
+                        kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
+                            expr,
+                            kind: ast::IncDecKind::Decrement,
+                        }),
+                    }
+                }
+                // QQQ(moscow): should this be here?
+                // ...<expr>
+                TokenKind::Ellipsis => {
+                    let expr = self.unary()?;
+                    ast::Expr {
+                        span: op.span.start..expr.span.end,
+                        kind: ast::ExprKind::Spread(box expr),
+                    }
+                }
+                _ => unreachable!(),
+            });
+        }
         self.call()
     }
 
     fn call(&mut self) -> ParseResult<ast::Expr<'a>> {
         let mut expr = self.primary()?;
+        while self.match_any(&[
+            TokenKind::LeftParen,
+            TokenKind::Dot,
+            TokenKind::MaybeDot,
+            TokenKind::LeftBrace,
+            TokenKind::Increment,
+            TokenKind::Decrement,
+        ]) {
+            expr = match self.previous.kind {
+                TokenKind::LeftParen => {
+                    // TODO: tail call
+                    let args = self.arg_list()?;
+                    ast::Expr {
+                        span: expr.span.start..self.previous.span.end,
+                        kind: ast::ExprKind::Call(box ast::Call {
+                            callee: box expr,
+                            args,
+                            tco: false,
+                            rest: false,
+                        }),
+                    }
+                }
+                TokenKind::Dot => {
+                    let field = self.consume(&TokenKind::Identifier, "Expected property name")?;
+                    ast::Expr {
+                        span: expr.span.start..self.previous.span.end,
+                        kind: ast::ExprKind::GetProp(box ast::GetProp {
+                            node: expr,
+                            field,
+                            is_optional: false,
+                        }),
+                    }
+                }
+                TokenKind::MaybeDot => {
+                    let field = self.consume(&TokenKind::Identifier, "Expected property name")?;
+                    ast::Expr {
+                        span: expr.span.start..self.previous.span.end,
+                        kind: ast::ExprKind::GetProp(box ast::GetProp {
+                            node: expr,
+                            field,
+                            is_optional: true,
+                        }),
+                    }
+                }
+                TokenKind::LeftBrace => {
+                    let key = self.expr()?;
+                    self.consume(&TokenKind::RightBrace, "Expected ']'")?;
+                    ast::Expr {
+                        span: expr.span.start..self.previous.span.end,
+                        kind: ast::ExprKind::GetItem(box ast::GetItem { node: expr, key }),
+                    }
+                }
+                TokenKind::Increment => ast::Expr {
+                    span: expr.span.start..self.previous.span.end,
+                    kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
+                        expr,
+                        kind: ast::IncDecKind::Increment,
+                    }),
+                },
+                TokenKind::Decrement => ast::Expr {
+                    span: expr.span.start..self.previous.span.end,
+                    kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
+                        expr,
+                        kind: ast::IncDecKind::Decrement,
+                    }),
+                },
+                _ => unreachable!(),
+            }
+        }
 
         Ok(expr)
+    }
+
+    fn arg_list(&mut self) -> ParseResult<ast::Args<'a>> {
+        // TODO: spread args
+        let span_start = self.previous.span.start;
+        let mut args = vec![];
+        if !self.check(&TokenKind::RightParen) {
+            loop {
+                if args.len() == 255 {
+                    return Err(VesError::parse(
+                        "Too many arguments",
+                        span_start..self.current.span.end,
+                        self.fid,
+                    ));
+                }
+                args.push(self.expr()?);
+                if !self.match_(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        self.consume(&TokenKind::RightParen, "Expected ')'")?;
+        Ok(args)
     }
 
     fn primary(&mut self) -> ParseResult<ast::Expr<'a>> {
@@ -316,15 +515,58 @@ impl<'a> Parser<'a> {
                     VesError::parse(
                         "Failed to parse number",
                         self.previous.span.clone(),
-                        self.fid.clone(),
+                        self.fid,
                     )
                 })?)
             ));
         }
         // string literal
         if self.match_(&TokenKind::String) {
-            let str_token = self.previous.clone();
-            return Ok(literal!(self, ast::LitValue::Str(str_token.lexeme.into())));
+            return Ok(literal!(
+                self,
+                ast::LitValue::Str(
+                    self.previous
+                        .lexeme
+                        .trim_start_matches(|v| v == '"' || v == '\'')
+                        .trim_end_matches(|v| v == '"' || v == '\'')
+                        // QQQ(moscow): is there a way to avoid the string copy here?
+                        .to_string()
+                        .into()
+                )
+            ));
+        }
+        if self.match_(&TokenKind::InterpolatedString(vec![])) {
+            // TODO: interpolated string
+            let span_start = self.previous.span.start;
+            let mut fragments = vec![];
+            let previous = std::mem::replace(&mut self.previous, self.eof.clone());
+            if let TokenKind::InterpolatedString(unprocessed) = previous.kind {
+                for frag in unprocessed.into_iter() {
+                    match frag {
+                        lexer::Frag::Str(v) => fragments.push(ast::FStringFrag::Str(ast::Lit {
+                            token: v.clone(),
+                            value: ast::LitValue::Str(v.lexeme.clone()),
+                        })),
+                        lexer::Frag::Sublexer(sublexer) => {
+                            let mut subparser = Parser::new(sublexer, self.fid);
+                            subparser.advance();
+                            fragments.push(ast::FStringFrag::Expr(subparser.expr()?));
+                        }
+                        lexer::Frag::UnterminatedFragment(frag) => {
+                            return Err(VesError::parse(
+                                "Unterminated fragment",
+                                frag.span,
+                                self.fid,
+                            ));
+                        }
+                    }
+                }
+            }
+            let span_end = self.current.span.end;
+            return Ok(ast::Expr {
+                span: span_start..span_end,
+                kind: ast::ExprKind::FString(ast::FString { fragments }),
+            });
         }
         // array literal
         if self.match_(&TokenKind::LeftBrace) {
@@ -333,7 +575,7 @@ impl<'a> Parser<'a> {
             while !self.at_end() && !self.check(&TokenKind::RightBrace) {
                 exprs.push(self.expr()?);
             }
-            self.consume(&TokenKind::RightBrace, "Expected closing ']'")?;
+            self.consume(&TokenKind::RightBrace, "Expected ']'")?;
             let span_end = self.current.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Array(exprs),
@@ -350,7 +592,7 @@ impl<'a> Parser<'a> {
                     // simple keys may be identifiers
                     let key_token = self.previous.clone();
                     identifier = Some(key_token.clone());
-                    literal!(self, ast::LitValue::Str(key_token.lexeme.into()))
+                    literal!(self, ast::LitValue::Str(key_token.lexeme))
                 } else {
                     // keys may also be expressions wrapped in []
                     self.consume(&TokenKind::LeftBrace, "Expected '[' before key expression")?;
@@ -372,12 +614,12 @@ impl<'a> Parser<'a> {
                     return Err(VesError::parse(
                         "Map entries without a value must have an identifier key",
                         self.previous.span.clone(),
-                        self.fid.clone(),
+                        self.fid,
                     ));
                 };
                 pairs.push((key, value));
             }
-            self.consume(&TokenKind::RightBracket, "Expected closing '}'")?;
+            self.consume(&TokenKind::RightBracket, "Expected '}'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Map(pairs),
@@ -388,7 +630,7 @@ impl<'a> Parser<'a> {
         if self.match_(&TokenKind::LeftParen) {
             let span_start = self.previous.span.start;
             let expr = self.comma()?;
-            self.consume(&TokenKind::RightParen, "Expected closing ')'")?;
+            self.consume(&TokenKind::RightParen, "Expected ')'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Grouping(box expr),
@@ -399,13 +641,13 @@ impl<'a> Parser<'a> {
             return Err(VesError::parse(
                 format!("Unexpected EOF at {:?}", self.previous.clone()),
                 self.eof.span.clone(),
-                self.fid.clone(),
+                self.fid,
             ));
         }
         Err(VesError::parse(
             format!("Unexpected token {:?}", self.previous.clone()),
             self.current.span.clone(),
-            self.fid.clone(),
+            self.fid,
         ))
     }
 
@@ -564,37 +806,51 @@ mod tests {
 
     #[test]
     fn parse_comma() {
-        const SOURCE: &str = "0, 0, 0";
+        const SOURCE: &str = r#"1.0e-5, none, true, false, "string""#;
         assert_ast!(
             SOURCE,
             vec![ast::Stmt {
-                span: 6..6,
                 kind: ast::StmtKind::ExprStmt(box ast::Expr {
-                    span: 6..6,
                     kind: ast::ExprKind::Comma(vec![
                         ast::Expr {
                             kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("0", 0..1, TokenKind::Number),
-                                value: ast::LitValue::Number(0f64)
+                                token: Token::new("1.0e-5", 0..6, TokenKind::Number),
+                                value: ast::LitValue::Number("1.0e-5".parse::<f64>().unwrap())
                             }),
-                            span: 0..1
+                            span: 0..6
                         },
                         ast::Expr {
                             kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("0", 3..4, TokenKind::Number),
-                                value: ast::LitValue::Number(0f64)
+                                token: Token::new("none", 8..12, TokenKind::None),
+                                value: ast::LitValue::None
                             }),
-                            span: 3..4
+                            span: 8..12
                         },
                         ast::Expr {
                             kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("0", 6..7, TokenKind::Number),
-                                value: ast::LitValue::Number(0f64)
+                                token: Token::new("true", 14..18, TokenKind::True),
+                                value: ast::LitValue::Bool(true)
                             }),
-                            span: 6..7
+                            span: 14..18
                         },
-                    ])
-                })
+                        ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("false", 20..25, TokenKind::False),
+                                value: ast::LitValue::Bool(false)
+                            }),
+                            span: 20..25
+                        },
+                        ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("\"string\"", 27..35, TokenKind::String),
+                                value: ast::LitValue::Str("string".into())
+                            }),
+                            span: 27..35
+                        },
+                    ]),
+                    span: 34..34,
+                }),
+                span: 34..34,
             }]
         )
     }
@@ -631,17 +887,15 @@ mod tests {
     }
 
     /*
-    TODO: test these
-    none
-    true
-    false
-    self
-    "string"
-    1.0e-5
+    TODO(jprochazk): test these
     [1.0, "a", true]
     { test }
     { test: 1.0 }
     { ["test"]: 1.0 }
+    f"test"
+    f"test{2+2}"
+    ...a
+    a(0, 0)
     a += 5
     a += 5
     a[0] += 5
