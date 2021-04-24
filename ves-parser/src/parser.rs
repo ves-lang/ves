@@ -6,14 +6,25 @@ use logos::Lexer as RawLexer;
 use std::convert::Into;
 use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
 
+/// Creates an AST literal node from the provided LitValue
 macro_rules! literal {
-    ($self:ident, $value:expr) => {
+    ($parser:ident, $value:expr) => {
         ast::Expr {
-            span: self.previous.span.clone(),
-            kind: ast::ExprKind::Lit(Box::new(ast::Lit {
-                token: self.previous.token.clone(),
+            span: $parser.previous.span.clone(),
+            kind: ast::ExprKind::Lit(box ast::Lit {
+                token: $parser.previous.clone(),
                 value: $value,
-            })),
+            }),
+        }
+    };
+}
+
+/// Creates an AST binary expression
+macro_rules! binary {
+    ($left:ident, $op:ident, $right:ident) => {
+        ast::Expr {
+            span: $left.span.start..$right.span.end,
+            kind: ast::ExprKind::Binary(ast::BinOpKind::$op, box $left, box $right),
         }
     };
 }
@@ -139,20 +150,24 @@ impl<'a> Parser<'a> {
 
     fn comma(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let exprs = vec![self.expr()?];
+        let mut exprs = vec![self.expr()?];
         while self.match_(&TokenKind::Comma) {
             exprs.push(self.expr()?);
         }
         let span_end = self.current.span.end;
 
-        Ok(ast::Expr {
-            kind: ast::ExprKind::Comma(expr),
-            span: span_start..span_end,
-        })
+        if exprs.len() == 1 {
+            Ok(exprs.pop().unwrap())
+        } else {
+            Ok(ast::Expr {
+                kind: ast::ExprKind::Comma(exprs),
+                span: span_start..span_end,
+            })
+        }
     }
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
-        match &self.current {
+        match &self.current.kind {
             &TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
             &TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
             &TokenKind::If => unimplemented!(),     /* self.if_expr() */
@@ -161,30 +176,48 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // TODO: is precedence wrong?
     fn assignment(&mut self) -> ParseResult<ast::Expr<'a>> {
         let expr = self.or()?;
 
-        if self.match_(&TokenKind::Equal) {
+        if self.match_any(&[
+            TokenKind::Equal,
+            TokenKind::OrEqual,
+            TokenKind::AndEqual,
+            TokenKind::PlusEqual,
+            TokenKind::MinusEqual,
+            TokenKind::StarEqual,
+            TokenKind::SlashEqual,
+            TokenKind::PowerEqual,
+            TokenKind::PercentEqual,
+        ]) {
+            let operator = self.previous.clone();
             let span_start = self.current.span.start;
-            let value = self.assignment();
-            return Ok(match expr.kind {
+            return Ok(match &expr.kind {
                 // x = <expr>
-                ast::ExprKind::Variable(token) => ast::Expr {
-                    kind: ast::ExprKind::Assignment(ast::Assignment { name: token, value }),
+                &ast::ExprKind::Variable(ref token) => ast::Expr {
+                    kind: ast::ExprKind::Assignment(box ast::Assignment {
+                        name: token.clone(),
+                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                    }),
                     span: span_start..self.current.span.end,
                 },
                 // x[<expr>] = <expr>
-                ast::ExprKind::GetItem(node, key) => ast::Expr {
-                    kind: ast::ExprKind::SetItem(ast::SetItem { node, key, value }),
+                &ast::ExprKind::GetItem(ref node, ref key) => ast::Expr {
+                    kind: ast::ExprKind::SetItem(box ast::SetItem {
+                        node: (*node.clone()),
+                        key: (*key.clone()),
+                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                    }),
                     span: span_start..self.current.span.end,
                 },
                 // x.key = <expr>
                 // except x?.key = <expr>
-                ast::ExprKind::GetProp(prop) if !*prop.is_optional => ast::Expr {
-                    kind: ast::ExprKind::SetProp(ast::SetProp {
-                        node: *prop.node,
-                        field: *prop.field,
-                        value,
+                &ast::ExprKind::GetProp(ref prop) if !prop.is_optional => ast::Expr {
+                    kind: ast::ExprKind::SetProp(box ast::SetProp {
+                        node: prop.node.clone(),
+                        field: prop.field.clone(),
+                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
                     }),
                     span: span_start..self.current.span.end,
                 },
@@ -203,6 +236,11 @@ impl<'a> Parser<'a> {
 
     fn or(&mut self) -> ParseResult<ast::Expr<'a>> {
         let expr = self.and()?;
+        if self.match_(&TokenKind::Or) {
+            let op = self.previous.clone();
+            let right = self.and()?;
+            return Ok(binary!(expr, Or, right));
+        }
 
         Ok(expr)
     }
@@ -280,20 +318,18 @@ impl<'a> Parser<'a> {
                         self.previous.span.clone(),
                         self.fid.clone(),
                     )
-                }))
+                })?)
             ));
         }
         // string literal
         if self.match_(&TokenKind::String) {
-            return Ok(literal!(
-                self,
-                ast::LitValue::Str(self.previous.lexeme.into())
-            ));
+            let str_token = self.previous.clone();
+            return Ok(literal!(self, ast::LitValue::Str(str_token.lexeme.into())));
         }
         // array literal
         if self.match_(&TokenKind::LeftBrace) {
             let span_start = self.previous.span.start;
-            let exprs = vec![];
+            let mut exprs = vec![];
             while !self.at_end() && !self.check(&TokenKind::RightBrace) {
                 exprs.push(self.expr()?);
             }
@@ -307,13 +343,14 @@ impl<'a> Parser<'a> {
         // map literals (JS-style object literals)
         if self.match_(&TokenKind::LeftBracket) {
             let span_start = self.previous.span.start;
-            let pairs = vec![];
+            let mut pairs = vec![];
             while !self.at_end() && !self.check(&TokenKind::RightBracket) {
                 let mut identifier = None;
                 let key = if self.match_(&TokenKind::Identifier) {
                     // simple keys may be identifiers
-                    identifier = Some(self.previous.clone());
-                    literal!(self, ast::LitValue::Str(self.previous.lexeme.into()))
+                    let key_token = self.previous.clone();
+                    identifier = Some(key_token.clone());
+                    literal!(self, ast::LitValue::Str(key_token.lexeme.into()))
                 } else {
                     // keys may also be expressions wrapped in []
                     self.consume(&TokenKind::LeftBrace, "Expected '[' before key expression")?;
@@ -354,7 +391,7 @@ impl<'a> Parser<'a> {
             self.consume(&TokenKind::RightParen, "Expected closing ')'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
-                kind: ast::ExprKind::Grouping(Box::new(expr)),
+                kind: ast::ExprKind::Grouping(box expr),
                 span: span_start..span_end,
             });
         }
@@ -463,11 +500,54 @@ impl<'a> Parser<'a> {
     }
 }
 
+fn desugar_assignment<'a>(
+    which: Token<'a>,
+    receiver: ast::Expr<'a>,
+    value: ast::Expr<'a>,
+) -> ast::Expr<'a> {
+    // transforms e.g. `name += value` into `name = name + value`
+    macro_rules! desugar {
+        ($receiver:ident, $op:ident, $value:ident) => {
+            ast::Expr {
+                span: $receiver.span.start..$value.span.end,
+                kind: ast::ExprKind::Binary(ast::BinOpKind::$op, box $receiver, box $value),
+            }
+        };
+    }
+    match which.kind {
+        // no-op for `name = value`
+        TokenKind::Equal => value,
+        TokenKind::OrEqual => desugar!(receiver, Or, value),
+        TokenKind::AndEqual => desugar!(receiver, And, value),
+        TokenKind::PlusEqual => desugar!(receiver, Add, value),
+        TokenKind::MinusEqual => desugar!(receiver, Sub, value),
+        TokenKind::StarEqual => desugar!(receiver, Mul, value),
+        TokenKind::SlashEqual => desugar!(receiver, Div, value),
+        TokenKind::PowerEqual => desugar!(receiver, Pow, value),
+        TokenKind::PercentEqual => desugar!(receiver, Rem, value),
+        _ => unreachable!(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pretty_assertions::assert_eq;
 
-    // TODO: utilities for easier testing parsed AST
+    // TODO: assert errors, too
+    // TODO: spans may be wrong
+
+    macro_rules! assert_ast {
+        ($source:expr, $expected:expr) => {
+            pretty_assertions::assert_eq!(
+                Parser::new(Lexer::new($source), FileId::anon())
+                    .parse()
+                    .unwrap()
+                    .body,
+                $expected
+            )
+        };
+    }
 
     #[test]
     fn parse_block() {
@@ -482,6 +562,74 @@ mod tests {
         );
     }
 
+    #[test]
+    fn parse_comma() {
+        const SOURCE: &str = "0, 0, 0";
+        assert_ast!(
+            SOURCE,
+            vec![ast::Stmt {
+                span: 6..6,
+                kind: ast::StmtKind::ExprStmt(box ast::Expr {
+                    span: 6..6,
+                    kind: ast::ExprKind::Comma(vec![
+                        ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("0", 0..1, TokenKind::Number),
+                                value: ast::LitValue::Number(0f64)
+                            }),
+                            span: 0..1
+                        },
+                        ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("0", 3..4, TokenKind::Number),
+                                value: ast::LitValue::Number(0f64)
+                            }),
+                            span: 3..4
+                        },
+                        ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("0", 6..7, TokenKind::Number),
+                                value: ast::LitValue::Number(0f64)
+                            }),
+                            span: 6..7
+                        },
+                    ])
+                })
+            }]
+        )
+    }
+
+    #[test]
+    fn parse_binary_or() {
+        const SOURCE: &str = "0 || 0";
+        assert_ast!(
+            SOURCE,
+            vec![ast::Stmt {
+                kind: ast::StmtKind::ExprStmt(box ast::Expr {
+                    kind: ast::ExprKind::Binary(
+                        ast::BinOpKind::Or,
+                        box ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("0", 0..1, TokenKind::Number),
+                                value: ast::LitValue::Number(0f64),
+                            }),
+                            span: 0..1
+                        },
+                        box ast::Expr {
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("0", 5..6, TokenKind::Number),
+                                value: ast::LitValue::Number(0f64),
+                            }),
+                            span: 5..6
+                        }
+                    ),
+                    span: 0..6
+                }),
+                span: 5..5
+            }]
+        )
+    }
+
     /*
     TODO: test these
     none
@@ -494,5 +642,9 @@ mod tests {
     { test }
     { test: 1.0 }
     { ["test"]: 1.0 }
+    a += 5
+    a += 5
+    a[0] += 5
+    a.b += 5
     */
 }
