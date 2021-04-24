@@ -59,8 +59,8 @@ impl<'a> Parser<'a> {
     fn stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         if self.match_(&TokenKind::LeftBrace) {
             self.block()
-            // TODO: here
         }
+        // TODO: this
         /* else if self.match_(&Print) {
             self.print_statement()
         }
@@ -139,7 +139,20 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn spread_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+        if self.match_(&TokenKind::Ellipsis) {
+            let span_start = self.previous.span.start;
+            Ok(ast::Expr {
+                kind: ast::ExprKind::Spread(box self.expr()?),
+                span: span_start..self.previous.span.start,
+            })
+        } else {
+            self.expr()
+        }
+    }
+
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+        // TODO: this
         match self.current.kind {
             TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
             TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
@@ -149,7 +162,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // TODO: is precedence wrong?
     fn assignment(&mut self) -> ParseResult<ast::Expr<'a>> {
         let expr = self.or()?;
         if self.match_any(&[
@@ -175,7 +187,7 @@ impl<'a> Parser<'a> {
                     span: span_start..self.current.span.end,
                 },
                 // x[<expr>] = <expr>
-                ast::ExprKind::GetItem(ref get) if is_valid_assignment_target(&get.node) => {
+                ast::ExprKind::GetItem(ref get) if is_valid_assignment_target(&get.node, false) => {
                     ast::Expr {
                         kind: ast::ExprKind::SetItem(box ast::SetItem {
                             node: get.node.clone(),
@@ -188,7 +200,7 @@ impl<'a> Parser<'a> {
                 // x.key = <expr>
                 // except x?.key = <expr>
                 ast::ExprKind::GetProp(ref get)
-                    if !get.is_optional && is_valid_assignment_target(&get.node) =>
+                    if !get.is_optional && is_valid_assignment_target(&get.node, false) =>
                 {
                     ast::Expr {
                         kind: ast::ExprKind::SetProp(box ast::SetProp {
@@ -310,7 +322,6 @@ impl<'a> Parser<'a> {
             TokenKind::Try,
             TokenKind::Ok,
             TokenKind::Err,
-            TokenKind::Ellipsis,
             TokenKind::Increment,
             TokenKind::Decrement,
         ]) {
@@ -330,21 +341,20 @@ impl<'a> Parser<'a> {
                 TokenKind::Increment | TokenKind::Decrement => {
                     let kind = self.previous.kind.clone();
                     let expr = self.call()?;
-                    ast::Expr {
-                        span: op.span.start..expr.span.end,
-                        kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
-                            expr,
-                            kind: ast::IncDecKind::from(kind),
-                        }),
-                    }
-                }
-                // QQQ(moscow): should this be here?
-                // ...<expr>
-                TokenKind::Ellipsis => {
-                    let expr = self.unary()?;
-                    ast::Expr {
-                        span: op.span.start..expr.span.end,
-                        kind: ast::ExprKind::Spread(box expr),
+                    if is_valid_assignment_target(&expr, true) {
+                        ast::Expr {
+                            span: op.span.start..expr.span.end,
+                            kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
+                                expr,
+                                kind: ast::IncDecKind::from(kind),
+                            }),
+                        }
+                    } else {
+                        return Err(VesError::parse(
+                            "Invalid assignment target",
+                            op.span.start..expr.span.end,
+                            self.fid,
+                        ));
                     }
                 }
                 _ => unreachable!(),
@@ -354,6 +364,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.call()?;
 
         if self.match_any(&[TokenKind::Increment, TokenKind::Decrement]) {
+            println!("??????");
             let kind = self.previous.kind.clone();
             expr = ast::Expr {
                 span: expr.span.start..self.previous.span.end,
@@ -421,13 +432,23 @@ impl<'a> Parser<'a> {
                         kind: ast::ExprKind::GetItem(box ast::GetItem { node: expr, key }),
                     }
                 }
-                TokenKind::Increment | TokenKind::Decrement => ast::Expr {
-                    span: expr.span.start..self.previous.span.end,
-                    kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
-                        expr,
-                        kind: ast::IncDecKind::from(self.previous.kind.clone()),
-                    }),
-                },
+                TokenKind::Increment | TokenKind::Decrement => {
+                    if is_valid_assignment_target(&expr, true) {
+                        ast::Expr {
+                            span: expr.span.start..self.previous.span.end,
+                            kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
+                                expr,
+                                kind: ast::IncDecKind::from(self.previous.kind.clone()),
+                            }),
+                        }
+                    } else {
+                        return Err(VesError::parse(
+                            "Invalid assignment target",
+                            expr.span.start..self.previous.span.end,
+                            self.fid,
+                        ));
+                    }
+                }
                 _ => unreachable!(),
             }
         }
@@ -448,7 +469,7 @@ impl<'a> Parser<'a> {
                         self.fid,
                     ));
                 }
-                args.push(self.expr()?);
+                args.push(self.spread_expr()?);
                 if !self.match_(&TokenKind::Comma) {
                     break;
                 }
@@ -511,7 +532,6 @@ impl<'a> Parser<'a> {
             ));
         }
         if self.match_(&TokenKind::InterpolatedString(vec![])) {
-            // TODO: interpolated string
             let span_start = self.previous.span.start;
             let mut fragments = vec![];
             let previous = std::mem::replace(&mut self.previous, self.eof.clone());
@@ -546,9 +566,9 @@ impl<'a> Parser<'a> {
         // array literal
         if self.match_(&TokenKind::LeftBracket) {
             let span_start = self.previous.span.start;
-            let mut exprs = vec![];
-            while !self.at_end() && !self.check(&TokenKind::RightBracket) {
-                exprs.push(self.expr()?);
+            let mut exprs = vec![self.spread_expr()?];
+            while self.match_(&TokenKind::Comma) {
+                exprs.push(self.spread_expr()?);
             }
             self.consume(&TokenKind::RightBracket, "Expected ']'")?;
             let span_end = self.current.span.end;
@@ -558,47 +578,12 @@ impl<'a> Parser<'a> {
             });
         }
         // map literals (JS-style object literals)
+        // TODO: spread operator in maps (also JS-style)
         if self.match_(&TokenKind::LeftBrace) {
             let span_start = self.previous.span.start;
-            let mut pairs = vec![];
-            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
-                let mut identifier = None;
-                let key = if self.match_(&TokenKind::Identifier) {
-                    // simple keys may be identifiers
-                    let key_token = self.previous.clone();
-                    identifier = Some(key_token.clone());
-                    literal!(self, ast::LitValue::Str(key_token.lexeme))
-                } else {
-                    // keys may also be expressions wrapped in []
-                    self.consume(
-                        &TokenKind::LeftBracket,
-                        "Expected '[' before key expression",
-                    )?;
-                    let key = self.expr()?;
-                    self.consume(
-                        &TokenKind::RightBracket,
-                        "Expected ']' after key expression",
-                    )?;
-                    key
-                };
-
-                let value = if self.match_(&TokenKind::Colon) {
-                    self.expr()?
-                } else if let Some(identifier) = identifier {
-                    // if ':' is omitted, the value is the value bound to the identifier key
-                    // which means the key must be a simple identifier
-                    ast::Expr {
-                        span: self.previous.span.clone(),
-                        kind: ast::ExprKind::Variable(identifier),
-                    }
-                } else {
-                    return Err(VesError::parse(
-                        "Map entries without a value must have an identifier key",
-                        self.previous.span.clone(),
-                        self.fid,
-                    ));
-                };
-                pairs.push((key, value));
+            let mut pairs = vec![self.parse_pair()?];
+            while self.match_(&TokenKind::Comma) {
+                pairs.push(self.parse_pair()?);
             }
             self.consume(&TokenKind::RightBrace, "Expected '}'")?;
             let span_end = self.previous.span.end;
@@ -620,16 +605,56 @@ impl<'a> Parser<'a> {
         }
         if self.match_(&TokenKind::EOF) {
             return Err(VesError::parse(
-                format!("Unexpected EOF at {:?}", self.previous.clone()),
+                format!("Unexpected EOF at {}", self.previous.lexeme),
                 self.eof.span.clone(),
                 self.fid,
             ));
         }
         Err(VesError::parse(
-            format!("Unexpected token {:?}", self.previous.clone()),
+            format!("Unexpected token {}", self.previous.lexeme),
             self.current.span.clone(),
             self.fid,
         ))
+    }
+
+    fn parse_pair(&mut self) -> ParseResult<(ast::Expr<'a>, ast::Expr<'a>)> {
+        let mut identifier = None;
+        let key = if self.match_(&TokenKind::Identifier) {
+            // simple keys may be identifiers
+            let key_token = self.previous.clone();
+            identifier = Some(key_token.clone());
+            literal!(self, ast::LitValue::Str(key_token.lexeme))
+        } else {
+            // keys may also be expressions wrapped in []
+            self.consume(
+                &TokenKind::LeftBracket,
+                "Expected '[' before key expression",
+            )?;
+            let key = self.expr()?;
+            self.consume(
+                &TokenKind::RightBracket,
+                "Expected ']' after key expression",
+            )?;
+            key
+        };
+
+        let value = if self.match_(&TokenKind::Colon) {
+            self.expr()?
+        } else if let Some(identifier) = identifier {
+            // if ':' is omitted, the value is the value bound to the identifier key
+            // which means the key must be a simple identifier
+            ast::Expr {
+                span: self.previous.span.clone(),
+                kind: ast::ExprKind::Variable(identifier),
+            }
+        } else {
+            return Err(VesError::parse(
+                "Map entries without a value must have an identifier key",
+                self.previous.span.clone(),
+                self.fid,
+            ));
+        };
+        Ok((key, value))
     }
 
     #[inline]
@@ -713,7 +738,7 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Token<'a> {
         std::mem::swap(&mut self.previous, &mut self.current);
         self.current = self.lexer.next_token().unwrap_or_else(|| self.eof.clone());
-        self.current.clone()
+        self.previous.clone()
     }
 
     /// Check if the parser has reached EOF
@@ -752,18 +777,33 @@ fn desugar_assignment<'a>(
     }
 }
 
-fn is_valid_assignment_target(expr: &ast::Expr<'_>) -> bool {
-    match &expr.kind {
-        ast::ExprKind::GetProp(ref get) => {
-            if get.is_optional {
-                false
-            } else {
-                is_valid_assignment_target(&get.node)
+fn is_valid_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> bool {
+    if !check_top {
+        match &expr.kind {
+            ast::ExprKind::GetProp(ref get) => {
+                if get.is_optional {
+                    false
+                } else {
+                    is_valid_assignment_target(&get.node, false)
+                }
             }
+            ast::ExprKind::GetItem(ref get) => is_valid_assignment_target(&get.node, false),
+            ast::ExprKind::Call(ref call) => is_valid_assignment_target(&call.callee, false),
+            _ => true,
         }
-        ast::ExprKind::GetItem(ref get) => is_valid_assignment_target(&get.node),
-        ast::ExprKind::Call(ref call) => is_valid_assignment_target(&call.callee),
-        _ => true,
+    } else {
+        match &expr.kind {
+            ast::ExprKind::Variable(..) => true,
+            ast::ExprKind::GetProp(ref get) => {
+                if get.is_optional {
+                    false
+                } else {
+                    is_valid_assignment_target(&get.node, false)
+                }
+            }
+            ast::ExprKind::GetItem(ref get) => is_valid_assignment_target(&get.node, false),
+            _ => false,
+        }
     }
 }
 
@@ -846,22 +886,18 @@ mod tests {
 
     #[test]
     fn parse_block() {
-        const SOURCE: &str = "{ }";
-        let parser = Parser::new(Lexer::new(SOURCE), FileId::anon());
-        assert_eq!(
-            parser.parse().unwrap().body,
-            vec![ast::Stmt {
-                kind: ast::StmtKind::Block(vec![]),
-                span: 0..2
-            }]
+        assert_ast!(
+            "{ }",
+            r#"
+StmtKind::Block
+  statements="#
         );
     }
 
     #[test]
     fn parse_comma() {
-        const SOURCE: &str = r#"1.0e-5, none, true, false, "string""#;
         assert_ast!(
-            SOURCE,
+            r#"1.0e-5, none, true, false, "string""#,
             r#"
 StmtKind::ExprStmt
   expr: ExprKind::Comma
@@ -890,9 +926,8 @@ StmtKind::ExprStmt
 
     #[test]
     fn parse_binary_or() {
-        const SOURCE: &str = "0 || 0";
         assert_ast!(
-            SOURCE,
+            "0 || 0",
             r#"
 StmtKind::ExprStmt
   expr: ExprKind::Binary
@@ -908,19 +943,258 @@ StmtKind::ExprStmt
         );
     }
 
-    /*
-    TODO(jprochazk): test these
-    [1.0, "a", true]
-    { test }
-    { test: 1.0 }
-    { ["test"]: 1.0 }
-    f"test"
-    f"test{2+2}"
-    ...a
-    a(0, 0)
-    a += 5
-    a += 5
-    a[0] += 5
-    a.b += 5
-    */
+    #[test]
+    fn parse_access() {
+        assert_ast!(
+            "a.b?.c[0]",
+            r#"
+StmtKind::ExprStmt
+  expr: GetItem
+    node: GetProp
+      node: GetProp
+        node: ExprKind::Variable
+          name: "a"
+        field: "b"
+        is_optional: false
+      field: "c"
+      is_optional: true
+    key: Lit
+      token: "0"
+      value: LitValue::Number
+        field0: 0"#
+        )
+    }
+
+    #[test]
+    fn parse_prefix_increment() {
+        assert_ast!(
+            "++a",
+            r#"
+StmtKind::ExprStmt
+  expr: IncDec
+    expr: ExprKind::Variable
+      name: "a"
+    kind: Increment"#
+        )
+    }
+
+    #[test]
+    fn parse_postfix_increment() {
+        assert_ast!(
+            "a++",
+            r#"
+StmtKind::ExprStmt
+  expr: IncDec
+    expr: ExprKind::Variable
+      name: "a"
+    kind: Increment"#
+        )
+    }
+
+    #[test]
+    fn parse_invalid_assignments() {
+        macro_rules! test_case {
+            ($source:literal) => {
+                let errors = Parser::new(Lexer::new($source), FileId::anon())
+                    .parse()
+                    .unwrap_err()
+                    .errors;
+                assert!(errors.len() == 1);
+                assert_eq!(&errors[0].msg, &"Invalid assignment target");
+            };
+        }
+        test_case!("a?.b = v");
+        test_case!("a()?.b = v");
+        test_case!("[a,b,c].f()?.x = v");
+        test_case!("a()?.b().c = v");
+    }
+
+    #[test]
+    fn parse_array_literal() {
+        // simple
+        assert_ast!(
+            r#"[0, "a", none, a]"#,
+            r#"
+StmtKind::ExprStmt
+  expr: ExprKind::Array
+    field0=
+      Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+      Lit
+        token: "\"a\""
+        value: LitValue::Str
+          field0: "a"
+      Lit
+        token: "none"
+        value: LitValue::None
+      ExprKind::Variable
+        name: "a""#
+        );
+        // with spread
+        assert_ast!(
+            r#"[...v]"#,
+            r#"
+StmtKind::ExprStmt
+  expr: ExprKind::Array
+    field0=
+      ExprKind::Spread
+        field0: ExprKind::Variable
+          name: "v""#
+        );
+    }
+
+    #[test]
+    fn parse_map_literals() {
+        // identifier key
+        assert_ast!(
+            r#"a = { test: 1.0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      field0=
+        tuple
+          field0: Lit
+            token: "test"
+            value: LitValue::Str
+              field0: "test"
+          field1: Lit
+            token: "1.0"
+            value: LitValue::Number
+              field0: 1"#
+        );
+        // expression key
+        assert_ast!(
+            r#"a = { ["test"]: 1.0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      field0=
+        tuple
+          field0: Lit
+            token: "\"test\""
+            value: LitValue::Str
+              field0: "test"
+          field1: Lit
+            token: "1.0"
+            value: LitValue::Number
+              field0: 1"#
+        );
+    }
+
+    #[test]
+    fn precedence() {
+        assert_ast!(
+            r#"1 / 1 + 1 * 1 ** 2"#,
+            r#"
+StmtKind::ExprStmt
+  expr: ExprKind::Binary
+    op: Add
+    left: ExprKind::Binary
+      op: Div
+      left: Lit
+        token: "1"
+        value: LitValue::Number
+          field0: 1
+      right: Lit
+        token: "1"
+        value: LitValue::Number
+          field0: 1
+    right: ExprKind::Binary
+      op: Mul
+      left: Lit
+        token: "1"
+        value: LitValue::Number
+          field0: 1
+      right: ExprKind::Binary
+        op: Pow
+        left: Lit
+          token: "1"
+          value: LitValue::Number
+            field0: 1
+        right: Lit
+          token: "2"
+          value: LitValue::Number
+            field0: 2"#
+        )
+    }
+
+    #[test]
+    fn string_interpolation() {
+        assert_ast!(
+            r#"f"test{2+2}""#,
+            r#"
+StmtKind::ExprStmt
+  expr: FString
+    fragments=
+      FStringFrag::Str
+        field0: Lit
+          token: "test"
+          value: LitValue::Str
+            field0: "test"
+      FStringFrag::Expr
+        field0: ExprKind::Binary
+          op: Add
+          left: Lit
+            token: "2"
+            value: LitValue::Number
+              field0: 2
+          right: Lit
+            token: "2"
+            value: LitValue::Number
+              field0: 2"#
+        )
+    }
+
+    #[test]
+    fn parse_call() {
+        assert_ast!(
+            r#"f(a, b, ...c)"#,
+            r#"
+StmtKind::ExprStmt
+  expr: Call
+    callee: ExprKind::Variable
+      name: "f"
+    args=
+      ExprKind::Variable
+        name: "a"
+      ExprKind::Variable
+        name: "b"
+      ExprKind::Spread
+        field0: ExprKind::Variable
+          name: "c"
+    tco: false
+    rest: false"#
+        )
+    }
+
+    #[test]
+    fn parse_compound_assignment() {
+        assert_ast!(
+            r#"a += b += 5"#,
+            r#"
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Binary
+      op: Add
+      left: ExprKind::Variable
+        name: "a"
+      right: Assignment
+        name: "b"
+        value: ExprKind::Binary
+          op: Add
+          left: ExprKind::Variable
+            name: "b"
+          right: Lit
+            token: "5"
+            value: LitValue::Number
+              field0: 5"#
+        );
+    }
 }
