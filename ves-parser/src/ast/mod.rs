@@ -21,7 +21,7 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
 }
 
 /// An Abstract Syntax Tree for a Ves source file.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AST<'a> {
     /// The statements in the global scope.
     pub body: Vec<Stmt<'a>>,
@@ -111,7 +111,7 @@ impl<'a> LitValue<'a> {
 }
 
 /// Contains a literal and its token.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Lit<'a> {
     /// The token that produced the literal.
     pub token: Token<'a>,
@@ -120,18 +120,18 @@ pub struct Lit<'a> {
 }
 
 /// A property access expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GetProp<'a> {
     /// The expression to access the field on, e.g. a struct instance.
     pub node: Expr<'a>,
     /// The field to access.
-    pub prop: Token<'a>,
+    pub field: Token<'a>,
     /// Whether this access is part of an optional chain, e.g. `obj.prop?`.
     pub is_optional: bool,
 }
 
 /// A property assignment expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SetProp<'a> {
     /// The object to assign the property on.
     pub node: Expr<'a>,
@@ -142,7 +142,7 @@ pub struct SetProp<'a> {
 }
 
 /// An item access expression, e.g. `obj[key]`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct GetItem<'a> {
     /// The object to key.
     pub node: Expr<'a>,
@@ -151,7 +151,7 @@ pub struct GetItem<'a> {
 }
 
 /// An item assignment expression, e.g. `obj[key] = value`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SetItem<'a> {
     /// The object to assign on.
     pub node: Expr<'a>,
@@ -162,7 +162,7 @@ pub struct SetItem<'a> {
 }
 
 /// A fragment of an interpolated string.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FStringFrag<'a> {
     /// A string literal fragment.
     Str(Lit<'a>),
@@ -171,7 +171,7 @@ pub enum FStringFrag<'a> {
 }
 
 /// An interpolated string literal.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FString<'a> {
     /// The fragments of an interpolated string.
     pub fragments: Vec<FStringFrag<'a>>,
@@ -188,7 +188,7 @@ pub enum IncDecKind {
 
 /// An increment or decrement expression.
 /// May operate only on variables, struct fields, and item accesses.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct IncDec<'a> {
     /// The expression to increment or decrement.
     pub expr: ExprPtr<'a>,
@@ -197,7 +197,7 @@ pub struct IncDec<'a> {
 }
 
 /// A variable assignment expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Assignment<'a> {
     /// The name of the variable to assign to.
     pub name: Token<'a>,
@@ -206,7 +206,7 @@ pub struct Assignment<'a> {
 }
 
 /// The possible parameters a function (or struct, excluding `rest`) can take.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Params<'a> {
     /// The positional arguments to this function / struct.
     pub positional: Vec<Token<'a>>,
@@ -231,7 +231,7 @@ pub enum FnKind {
 }
 
 /// A function or  method declaration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FnInfo<'a> {
     /// The name of the function (auto-generated for lambdas).
     pub name: Token<'a>,
@@ -255,7 +255,7 @@ impl<'a> FnInfo<'a> {
 }
 
 /// The initializer block of a struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Initializer<'a> {
     /// The body of the initializer.
     pub body: FnInfo<'a>,
@@ -276,7 +276,7 @@ impl<'a> Initializer<'a> {
 }
 
 /// A struct declaration statement or expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
@@ -291,7 +291,7 @@ pub struct StructInfo<'a> {
 }
 
 /// A possible condition pattern.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ConditionPattern<'a> {
     /// The value of the condition itself.
     Value,
@@ -306,7 +306,7 @@ pub enum ConditionPattern<'a> {
 }
 
 /// A condition of an if statement, while loop, or for loop.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Condition<'a> {
     /// The value of the condition.
     pub value: Expr<'a>,
@@ -316,7 +316,7 @@ pub struct Condition<'a> {
 }
 
 /// An if statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct If<'a> {
     /// The if condition.
     pub condition: Condition<'a>,
@@ -327,7 +327,7 @@ pub struct If<'a> {
 }
 
 /// A `do` block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DoBlock<'a> {
     /// The statements in the do block.
     statements: Vec<Stmt<'a>>,
@@ -336,7 +336,7 @@ pub struct DoBlock<'a> {
 }
 
 /// A function call or struct constructor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Call<'a> {
     /// The function or struct being called.
     callee: ExprPtr<'a>,
@@ -349,7 +349,7 @@ pub struct Call<'a> {
 }
 
 /// The range of a for loop.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Range<'a> {
     /// The start of the range (value before the `..`).
     start: Expr<'a>,
@@ -362,7 +362,7 @@ pub struct Range<'a> {
 }
 
 /// The kind of an expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind<'a> {
     /// A struct declaration.
     Struct(Ptr<StructInfo<'a>>),
@@ -376,7 +376,7 @@ pub enum ExprKind<'a> {
     Binary(BinOp, ExprPtr<'a>, ExprPtr<'a>),
     /// A unary operator, e.g. `!a` or `try call()`
     Unary(UnOp, ExprPtr<'a>),
-    /// A literal, e.g. a number, a string or an array
+    /// A literal, e.g. a number or a string
     Lit(Ptr<Lit<'a>>),
     /// A C++-like comma operator
     Comma(Vec<Expr<'a>>),
@@ -397,7 +397,7 @@ pub enum ExprKind<'a> {
     /// An array literal.
     Array(Vec<Expr<'a>>),
     /// A dictionary literal.
-    Dict(Vec<(Expr<'a>, Expr<'a>)>),
+    Map(Vec<(Expr<'a>, Expr<'a>)>),
     /// A variable access expression (includes self).
     Variable(Token<'a>),
     /// A range specified, e.g. `0..10` or `start..end, -2`.
@@ -415,7 +415,7 @@ pub enum ExprKind<'a> {
 }
 
 /// An expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Expr<'a> {
     /// The kind of the expression.
     pub kind: ExprKind<'a>,
@@ -433,7 +433,7 @@ pub enum VarKind {
 }
 
 /// A variable declaration statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Var<'a> {
     /// The name of the variable being declared.
     pub name: Token<'a>,
@@ -444,7 +444,7 @@ pub struct Var<'a> {
 }
 
 /// A for loop statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct For<'a> {
     /// The list of the loop initializers.
     pub initializers: Vec<Assignment<'a>>,
@@ -459,7 +459,7 @@ pub struct For<'a> {
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ForEach<'a> {
     /// The variable to bind the elements to.
     pub variable: Token<'a>,
@@ -472,7 +472,7 @@ pub struct ForEach<'a> {
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct While<'a> {
     /// The condition of the loop.
     pub condition: Condition<'a>,
@@ -483,7 +483,7 @@ pub struct While<'a> {
 }
 
 /// A statement kind.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum StmtKind<'a> {
     /// One or more variable declarations, e.g. `let a, b = 3, c`.
     /// All variables are guaranteed to be either all const or all non-const.
@@ -516,7 +516,7 @@ pub enum StmtKind<'a> {
 }
 
 /// A Ves statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Stmt<'a> {
     /// The kind of the statement.
     pub kind: StmtKind<'a>,

@@ -143,8 +143,8 @@ pub enum TokenKind<'a> {
     #[regex("'([^'\\\\]|\\\\.)*'")]
     String,
     /// Floating point (IEEE754) numeric literal
-    /// TODO: ignore underscores
-    #[regex("-?(((((([0-9]|([0-9][0-9]|_[0-9]))+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf))", priority = 2)]
+    /// TODO: underscores
+    #[regex("-?((((([0-9]+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf))", priority = 2)]
     Number,
     /// No value (same as nil/null)
     #[token("none")]
