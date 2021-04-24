@@ -218,7 +218,7 @@ pub enum IncDecKind {
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct IncDec<'a> {
     /// The expression to increment or decrement.
-    pub expr: ExprPtr<'a>,
+    pub expr: Expr<'a>,
     #[debug]
     /// The operation to perform.
     pub kind: IncDecKind,
@@ -359,35 +359,35 @@ pub struct If<'a> {
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct DoBlock<'a> {
     /// The statements in the do block.
-    statements: Vec<Stmt<'a>>,
+    pub statements: Vec<Stmt<'a>>,
     /// The resulting value of the do block.
-    value: Option<Expr<'a>>,
+    pub value: Option<Expr<'a>>,
 }
 
 /// A function call or struct constructor.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct Call<'a> {
     /// The function or struct being called.
-    callee: ExprPtr<'a>,
+    pub callee: ExprPtr<'a>,
     /// The arg passed to the call.
-    args: Args<'a>,
+    pub args: Args<'a>,
     /// Whether the call can be compiled as tail call.
-    tco: bool,
+    pub tco: bool,
     // Whether the call has forwarded arguments
-    rest: bool,
+    pub rest: bool,
 }
 
 /// The range of a for loop.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct Range<'a> {
     /// The start of the range (value before the `..`).
-    start: Expr<'a>,
+    pub start: Expr<'a>,
     /// The end of the range (value before the `..`).
-    end: Expr<'a>,
+    pub end: Expr<'a>,
     /// The step of the range.
-    step: Expr<'a>,
+    pub step: Expr<'a>,
     /// Whether the range is inclusive (`..=`) or exclusive (`..`).
-    inclusive: bool,
+    pub inclusive: bool,
 }
 
 /// The kind of an expression.
@@ -429,10 +429,7 @@ pub enum ExprKind<'a> {
     /// A property assignment expression, e.g. `a.b = c`
     SetProp(#[forward] Ptr<SetProp<'a>>),
     /// An item access expression, e.g. `a[0]`.
-    GetItem(
-        #[rename = "node"] ExprPtr<'a>,
-        #[rename = "item"] ExprPtr<'a>,
-    ),
+    GetItem(#[forward] Ptr<GetItem<'a>>),
     /// An item assignment expression, e.g. `a[0] = 3`
     SetItem(#[forward] Ptr<SetItem<'a>>),
     /// A utf-8 string that contains one or more interpolation fragments.
