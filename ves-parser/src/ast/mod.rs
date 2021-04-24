@@ -251,11 +251,36 @@ pub struct StructInfo<'a> {
     pub r#static: Box<StructInfo<'a>>,
 }
 
+/// A possible condition pattern.
+#[derive(Debug, Clone)]
+pub enum ConditionPattern<'a> {
+    /// The value of the condition itself.
+    Value,
+    /// Whether the condition is `none`.
+    IsNone,
+    /// Whether the condition is `ok` plus a binding for the inner value.
+    IsOk(Token<'a>),
+    /// Whether the condition is `err` plus a binding for the inner value.
+    IsErr(Token<'a>),
+    /// Whether the condition is `some` plus a binding for the value (some is implicit).
+    IsSome(Token<'a>),
+}
+
+/// A condition of an if statement, while loop, or for loop.
+#[derive(Debug, Clone)]
+pub struct Condition<'a> {
+    /// The value of the condition.
+    pub value: Expr<'a>,
+    /// The pattern of the condition. If the pattern is [`ConditionPattern::Value`], a simple
+    /// truthiness check is performed.
+    pub pattern: ConditionPattern<'a>,
+}
+
 /// An if statement.
 #[derive(Debug, Clone)]
 pub struct If<'a> {
     /// The if condition.
-    pub condition: Expr<'a>,
+    pub condition: Condition<'a>,
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
@@ -411,7 +436,7 @@ pub struct ForEach<'a> {
 #[derive(Debug, Clone)]
 pub struct While<'a> {
     /// The condition of the loop.
-    pub condition: Expr<'a>,
+    pub condition: Condition<'a>,
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.

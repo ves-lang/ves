@@ -30,10 +30,17 @@ for_each = "for" IDENTIFIER "in" ( for_range | expression ) block ;
 for_loop = "for" binding* ";" expression? ";" expression blcok ;
 range = call ( ".." | "..=" ) call ( "," experssion )? ;
 
-while_stmt = "while" expression block ;
+while_stmt = "while" condition block ;
 loop_stmt = "loop" block ;
 
 control_stmt = ( "break" | "continue" ) label ;
+
+condition = ( 
+    ( 
+        "none" 
+        | ( "some" |  "ok" | "err" ) "(" IDENTIFIER ")"
+    ) "="
+)? expression ;
 
 defer_stmt = "defer" ( block | call );
 expr_stmt = comma ( ";" comma )* ;
@@ -61,7 +68,7 @@ params = names? default_params? rest_params? ;
 defualt_params = IDENTIFIER "=" expression | ( "," IDENTIFIER "=" expression )* ;
 rest_params = "..." IDENTIFIER ;
 
-if_expr = "if" expression block ( "else" ( if_expr | block ) )? ;
+if_expr = "if" condition block ( "else" ( if_expr | block ) )? ;
 
 do_block = "do" block ;
 
