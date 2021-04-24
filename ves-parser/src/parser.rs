@@ -751,19 +751,76 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
 
+    use ast2str::ast2str_lib::symbols;
+    use ast2str::AstToStr;
+    use lazy_static::lazy_static;
+    use regex::Regex;
+
+    #[derive(Clone, PartialEq)]
+    struct DisplayAsDebugWrapper<T>(T);
+
+    impl<T> std::fmt::Debug for DisplayAsDebugWrapper<T>
+    where
+        T: std::fmt::Display,
+    {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl<T> std::ops::Deref for DisplayAsDebugWrapper<T> {
+        type Target = T;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    lazy_static! {
+        static ref RE: Regex = Regex::new(
+            &[
+                symbols::HORIZONTAL_BAR,
+                symbols::VERTICAL_BAR,
+                symbols::BRANCH,
+                symbols::LEFT_UPPER_CORNER,
+                symbols::LEFT_BOTTOM_CORNER,
+                symbols::RIGHT_UPPER_CORNER,
+                symbols::RIGHT_BOTTOM_CORNER,
+                symbols::CROSS,
+                symbols::DOWNWARDS_POINTING_ARROW,
+            ]
+            .join("|")
+        )
+        .unwrap();
+    }
+
     // TODO: assert errors, too
     // TODO: spans may be wrong
 
     macro_rules! assert_ast {
         ($source:expr, $expected:expr) => {
             pretty_assertions::assert_eq!(
-                Parser::new(Lexer::new($source), FileId::anon())
-                    .parse()
-                    .unwrap()
-                    .body,
-                $expected
+                DisplayAsDebugWrapper(clean_tree(
+                    Parser::new(Lexer::new($source), FileId::anon())
+                        .parse()
+                        .unwrap()
+                        .body
+                        .into_iter()
+                        .map(|stmt| stmt.ast_to_str())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )),
+                DisplayAsDebugWrapper($expected.trim_start().to_owned())
             )
         };
+    }
+
+    fn clean_tree(tree: String) -> String {
+        RE.replace_all(&tree, " ")
+            .lines()
+            .map(|l| l.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 
     #[test]
@@ -784,49 +841,29 @@ mod tests {
         const SOURCE: &str = r#"1.0e-5, none, true, false, "string""#;
         assert_ast!(
             SOURCE,
-            vec![ast::Stmt {
-                kind: ast::StmtKind::ExprStmt(box ast::Expr {
-                    kind: ast::ExprKind::Comma(vec![
-                        ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("1.0e-5", 0..6, TokenKind::Number),
-                                value: ast::LitValue::Number("1.0e-5".parse::<f64>().unwrap())
-                            }),
-                            span: 0..6
-                        },
-                        ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("none", 8..12, TokenKind::None),
-                                value: ast::LitValue::None
-                            }),
-                            span: 8..12
-                        },
-                        ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("true", 14..18, TokenKind::True),
-                                value: ast::LitValue::Bool(true)
-                            }),
-                            span: 14..18
-                        },
-                        ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("false", 20..25, TokenKind::False),
-                                value: ast::LitValue::Bool(false)
-                            }),
-                            span: 20..25
-                        },
-                        ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("\"string\"", 27..35, TokenKind::String),
-                                value: ast::LitValue::Str("string".into())
-                            }),
-                            span: 27..35
-                        },
-                    ]),
-                    span: 34..34,
-                }),
-                span: 34..34,
-            }]
+            r#"
+StmtKind::ExprStmt
+  expr: ExprKind::Comma
+    field0=
+      Lit
+        token: "1.0e-5"
+        value: LitValue::Number
+          field0: 0.00001
+      Lit
+        token: "none"
+        value: LitValue::None
+      Lit
+        token: "true"
+        value: LitValue::Bool
+          field0: true
+      Lit
+        token: "false"
+        value: LitValue::Bool
+          field0: false
+      Lit
+        token: "\"string\""
+        value: LitValue::Str
+          field0: "string""#
         )
     }
 
@@ -835,30 +872,19 @@ mod tests {
         const SOURCE: &str = "0 || 0";
         assert_ast!(
             SOURCE,
-            vec![ast::Stmt {
-                kind: ast::StmtKind::ExprStmt(box ast::Expr {
-                    kind: ast::ExprKind::Binary(
-                        ast::BinOpKind::Or,
-                        box ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("0", 0..1, TokenKind::Number),
-                                value: ast::LitValue::Number(0f64),
-                            }),
-                            span: 0..1
-                        },
-                        box ast::Expr {
-                            kind: ast::ExprKind::Lit(box ast::Lit {
-                                token: Token::new("0", 5..6, TokenKind::Number),
-                                value: ast::LitValue::Number(0f64),
-                            }),
-                            span: 5..6
-                        }
-                    ),
-                    span: 0..6
-                }),
-                span: 5..5
-            }]
-        )
+            r#"
+StmtKind::ExprStmt
+  expr: ExprKind::Binary
+    op: Or
+    left: Lit
+      token: "0"
+      value: LitValue::Number
+        field0: 0
+    right: Lit
+      token: "0"
+      value: LitValue::Number
+        field0: 0"#
+        );
     }
 
     /*
