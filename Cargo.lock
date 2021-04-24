@@ -35,6 +35,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "ast2str"
+version = "0.1.0"
+source = "git+https://github.com/optimalstrategy/ast2str#bf98c62dbfd5f50025a5d608d01bb68bd4d3c598"
+dependencies = [
+ "ast2str-derive",
+ "ast2str-lib",
+]
+
+[[package]]
+name = "ast2str-derive"
+version = "0.2.1"
+source = "git+https://github.com/optimalstrategy/ast2str#bf98c62dbfd5f50025a5d608d01bb68bd4d3c598"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "ast2str-lib"
+version = "0.2.0"
+source = "git+https://github.com/optimalstrategy/ast2str#bf98c62dbfd5f50025a5d608d01bb68bd4d3c598"
+
+[[package]]
 name = "atty"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,6 +509,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "plain-msgbox"
+version = "0.1.0"
+source = "git+https://github.com/optimalstrategy/plain-msgbox#2c205092f558b0f1d52042c8da6838798cfcff15"
+
+[[package]]
 name = "plotters"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -826,7 +855,9 @@ dependencies = [
 name = "ves-parser"
 version = "0.1.0"
 dependencies = [
+ "ast2str",
  "logos",
+ "plain-msgbox",
  "pretty_assertions",
  "ves-error",
 ]

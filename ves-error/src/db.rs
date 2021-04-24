@@ -22,11 +22,29 @@ impl FileId {
     }
 }
 
+/// A ves source code file.
+#[derive(Debug, Clone)]
+struct VesFile<'a> {
+    /// The source of the file
+    source: Cow<'a, str>,
+    /// The BLAKE hash of the source file.
+    hash: blake2s_simd::Hash,
+    // TODO: name of the module
+    module: (),
+}
+
+impl<'a> AsRef<str> for VesFile<'a> {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        &*self.source
+    }
+}
+
 /// A database of the currently active Ves source code files.
 /// Used for error reporting.
 #[derive(Debug)]
 pub struct VesFileDatabase<'a> {
-    db: SimpleFiles<Cow<'a, str>, Cow<'a, str>>,
+    db: SimpleFiles<Cow<'a, str>, VesFile<'a>>,
     config: Config,
 }
 
@@ -44,6 +62,30 @@ impl<'a> VesFileDatabase<'a> {
         Self { config, ..self }
     }
 
+    /// Adds a new file to the database.
+    pub fn add_file(&mut self, name: Cow<'a, str>, source: Cow<'a, str>) -> FileId {
+        let hash = hash(&source);
+        let file = VesFile {
+            source,
+            hash,
+            module: (),
+        };
+        FileId(self.db.add(name, file))
+    }
+
+    /// Adds a snippet that doesn't come from a file to the database, using
+    /// the hash of the file as its name.
+    pub fn add_snippet(&mut self, source: Cow<'a, str>) -> FileId {
+        let hash = hash(&source);
+        let name = Cow::Owned(format!("<source: #{}>", &hash.to_hex()));
+        let file = VesFile {
+            source,
+            hash,
+            module: (),
+        };
+        FileId(self.db.add(name, file))
+    }
+
     /// Returns a tuple of (line, column) for the given span and file id.
     ///
     /// # Panics
@@ -51,21 +93,20 @@ impl<'a> VesFileDatabase<'a> {
     pub fn location(&self, id: FileId, span: &crate::Span) -> (usize, usize) {
         let line = self
             .line_index(id, span.start)
-            .expect("Attempted to query an nonexistent file.");
+            .expect("Attempted to query a nonexistent file.");
         let column = self.column_number(id, line, span.start).unwrap();
         (line + 1, column)
     }
 
-    /// Adds a new file to the database.
-    pub fn add_file(&mut self, name: Cow<'a, str>, source: Cow<'a, str>) -> FileId {
-        FileId(self.db.add(name, source))
-    }
-
-    /// Adds a snippet that doesn't come from a file to the database, using
-    /// the hash of the file as its name.
-    pub fn add_snippet(&mut self, source: Cow<'a, str>) -> FileId {
-        let hash = hash(&source);
-        self.add_file(Cow::Owned(format!("<source: #{}>", &hash.to_hex())), source)
+    /// Returns the BLAKE hash of the file with the given id.
+    #[inline]
+    pub fn hash(&'a self, id: FileId) -> &blake2s_simd::Hash {
+        &self
+            .db
+            .get(id.0)
+            .expect("Attempted to query a nonexistent file")
+            .source()
+            .hash
     }
 
     /// Reports the errors form the [`ErrCtx`] to STDERR.
@@ -185,7 +226,6 @@ impl<'a> files::Files<'a> for VesFileDatabase<'a> {
 
     #[inline]
     fn name(&'a self, id: Self::FileId) -> Result<Self::Name, files::Error> {
-        check_fid!(id);
         self.db.name(id.0)
     }
 

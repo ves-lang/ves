@@ -1,6 +1,7 @@
 use std::borrow::Cow;
 
-use ves_error::FileId;
+use ast2str::AstToStr;
+use ves_error::{FileId, Files, VesFileDatabase};
 
 use crate::lexer::{Span, Token, TokenKind};
 
@@ -21,8 +22,9 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
 }
 
 /// An Abstract Syntax Tree for a Ves source file.
-#[derive(Debug)]
+#[derive(Debug, AstToStr)]
 pub struct AST<'a> {
+    #[forward]
     /// The statements in the global scope.
     pub body: Vec<Stmt<'a>>,
     /// The id of the file the AST belongs to.
@@ -33,6 +35,31 @@ impl<'a> AST<'a> {
     /// Creates a new [`AST`] form the given statements and [`FileId`].
     pub fn new(body: Vec<Stmt<'a>>, file_id: FileId) -> Self {
         Self { body, file_id }
+    }
+
+    /// Pretty-prints the AST into a string, using the file name and hash from the database.
+    pub fn to_str_with_db(&self, db: &VesFileDatabase<'a>) -> String {
+        let rows = if db.name(self.file_id).is_ok() {
+            vec![
+                format!("Script: {}", db.name(self.file_id).unwrap()),
+                format!("Hash:   {}", db.hash(self.file_id).to_hex()),
+            ]
+        } else {
+            vec![
+                "Script: <source>".to_string(),
+                "Hash:   <missing hash>".to_string(),
+            ]
+        };
+        let root = plain_msgbox::generate_with_caption(&rows, "program");
+        format!(
+            "{}\n{}",
+            root,
+            self.body
+                .iter()
+                .map(|stmt| stmt.ast_to_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 }
 
@@ -89,7 +116,7 @@ pub enum UnOpKind {
 }
 
 /// Represents the value of a literal.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, AstToStr)]
 pub enum LitValue<'a> {
     /// A 64-bit floating pointer number.
     Number(f64),
@@ -111,7 +138,7 @@ impl<'a> LitValue<'a> {
 }
 
 /// Contains a literal and its token.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Lit<'a> {
     /// The token that produced the literal.
     pub token: Token<'a>,
@@ -120,7 +147,7 @@ pub struct Lit<'a> {
 }
 
 /// A property access expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct GetProp<'a> {
     /// The expression to access the field on, e.g. a struct instance.
     pub node: Expr<'a>,
@@ -131,7 +158,7 @@ pub struct GetProp<'a> {
 }
 
 /// A property assignment expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct SetProp<'a> {
     /// The object to assign the property on.
     pub node: Expr<'a>,
@@ -142,7 +169,7 @@ pub struct SetProp<'a> {
 }
 
 /// An item access expression, e.g. `obj[key]`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct GetItem<'a> {
     /// The object to key.
     pub node: Expr<'a>,
@@ -151,7 +178,7 @@ pub struct GetItem<'a> {
 }
 
 /// An item assignment expression, e.g. `obj[key] = value`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct SetItem<'a> {
     /// The object to assign on.
     pub node: Expr<'a>,
@@ -162,7 +189,7 @@ pub struct SetItem<'a> {
 }
 
 /// A fragment of an interpolated string.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub enum FStringFrag<'a> {
     /// A string literal fragment.
     Str(Lit<'a>),
@@ -171,7 +198,7 @@ pub enum FStringFrag<'a> {
 }
 
 /// An interpolated string literal.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct FString<'a> {
     /// The fragments of an interpolated string.
     pub fragments: Vec<FStringFrag<'a>>,
@@ -188,16 +215,17 @@ pub enum IncDecKind {
 
 /// An increment or decrement expression.
 /// May operate only on variables, struct fields, and item accesses.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct IncDec<'a> {
     /// The expression to increment or decrement.
     pub expr: ExprPtr<'a>,
+    #[debug]
     /// The operation to perform.
     pub kind: IncDecKind,
 }
 
 /// A variable assignment expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Assignment<'a> {
     /// The name of the variable to assign to.
     pub name: Token<'a>,
@@ -206,7 +234,7 @@ pub struct Assignment<'a> {
 }
 
 /// The possible parameters a function (or struct, excluding `rest`) can take.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Params<'a> {
     /// The positional arguments to this function / struct.
     pub positional: Vec<Token<'a>>,
@@ -231,7 +259,7 @@ pub enum FnKind {
 }
 
 /// A function or  method declaration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct FnInfo<'a> {
     /// The name of the function (auto-generated for lambdas).
     pub name: Token<'a>,
@@ -239,6 +267,7 @@ pub struct FnInfo<'a> {
     pub params: Params<'a>,
     /// The body of the function.
     pub body: Vec<Stmt<'a>>,
+    #[debug]
     /// The kind of the function.
     pub kind: FnKind,
 }
@@ -255,7 +284,7 @@ impl<'a> FnInfo<'a> {
 }
 
 /// The initializer block of a struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Initializer<'a> {
     /// The body of the initializer.
     pub body: FnInfo<'a>,
@@ -276,7 +305,7 @@ impl<'a> Initializer<'a> {
 }
 
 /// A struct declaration statement or expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
@@ -291,7 +320,7 @@ pub struct StructInfo<'a> {
 }
 
 /// A possible condition pattern.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub enum ConditionPattern<'a> {
     /// The value of the condition itself.
     Value,
@@ -306,7 +335,7 @@ pub enum ConditionPattern<'a> {
 }
 
 /// A condition of an if statement, while loop, or for loop.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Condition<'a> {
     /// The value of the condition.
     pub value: Expr<'a>,
@@ -316,7 +345,7 @@ pub struct Condition<'a> {
 }
 
 /// An if statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct If<'a> {
     /// The if condition.
     pub condition: Condition<'a>,
@@ -327,7 +356,7 @@ pub struct If<'a> {
 }
 
 /// A `do` block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct DoBlock<'a> {
     /// The statements in the do block.
     statements: Vec<Stmt<'a>>,
@@ -336,7 +365,7 @@ pub struct DoBlock<'a> {
 }
 
 /// A function call or struct constructor.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Call<'a> {
     /// The function or struct being called.
     callee: ExprPtr<'a>,
@@ -349,7 +378,7 @@ pub struct Call<'a> {
 }
 
 /// The range of a for loop.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Range<'a> {
     /// The start of the range (value before the `..`).
     start: Expr<'a>,
@@ -362,61 +391,76 @@ pub struct Range<'a> {
 }
 
 /// The kind of an expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub enum ExprKind<'a> {
     /// A struct declaration.
-    Struct(Ptr<StructInfo<'a>>),
+    Struct(#[forward] Ptr<StructInfo<'a>>),
     ///A function declaration.
-    Fn(Ptr<FnInfo<'a>>),
+    Fn(#[forward] Ptr<FnInfo<'a>>),
     /// An if expression.
-    If(Ptr<If<'a>>),
+    If(#[forward] Ptr<If<'a>>),
     /// A `do` block.
-    DoBlock(Ptr<DoBlock<'a>>),
+    DoBlock(#[forward] Ptr<DoBlock<'a>>),
     /// A binary operator, e.g. `a + b`
-    Binary(BinOp, ExprPtr<'a>, ExprPtr<'a>),
-    /// A unary operator, e.g. `!a` or `try call()`
-    Unary(UnOp, ExprPtr<'a>),
+    Binary(
+        #[debug]
+        #[rename = "op"]
+        BinOp,
+        #[rename = "left"] ExprPtr<'a>,
+        #[rename = "right"] ExprPtr<'a>,
+    ),
+    /// A unary operator,e e.g. `!a` or `try call()`
+    Unary(
+        #[debug]
+        #[rename = "op"]
+        UnOp,
+        #[rename = "operand"] ExprPtr<'a>,
+    ),
     /// A literal, e.g. a number, a string or an array
-    Lit(Ptr<Lit<'a>>),
+    Lit(#[forward] Ptr<Lit<'a>>),
     /// A C++-like comma operator
     Comma(Vec<Expr<'a>>),
     /// A function call or struct constructor.
-    Call(Ptr<Call<'a>>),
+    Call(#[forward] Ptr<Call<'a>>),
     /// A spread expression, e.g. `...arr`.
     Spread(ExprPtr<'a>),
     /// A property access expression, e.g. `a.b` and `c?.d`.
-    GetProp(Ptr<GetProp<'a>>),
+    GetProp(#[forward] Ptr<GetProp<'a>>),
     /// A property assignment expression, e.g. `a.b = c`
-    SetProp(Ptr<SetProp<'a>>),
+    SetProp(#[forward] Ptr<SetProp<'a>>),
     /// An item access expression, e.g. `a[0]`.
-    GetItem(ExprPtr<'a>, ExprPtr<'a>),
+    GetItem(
+        #[rename = "node"] ExprPtr<'a>,
+        #[rename = "item"] ExprPtr<'a>,
+    ),
     /// An item assignment expression, e.g. `a[0] = 3`
-    SetItem(Ptr<SetItem<'a>>),
+    SetItem(#[forward] Ptr<SetItem<'a>>),
     /// A utf-8 string that contains one or more interpolation fragments.
-    FString(FString<'a>),
+    FString(#[forward] FString<'a>),
     /// An array literal.
     Array(Vec<Expr<'a>>),
     /// A dictionary literal.
     Dict(Vec<(Expr<'a>, Expr<'a>)>),
     /// A variable access expression (includes self).
-    Variable(Token<'a>),
+    Variable(#[rename = "name"] Token<'a>),
     /// A range specified, e.g. `0..10` or `start..end, -2`.
-    Range(Ptr<Range<'a>>),
+    Range(#[forward] Ptr<Range<'a>>),
     /// A prefix increment or decrement
-    PrefixIncDec(Ptr<IncDec<'a>>),
+    PrefixIncDec(#[forward] Ptr<IncDec<'a>>),
     /// A postfix increment or decrement
-    PostfixIncDec(Ptr<IncDec<'a>>),
+    PostfixIncDec(#[forward] Ptr<IncDec<'a>>),
     /// An assignment expression
-    Assignment(Ptr<Assignment<'a>>),
+    Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.
     Grouping(ExprPtr<'a>),
     /// A loop label, e.g. `@outer`
-    Label(Token<'a>),
+    Label(#[rename = "value"] Token<'a>),
 }
 
 /// An expression.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Expr<'a> {
+    #[forward]
     /// The kind of the expression.
     pub kind: ExprKind<'a>,
     /// The span of the entire expression.
@@ -433,10 +477,11 @@ pub enum VarKind {
 }
 
 /// A variable declaration statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Var<'a> {
     /// The name of the variable being declared.
     pub name: Token<'a>,
+    #[debug]
     /// The kind of the variable.
     pub kind: VarKind,
     /// The initial value of the variable.
@@ -444,7 +489,7 @@ pub struct Var<'a> {
 }
 
 /// A for loop statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct For<'a> {
     /// The list of the loop initializers.
     pub initializers: Vec<Assignment<'a>>,
@@ -459,7 +504,7 @@ pub struct For<'a> {
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct ForEach<'a> {
     /// The variable to bind the elements to.
     pub variable: Token<'a>,
@@ -472,7 +517,7 @@ pub struct ForEach<'a> {
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct While<'a> {
     /// The condition of the loop.
     pub condition: Condition<'a>,
@@ -483,41 +528,42 @@ pub struct While<'a> {
 }
 
 /// A statement kind.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub enum StmtKind<'a> {
     /// One or more variable declarations, e.g. `let a, b = 3, c`.
     /// All variables are guaranteed to be either all const or all non-const.
-    Var(Vec<Var<'a>>),
+    Var(#[rename = "declarations"] Vec<Var<'a>>),
     /// A for loop statement.
-    For(Ptr<For<'a>>),
+    For(#[forward] Ptr<For<'a>>),
     /// A foreach loop statement.
-    ForEach(Ptr<ForEach<'a>>),
+    ForEach(#[forward] Ptr<ForEach<'a>>),
     /// A while loop statement.
-    While(Ptr<While<'a>>),
+    While(#[forward] Ptr<While<'a>>),
     /// A block statement.
-    Block(Vec<Stmt<'a>>),
+    Block(#[rename = "statements"] Vec<Stmt<'a>>),
     /// An expression statement.
-    ExprStmt(ExprPtr<'a>),
+    ExprStmt(#[rename = "expr"] ExprPtr<'a>),
     /// A print statement.
     Print(ExprPtr<'a>),
     /// An if statement.
-    If(Ptr<If<'a>>),
+    If(#[forward] Ptr<If<'a>>),
     /// A return statement.
     Return(Option<ExprPtr<'a>>),
     /// A break statement.
-    Break(Token<'a>),
+    Break(#[rename = "label"] Token<'a>),
     /// A continue statement.
-    Continue(Token<'a>),
+    Continue(#[rename = "label"] Token<'a>),
     /// A `defer` statement
-    Defer(Ptr<Call<'a>>),
+    Defer(#[forward] Ptr<Call<'a>>),
     /// An empty node that compiles to nothing.
     /// Used by the constant folder to remove dead code.
     _Empty,
 }
 
 /// A Ves statement.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, AstToStr)]
 pub struct Stmt<'a> {
+    #[forward]
     /// The kind of the statement.
     pub kind: StmtKind<'a>,
     /// The span of the whole statement.
@@ -589,3 +635,75 @@ macro_rules! gen_from_for_enum {
 gen_from_for_enum!(f64, LitValue<'a>, Number);
 gen_from_for_enum!(bool, LitValue<'a>, Bool);
 gen_from_for_enum!(Cow<'a, str>, LitValue<'a>, Str);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_ast_printing() {
+        let mut db = VesFileDatabase::default();
+        let id = db.add_file(
+            "test".into(),
+            r#"do { 
+            try api_method()
+        }"#
+            .into(),
+        );
+        let span = Span { start: 0, end: 1 };
+        let ast = AST::new(
+            vec![Stmt {
+                kind: StmtKind::ExprStmt(box Expr {
+                    kind: ExprKind::DoBlock(box DoBlock {
+                        statements: vec![],
+                        value: Some(Expr {
+                            kind: ExprKind::Unary(
+                                UnOpKind::Try,
+                                box Expr {
+                                    kind: ExprKind::Call(box Call {
+                                        callee: box Expr {
+                                            kind: ExprKind::Variable(Token::new(
+                                                "api_method",
+                                                span.clone(),
+                                                TokenKind::Identifier,
+                                            )),
+                                            span: span.clone(),
+                                        },
+                                        args: vec![],
+                                        tco: false,
+                                        rest: false,
+                                    }),
+                                    span: span.clone(),
+                                },
+                            ),
+                            span: span.clone(),
+                        }),
+                    }),
+                    span: span.clone(),
+                }),
+                span,
+            }],
+            id,
+        );
+        println!("{}", ast.to_str_with_db(&db));
+        assert_eq!(
+            ast.to_str_with_db(&db),
+            r#"╭──────────────────────────╮
+│ Script: test             │
+│ Hash:   e6427151da26e8b2 │
+<program>──────────────────╯
+StmtKind::ExprStmt
+╰─expr: DoBlock
+  ├─statements=✕
+  ╰─value: ExprKind::Unary
+    ├─op: Try
+    ╰─operand: Call
+      ├─callee: ExprKind::Variable
+      │ ╰─name: "api_method"
+      ├─args=✕
+      ├─tco: false
+      ╰─rest: false"#
+        );
+    }
+}

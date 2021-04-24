@@ -1,6 +1,7 @@
 pub mod db;
 pub mod diagnostics;
 
+pub use codespan_reporting::files::Files;
 pub use db::FileId;
 pub use db::VesFileDatabase;
 
