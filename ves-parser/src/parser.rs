@@ -175,24 +175,30 @@ impl<'a> Parser<'a> {
                     span: span_start..self.current.span.end,
                 },
                 // x[<expr>] = <expr>
-                ast::ExprKind::GetItem(ref get) => ast::Expr {
-                    kind: ast::ExprKind::SetItem(box ast::SetItem {
-                        node: get.node.clone(),
-                        key: get.key.clone(),
-                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
-                    }),
-                    span: span_start..self.current.span.end,
-                },
+                ast::ExprKind::GetItem(ref get) if is_valid_assignment_target(&get.node) => {
+                    ast::Expr {
+                        kind: ast::ExprKind::SetItem(box ast::SetItem {
+                            node: get.node.clone(),
+                            key: get.key.clone(),
+                            value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                        }),
+                        span: span_start..self.current.span.end,
+                    }
+                }
                 // x.key = <expr>
                 // except x?.key = <expr>
-                ast::ExprKind::GetProp(ref get) if !get.is_optional => ast::Expr {
-                    kind: ast::ExprKind::SetProp(box ast::SetProp {
-                        node: get.node.clone(),
-                        field: get.field.clone(),
-                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
-                    }),
-                    span: span_start..self.current.span.end,
-                },
+                ast::ExprKind::GetProp(ref get)
+                    if !get.is_optional && is_valid_assignment_target(&get.node) =>
+                {
+                    ast::Expr {
+                        kind: ast::ExprKind::SetProp(box ast::SetProp {
+                            node: get.node.clone(),
+                            field: get.field.clone(),
+                            value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                        }),
+                        span: span_start..self.current.span.end,
+                    }
+                }
                 _ => {
                     return Err(VesError::parse(
                         "Invalid assignment target",
@@ -415,18 +421,11 @@ impl<'a> Parser<'a> {
                         kind: ast::ExprKind::GetItem(box ast::GetItem { node: expr, key }),
                     }
                 }
-                TokenKind::Increment => ast::Expr {
+                TokenKind::Increment | TokenKind::Decrement => ast::Expr {
                     span: expr.span.start..self.previous.span.end,
                     kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
                         expr,
-                        kind: ast::IncDecKind::Increment,
-                    }),
-                },
-                TokenKind::Decrement => ast::Expr {
-                    span: expr.span.start..self.previous.span.end,
-                    kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
-                        expr,
-                        kind: ast::IncDecKind::Decrement,
+                        kind: ast::IncDecKind::from(self.previous.kind.clone()),
                     }),
                 },
                 _ => unreachable!(),
@@ -471,6 +470,13 @@ impl<'a> Parser<'a> {
         }
         // 'self'
         if self.match_(&TokenKind::Self_) {
+            return Ok(ast::Expr {
+                span: self.previous.span.clone(),
+                kind: ast::ExprKind::Variable(self.previous.clone()),
+            });
+        }
+        // identifier
+        if self.match_(&TokenKind::Identifier) {
             return Ok(ast::Expr {
                 span: self.previous.span.clone(),
                 kind: ast::ExprKind::Variable(self.previous.clone()),
@@ -743,6 +749,21 @@ fn desugar_assignment<'a>(
         TokenKind::PowerEqual => desugar!(receiver, Pow, value),
         TokenKind::PercentEqual => desugar!(receiver, Rem, value),
         _ => unreachable!(),
+    }
+}
+
+fn is_valid_assignment_target(expr: &ast::Expr<'_>) -> bool {
+    match &expr.kind {
+        ast::ExprKind::GetProp(ref get) => {
+            if get.is_optional {
+                false
+            } else {
+                is_valid_assignment_target(&get.node)
+            }
+        }
+        ast::ExprKind::GetItem(ref get) => is_valid_assignment_target(&get.node),
+        ast::ExprKind::Call(ref call) => is_valid_assignment_target(&call.callee),
+        _ => true,
     }
 }
 
