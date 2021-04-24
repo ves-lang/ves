@@ -1,4 +1,4 @@
-#![feature(box_syntax)]
+#![feature(box_syntax, string_remove_matches)]
 #[macro_use]
 mod macros;
 
