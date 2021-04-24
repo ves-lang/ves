@@ -28,7 +28,7 @@ jobs:
           command: test
 
   lints:
-    name: Miri + Clippy + rustfmt
+    name: Clippy + rustfmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
@@ -42,11 +42,12 @@ jobs:
           override: true
           components: rustfmt, clippy, miri
 
-      - name: Run cargo miri test
-        uses: actions-rs/cargo@v1
-        with:
-          command: miri
-          args: test -- -Zunstable-options --exclude-should-panic
+      # NOTE: miri is *extremely* slow, it takes up too many CI minutes
+      # - name: Run cargo miri test
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: miri
+      #     args: test -- -Zunstable-options --exclude-should-panic
 
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
