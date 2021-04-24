@@ -213,6 +213,16 @@ pub enum IncDecKind {
     Decrement,
 }
 
+impl From<TokenKind<'_>> for IncDecKind {
+    fn from(kind: TokenKind<'_>) -> Self {
+        match kind {
+            TokenKind::Increment => IncDecKind::Increment,
+            TokenKind::Decrement => IncDecKind::Decrement,
+            rest => unreachable!("Attempted to convert a wrong TokenKind into an increment or decrement operator: {:?}", rest),
+        }
+    }
+}
+
 /// An increment or decrement expression.
 /// May operate only on variables, struct fields, and item accesses.
 #[derive(Debug, Clone, PartialEq, AstToStr)]

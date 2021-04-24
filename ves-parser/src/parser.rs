@@ -5,41 +5,6 @@ use crate::{
 use std::convert::Into;
 use ves_error::{ErrCtx, FileId, VesError};
 
-/// Creates an AST literal node from the provided LitValue
-macro_rules! literal {
-    ($parser:ident, $value:expr) => {
-        ast::Expr {
-            span: $parser.previous.span.clone(),
-            kind: ast::ExprKind::Lit(box ast::Lit {
-                token: $parser.previous.clone(),
-                value: $value,
-            }),
-        }
-    };
-}
-
-/// Creates an AST binary expression
-macro_rules! binary {
-    ($left:ident, $op:ident, $right:expr) => {{
-        let l = $left;
-        let r = $right;
-        ast::Expr {
-            span: l.span.start..r.span.end,
-            kind: ast::ExprKind::Binary(ast::BinOpKind::$op, box l, box r),
-        }
-    }};
-}
-
-macro_rules! unary {
-    ($op:ident, $operand:expr, $t:ident) => {{
-        let operand = $operand;
-        ast::Expr {
-            span: $t.span.start..operand.span.end,
-            kind: ast::ExprKind::Unary(ast::UnOpKind::$op, box operand),
-        }
-    }};
-}
-
 type ParseResult<T> = std::result::Result<T, VesError>;
 
 pub struct Parser<'a> {
@@ -92,7 +57,7 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        if self.match_(&TokenKind::LeftBracket) {
+        if self.match_(&TokenKind::LeftBrace) {
             self.block()
             // TODO: here
         }
@@ -122,8 +87,8 @@ impl<'a> Parser<'a> {
     fn block(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
         let mut body = vec![];
-        // if the next token is a RightBracket, the block is empty
-        if !self.check(&TokenKind::RightBracket) {
+        // if the next token is a RightBrace, the block is empty
+        if !self.check(&TokenKind::RightBrace) {
             while !self.at_end() {
                 match self.stmt() {
                     Ok(stmt) => body.push(stmt),
@@ -134,7 +99,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.consume(&TokenKind::RightBracket, "Expected '}' after a block")?;
+        self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
 
         let span_end = self.current.span.end;
         Ok(ast::Stmt {
@@ -339,9 +304,9 @@ impl<'a> Parser<'a> {
             TokenKind::Try,
             TokenKind::Ok,
             TokenKind::Err,
+            TokenKind::Ellipsis,
             TokenKind::Increment,
             TokenKind::Decrement,
-            TokenKind::Ellipsis,
         ]) {
             let op = self.previous.clone();
             return Ok(match self.previous.kind {
@@ -355,25 +320,15 @@ impl<'a> Parser<'a> {
                 TokenKind::Ok => unary!(Ok, self.unary()?, op),
                 // err <expr>
                 TokenKind::Err => unary!(Err, self.unary()?, op),
-                // ++<expr>
-                TokenKind::Increment => {
-                    let expr = self.unary()?;
+                // ++<expr> or --<expr>
+                TokenKind::Increment | TokenKind::Decrement => {
+                    let kind = self.previous.kind.clone();
+                    let expr = self.call()?;
                     ast::Expr {
                         span: op.span.start..expr.span.end,
                         kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
                             expr,
-                            kind: ast::IncDecKind::Increment,
-                        }),
-                    }
-                }
-                // --<expr>
-                TokenKind::Decrement => {
-                    let expr = self.unary()?;
-                    ast::Expr {
-                        span: op.span.start..expr.span.end,
-                        kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
-                            expr,
-                            kind: ast::IncDecKind::Decrement,
+                            kind: ast::IncDecKind::from(kind),
                         }),
                     }
                 }
@@ -389,7 +344,21 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             });
         }
-        self.call()
+
+        let mut expr = self.call()?;
+
+        if self.match_any(&[TokenKind::Increment, TokenKind::Decrement]) {
+            let kind = self.previous.kind.clone();
+            expr = ast::Expr {
+                span: expr.span.start..self.previous.span.end,
+                kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
+                    expr,
+                    kind: ast::IncDecKind::from(kind),
+                }),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn call(&mut self) -> ParseResult<ast::Expr<'a>> {
@@ -398,7 +367,7 @@ impl<'a> Parser<'a> {
             TokenKind::LeftParen,
             TokenKind::Dot,
             TokenKind::MaybeDot,
-            TokenKind::LeftBrace,
+            TokenKind::LeftBracket,
             TokenKind::Increment,
             TokenKind::Decrement,
         ]) {
@@ -438,9 +407,9 @@ impl<'a> Parser<'a> {
                         }),
                     }
                 }
-                TokenKind::LeftBrace => {
+                TokenKind::LeftBracket => {
                     let key = self.expr()?;
-                    self.consume(&TokenKind::RightBrace, "Expected ']'")?;
+                    self.consume(&TokenKind::RightBracket, "Expected ']'")?;
                     ast::Expr {
                         span: expr.span.start..self.previous.span.end,
                         kind: ast::ExprKind::GetItem(box ast::GetItem { node: expr, key }),
@@ -569,13 +538,13 @@ impl<'a> Parser<'a> {
             });
         }
         // array literal
-        if self.match_(&TokenKind::LeftBrace) {
+        if self.match_(&TokenKind::LeftBracket) {
             let span_start = self.previous.span.start;
             let mut exprs = vec![];
-            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
+            while !self.at_end() && !self.check(&TokenKind::RightBracket) {
                 exprs.push(self.expr()?);
             }
-            self.consume(&TokenKind::RightBrace, "Expected ']'")?;
+            self.consume(&TokenKind::RightBracket, "Expected ']'")?;
             let span_end = self.current.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Array(exprs),
@@ -583,10 +552,10 @@ impl<'a> Parser<'a> {
             });
         }
         // map literals (JS-style object literals)
-        if self.match_(&TokenKind::LeftBracket) {
+        if self.match_(&TokenKind::LeftBrace) {
             let span_start = self.previous.span.start;
             let mut pairs = vec![];
-            while !self.at_end() && !self.check(&TokenKind::RightBracket) {
+            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
                 let mut identifier = None;
                 let key = if self.match_(&TokenKind::Identifier) {
                     // simple keys may be identifiers
@@ -595,9 +564,15 @@ impl<'a> Parser<'a> {
                     literal!(self, ast::LitValue::Str(key_token.lexeme))
                 } else {
                     // keys may also be expressions wrapped in []
-                    self.consume(&TokenKind::LeftBrace, "Expected '[' before key expression")?;
+                    self.consume(
+                        &TokenKind::LeftBracket,
+                        "Expected '[' before key expression",
+                    )?;
                     let key = self.expr()?;
-                    self.consume(&TokenKind::RightBrace, "Expected ']' after key expression")?;
+                    self.consume(
+                        &TokenKind::RightBracket,
+                        "Expected ']' after key expression",
+                    )?;
                     key
                 };
 
@@ -619,7 +594,7 @@ impl<'a> Parser<'a> {
                 };
                 pairs.push((key, value));
             }
-            self.consume(&TokenKind::RightBracket, "Expected '}'")?;
+            self.consume(&TokenKind::RightBrace, "Expected '}'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Map(pairs),
@@ -718,7 +693,7 @@ impl<'a> Parser<'a> {
                 TokenKind::If,
                 TokenKind::Return,
                 TokenKind::Struct,
-                TokenKind::LeftBrace,
+                TokenKind::LeftBracket,
                 TokenKind::Print,
             ]
             .contains(&self.current.kind))

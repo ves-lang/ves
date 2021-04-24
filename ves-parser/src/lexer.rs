@@ -66,13 +66,13 @@ pub enum TokenKind<'a> {
     #[token(")")]
     RightParen,
     #[token("{")]
-    LeftBracket,
-    #[token("}")]
-    RightBracket,
-    #[token("[")]
     LeftBrace,
-    #[token("]")]
+    #[token("}")]
     RightBrace,
+    #[token("[")]
+    LeftBracket,
+    #[token("]")]
+    RightBracket,
     #[regex("@")]
     At,
     #[token(":")]
@@ -588,7 +588,7 @@ mod tests {
             test_tokenize(SOURCE),
             vec![
                 token!(At, "@"), token!(Identifier, "label"), token!(Colon, ":"),
-                token!(Loop, "loop"), token!(LeftBracket, "{"), token!(RightBracket, "}"),
+                token!(Loop, "loop"), token!(LeftBrace, "{"), token!(RightBrace, "}"),
             ]
         );
     }
