@@ -83,6 +83,10 @@ pub enum TokenKind<'a> {
     Semi,
     #[token("=")]
     Equal,
+    #[token("++")]
+    Increment,
+    #[token("--")]
+    Decrement,
     #[token("**")]
     Power,
     #[token("&&")]
@@ -147,7 +151,10 @@ pub enum TokenKind<'a> {
     String,
     /// Floating point (IEEE754) numeric literal
     /// TODO: underscores
-    #[regex("-?((((([0-9]+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf))", priority = 2)]
+    #[regex(
+        "-?((((([0-9]+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
+        priority = 2
+    )]
     Number,
     /// No value (same as nil/null)
     #[token("none")]
