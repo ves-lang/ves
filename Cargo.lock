@@ -814,6 +814,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ves-frontend"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "ves-error",
+ "ves-parser",
+]
+
+[[package]]
 name = "ves-parser"
 version = "0.1.0"
 dependencies = [

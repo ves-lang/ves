@@ -95,6 +95,7 @@ mod tests {
 
     use super::*;
 
+    #[allow(clippy::redundant_clone)]
     #[test]
     fn test_primitive_clones() {
         let num = Value::Num(std::f64::consts::PI);
@@ -125,7 +126,7 @@ mod tests {
         std::mem::drop(val);
         assert_eq!(cloned.ref_count(), 1);
 
-        match &*cloned.as_ptr().map(|cc| cc).unwrap() {
+        match &*cloned.as_ptr().unwrap() {
             VesObject::Str(s) => {
                 assert_eq!(&***s, "a string");
             }

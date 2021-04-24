@@ -2,6 +2,7 @@
 members = [
     "ves-error",
     "ves-parser",
+    "ves-frontend",
     "ves-runtime",
     "experiments"
 ]

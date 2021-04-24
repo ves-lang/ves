@@ -1,0 +1,11 @@
+[package]
+name = "ves-frontend"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ves_error = { package = "ves-error", path = "../ves-error" }
+ves_parser = { package = "ves-parser", path = "../ves-parser" }
+ahash = "0.7.2"

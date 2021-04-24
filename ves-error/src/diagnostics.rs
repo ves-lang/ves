@@ -12,8 +12,9 @@ use crate::{
 pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnostic<FileId> {
     use crate::VesErrorKind::*;
 
-    let base = match e.kind {
+    let base = match &e.kind {
         Lex | Parse | ResolutionSuggestWildcard => Diagnostic::error(),
+        AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
         Resolution => unimplemented!(),

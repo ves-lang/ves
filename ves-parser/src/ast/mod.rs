@@ -1,6 +1,8 @@
 use std::borrow::Cow;
 
-use crate::lexer::{Span, Token};
+use ves_error::FileId;
+
+use crate::lexer::{Span, Token, TokenKind};
 
 pub type Ptr<T> = Box<T>;
 pub type ExprPtr<'a> = Ptr<Expr<'a>>;
@@ -9,14 +11,28 @@ pub type BinOp = BinOpKind;
 pub type UnOp = UnOpKind;
 pub type Args<'a> = Vec<Expr<'a>>;
 
+/// Returns `true` if the given token is a reserved identifier.
+pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
+    if token.kind == TokenKind::Identifier {
+        matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "arr")
+    } else {
+        false
+    }
+}
+
+/// An Abstract Syntax Tree for a Ves source file.
 #[derive(Debug)]
 pub struct AST<'a> {
+    /// The statements in the global scope.
     pub body: Vec<Stmt<'a>>,
+    /// The id of the file the AST belongs to.
+    pub file_id: FileId,
 }
 
 impl<'a> AST<'a> {
-    pub fn new(body: Vec<Stmt<'a>>) -> Self {
-        Self { body }
+    /// Creates a new [`AST`] form the given statements and [`FileId`].
+    pub fn new(body: Vec<Stmt<'a>>, file_id: FileId) -> Self {
+        Self { body, file_id }
     }
 }
 
@@ -238,6 +254,27 @@ impl<'a> FnInfo<'a> {
     }
 }
 
+/// The initializer block of a struct.
+#[derive(Debug, Clone)]
+pub struct Initializer<'a> {
+    /// The body of the initializer.
+    pub body: FnInfo<'a>,
+    /// Whether the initializer is doing any suspicious operations
+    /// that may lead to the struct escaping.
+    /// NOTE: This field isn't currently used.
+    pub may_escape: bool,
+}
+
+impl<'a> Initializer<'a> {
+    /// Creates a new [`Initializer`] instance.
+    pub fn new(body: FnInfo<'a>) -> Self {
+        Self {
+            body,
+            may_escape: true,
+        }
+    }
+}
+
 /// A struct declaration statement or expression.
 #[derive(Debug, Clone)]
 pub struct StructInfo<'a> {
@@ -247,6 +284,8 @@ pub struct StructInfo<'a> {
     pub fields: Vec<Expr<'a>>,
     /// The methods defined on this struct.
     pub methods: Vec<FnInfo<'a>>,
+    /// THe initializer block of this struct.
+    pub initializer: Option<Initializer<'a>>,
     /// The static fields and methods defined on this struct.
     pub r#static: Box<StructInfo<'a>>,
 }
@@ -385,7 +424,7 @@ pub struct Expr<'a> {
 }
 
 /// The kind of a variable declaration.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum VarKind {
     /// An immutable `let` variable.
     Let,

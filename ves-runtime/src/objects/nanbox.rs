@@ -406,6 +406,7 @@ mod tests {
 
     use super::*;
 
+    #[allow(clippy::unusual_byte_groupings)]
     #[test]
     fn test_nanbox_tags() {
         println!("{:064b}", QNAN);
@@ -460,9 +461,7 @@ mod tests {
         let num = NanBox::new(Value::Num(std::f64::consts::PI));
         assert!(num.is_num());
         assert!(!num.is_none());
-        assert_eq!(num.0, unsafe {
-            std::mem::transmute::<f64, u64>(std::f64::consts::PI)
-        });
+        assert_eq!(num.0, std::f64::consts::PI.to_bits());
         println!("{:#?}", num);
 
         for value in &[false, true] {

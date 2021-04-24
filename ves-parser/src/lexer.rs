@@ -454,7 +454,7 @@ mod tests {
         }
         out
     }
-    fn test_tokenize<'a>(src: &'a str) -> Vec<TestToken<'a>> {
+    fn test_tokenize(src: &'_ str) -> Vec<TestToken<'_>> {
         test_tokenize_inner(&mut TokenKind::lexer(src))
     }
     macro_rules! token {

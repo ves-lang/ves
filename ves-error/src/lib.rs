@@ -13,12 +13,16 @@ pub struct ErrCtx {
     pub errors: Vec<VesError>,
     /// The list of the warnings that have been issued so far.
     pub warnings: Vec<VesError>,
+    /// The local file id for the errors in this context. This isn't used in any way internally.
+    /// [`FileId::anon()`] by default.
+    pub local_file_id: FileId,
 }
 
 impl ErrCtx {
     /// Creates a new error context
     pub fn new() -> ErrCtx {
         ErrCtx {
+            local_file_id: FileId::anon(),
             errors: vec![],
             warnings: vec![],
         }
@@ -30,6 +34,16 @@ impl ErrCtx {
             self.warnings.push(e)
         } else {
             self.errors.push(e)
+        }
+    }
+
+    /// Marks the last error in the errors list as a warning and moves it to the warnings list.
+    pub fn mark_last_error_as_warning(&mut self) -> Option<()> {
+        if let Some(e) = self.errors.pop() {
+            self.warnings.push(e);
+            Some(())
+        } else {
+            None
         }
     }
 
@@ -46,6 +60,12 @@ impl ErrCtx {
     }
 }
 
+impl Default for ErrCtx {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum VesErrorKind {
     /// Represents a lex error.
@@ -58,6 +78,8 @@ pub enum VesErrorKind {
     Resolution,
     /// Represents a resolution error that suggests to use a wildcard as a variable name.
     ResolutionSuggestWildcard,
+    /// A warning issued when the user attempts to shadow an unused local variable.
+    AttemptedToShadowUnusedLocal(Span),
     /// Represents an error that has occurred at runtime.
     Runtime,
     /// A runtime panic.
