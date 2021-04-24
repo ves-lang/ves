@@ -668,4 +668,23 @@ mod tests {
             ]
         );
     }
+
+    #[test]
+    fn array() {
+        const SOURCE: &str = r#"[0, "a", none, a]"#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(LeftBracket, "["),
+                token!(Number, "0"),
+                token!(Comma, ","),
+                token!(String, "\"a\""),
+                token!(Comma, ","),
+                token!(None, "none"),
+                token!(Comma, ","),
+                token!(Identifier, "a"),
+                token!(RightBracket, "]"),
+            ]
+        );
+    }
 }
