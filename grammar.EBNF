@@ -72,14 +72,15 @@ if_expr = "if" condition block ( "else" ( if_expr | block ) )? ;
 
 do_block = "do" block ;
 
-assignment = call ( assignment_op expression )?
-    | inc
-    | dec
+assignment = 
+    assignment_target ( assignment_op expression )?
     | logic_or 
     ;
 assignment_op = "+=" | "-=" | "*=" | "/=" | "**=" | "%="  "||=" | "&&=" ;
-inc = "++" call | call "++" ;
-dec = "--" call | call "--" ;
+assignment_target = IDENTIFIER |
+  | call property_access
+  | call item_access
+  ;
 
 logic_or       = logic_and ( "||" logic_and )* ;
 logic_and      = equality ( "&&" equality )* ;
@@ -89,14 +90,23 @@ addition       = multiplication ( ( "-" | "+" ) multiplication )* ;
 multiplication = exponentiation ( ("/" | "*" | "%" ) exponentiation )* ;
 exponentiation = unary ( ( "**" ) exponentiation )* ;
 unary          = ( "!" | "-" | "try" | "ok" | "err" ) unary 
+    | inc
+    | dec
     | call
     ;
+
+inc = "++" assignment_target | assignment_target "++" ;
+dec = "--" assignment_target | assignment_target "--" ;
 
 call = primary ( 
     "(" args? ")" 
     | ( "." | "?." ) IDENTIFIER
     | "[" expression "]"
 )* ;
+
+
+property_access = ( "." | "?." ) IDENTIFIER ;
+item_access     = "[" expression "]" ;
 
 args = spread_expr ( "," spread_expr )* ","? ;
 spread_expr = "..."? expression ;
