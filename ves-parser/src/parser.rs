@@ -237,6 +237,15 @@ impl<'a> Parser<'a> {
                     // rest argument
                     let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
                     rest = Some(name);
+                    // rest params must be last
+                    if !self.check(&TokenKind::RightParen) {
+                        return Err(VesError::parse(
+                            "Rest parameter must appear last in parameter list",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    break;
                 } else {
                     // positional or default argument
                     let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
@@ -1123,6 +1132,20 @@ mod tests {
         }};
     }
 
+    macro_rules! assert_ast_err {
+        ($source:literal, $error:literal) => {{
+            let src = $source;
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.into());
+            let errors = Parser::new(Lexer::new(src), fid, &db)
+                .parse()
+                .unwrap_err()
+                .errors;
+            assert!(errors.len() == 1);
+            assert_eq!(&errors[0].msg, $error);
+        }};
+    }
+
     fn clean_tree(tree: String) -> String {
         RE.replace_all(&tree, " ")
             .lines()
@@ -1240,23 +1263,10 @@ StmtKind::ExprStmt
 
     #[test]
     fn parse_invalid_assignments() {
-        macro_rules! test_case {
-            ($source:literal) => {{
-                let src = $source;
-                let mut db = VesFileDatabase::new();
-                let fid = db.add_snippet(src.into());
-                let errors = Parser::new(Lexer::new(src), fid, &db)
-                    .parse()
-                    .unwrap_err()
-                    .errors;
-                assert!(errors.len() == 1);
-                assert_eq!(&errors[0].msg, &"Invalid assignment target");
-            }};
-        }
-        test_case!("a?.b = v");
-        test_case!("a()?.b = v");
-        test_case!("[a,b,c].f()?.x = v");
-        test_case!("a()?.b().c = v");
+        assert_ast_err!("a?.b = v", "Invalid assignment target");
+        assert_ast_err!("a()?.b = v", "Invalid assignment target");
+        assert_ast_err!("[a,b,c].f()?.x = v", "Invalid assignment target");
+        assert_ast_err!("a()?.b().c = v", "Invalid assignment target");
     }
 
     #[test]
@@ -1772,5 +1782,23 @@ StmtKind::ExprStmt
             field0: 0
     kind: Function"#
         );
+    }
+
+    #[test]
+    fn parse_bad_fn_decl() {
+        // positional after default
+        assert_ast_err!(
+            "fn(a=0,b) {}",
+            "Positional arguments may not appear after arguments with default values"
+        );
+        // rest not last
+        assert_ast_err!(
+            "fn(...a, b) {}",
+            "Rest parameter must appear last in parameter list"
+        );
+        // unopened param list
+        assert_ast_err!("fn a) {}", "Expected '('");
+        // unclosed param list
+        assert_ast_err!("fn(a {}", "Expected ')'");
     }
 }
