@@ -57,34 +57,29 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
-        #[allow(clippy::if_same_then_else)]
-        if self.match_(&TokenKind::LeftBrace) {
-            self.block()
-            // TODO: this
-        } else if self.match_(&TokenKind::Print) {
-            unimplemented!()
-            //self.print_statement()
-        } else if self.match_(&TokenKind::Loop) {
-            unimplemented!()
-            //self.loop_statement();
-        } else if self.match_(&TokenKind::For) {
-            unimplemented!()
-            //self.for_statement();
-        } else if self.match_(&TokenKind::While) {
-            unimplemented!()
-            //self.while_statement();
-        } else if self.match_(&TokenKind::Break) {
-            unimplemented!()
-            //self.break_statement();
-        } else if self.match_(&TokenKind::Continue) {
-            unimplemented!()
-            //self.continue_statement();
-        } else if self.match_(&TokenKind::Defer) {
-            unimplemented!()
-            //self.defer_statement();
-        } else if self.match_(&TokenKind::Return) {
-            unimplemented!()
-            //self.return_statement();
+        if self.match_any(&[
+            TokenKind::LeftBrace,
+            TokenKind::Print,
+            TokenKind::Loop,
+            TokenKind::For,
+            TokenKind::While,
+            TokenKind::Break,
+            TokenKind::Continue,
+            TokenKind::Defer,
+            TokenKind::Return,
+        ]) {
+            match self.previous.kind {
+                TokenKind::LeftBrace => self.block(),
+                TokenKind::Print => unimplemented!(),
+                TokenKind::Loop => unimplemented!(),
+                TokenKind::For => unimplemented!(),
+                TokenKind::While => unimplemented!(),
+                TokenKind::Break => unimplemented!(),
+                TokenKind::Continue => unimplemented!(),
+                TokenKind::Defer => unimplemented!(),
+                TokenKind::Return => unimplemented!(),
+                _ => unreachable!(),
+            }
         } else {
             self.expr_stmt(consume_semi)
         }
@@ -161,36 +156,94 @@ impl<'a> Parser<'a> {
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         // TODO: this
-        match self.current.kind {
-            TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
-            TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
-            TokenKind::If => unimplemented!(),     /* self.if_expr(), */
-            TokenKind::Do => self.do_block(),
-            _ => self.assignment(),
+        if self.match_any(&[
+            TokenKind::Struct,
+            TokenKind::Fn,
+            TokenKind::If,
+            TokenKind::Do,
+        ]) {
+            match self.previous.kind {
+                TokenKind::Struct => unimplemented!(),
+                TokenKind::Fn => unimplemented!(),
+                TokenKind::If => self.if_expr(),
+                TokenKind::Do => self.do_block_expr(),
+                _ => unreachable!(),
+            }
+        } else {
+            self.assignment()
         }
     }
 
-    /* fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
-        self.advance(); // consume the `if` token
+    fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-
+        let condition = self.condition()?;
+        let then = self.do_block()?;
+        let mut otherwise = None;
+        if self.match_(&TokenKind::Else) {
+            if self.match_(&TokenKind::If) {
+                // `else if`
+                let nested = self.if_expr()?;
+                otherwise = Some(ast::DoBlock {
+                    statements: vec![],
+                    value: Some(nested),
+                });
+            } else {
+                // `else`
+                otherwise = Some(self.do_block()?);
+            }
+        }
         let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::If(box ast::If {
+                condition,
+                then,
+                otherwise,
+            }),
+        })
     }
 
-    fn condition(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn condition(&mut self) -> ParseResult<ast::Condition<'a>> {
         if self.match_any(&[TokenKind::Ok, TokenKind::Err]) {
+            let which = self.previous.clone();
+            self.consume(&TokenKind::LeftParen, "Expected '('")?;
+            let ident = self.consume(&TokenKind::Identifier, "Expected identifier")?;
+            self.consume(&TokenKind::RightParen, "Expected ')'")?;
+            self.consume(&TokenKind::Equal, "Expected assignment")?;
+            let value = self.expr()?;
+            Ok(ast::Condition {
+                value,
+                pattern: match which.kind {
+                    TokenKind::Ok => ast::ConditionPattern::IsOk(ident),
+                    TokenKind::Err => ast::ConditionPattern::IsErr(ident),
+                    _ => unreachable!(),
+                },
+            })
             // destructuring
-
+        } else {
+            let value = self.expr()?;
+            Ok(ast::Condition {
+                value,
+                pattern: ast::ConditionPattern::Value,
+            })
         }
-    } */
+    }
 
-    fn do_block(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn do_block_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let inner = self.do_block()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::DoBlock(box inner),
+        })
+    }
+
+    fn do_block(&mut self) -> ParseResult<ast::DoBlock<'a>> {
         // the value of the block is the last expression statement,
         // but only if it is not terminated by a semicolon.
         // in any other case the value is `none`
 
-        self.advance(); // consume the `do` token
-        let span_start = self.previous.span.start;
         self.consume(&TokenKind::LeftBrace, "Expected block")?;
 
         let mut body = vec![];
@@ -213,7 +266,6 @@ impl<'a> Parser<'a> {
         }
 
         self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
-        let span_end = self.previous.span.end;
 
         // if the last statement was not terminated by a semicolon,
         // and it's an expression, then that's the value.
@@ -230,12 +282,9 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(ast::Expr {
-            span: span_start..span_end,
-            kind: ast::ExprKind::DoBlock(box ast::DoBlock {
-                statements: body,
-                value,
-            }),
+        Ok(ast::DoBlock {
+            statements: body,
+            value,
         })
     }
 
@@ -1306,6 +1355,141 @@ StmtKind::ExprStmt
             token: "5"
             value: LitValue::Number
               field0: 5"#
+        );
+    }
+
+    #[test]
+    fn parse_if_expr() {
+        // simple
+        assert_ast!(
+            r#"if v { 0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: None"#
+        );
+        // with else
+        assert_ast!(
+            r#"if v { 0 } else { 1 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: DoBlock
+      statements=
+      value: Lit
+        token: "1"
+        value: LitValue::Number
+          field0: 1"#
+        );
+        // more branches
+        assert_ast!(
+            r#"if v0 { 0 } else if v1 { 1 } else if v2 { 2 } else { 0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v0"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: DoBlock
+      statements=
+      value: If
+        condition: Condition
+          value: ExprKind::Variable
+            name: "v1"
+          pattern: ConditionPattern::Value
+        then: DoBlock
+          statements=
+          value: Lit
+            token: "1"
+            value: LitValue::Number
+              field0: 1
+        otherwise: DoBlock
+          statements=
+          value: If
+            condition: Condition
+              value: ExprKind::Variable
+                name: "v2"
+              pattern: ConditionPattern::Value
+            then: DoBlock
+              statements=
+              value: Lit
+                token: "2"
+                value: LitValue::Number
+                  field0: 2
+            otherwise: DoBlock
+              statements=
+              value: Lit
+                token: "0"
+                value: LitValue::Number
+                  field0: 0"#
+        );
+        // destructuring
+        assert_ast!(
+            r#"if ok(v) = f() { v }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsOk
+        field0: "v"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "v"
+    otherwise: None"#
+        );
+        assert_ast!(
+            r#"if err(e) = f() { e }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsErr
+        field0: "e"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "e"
+    otherwise: None"#
         );
     }
 
