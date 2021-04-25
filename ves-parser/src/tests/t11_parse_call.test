@@ -1,0 +1,18 @@
+f(a, b, ...c)
+
+%output
+
+StmtKind::ExprStmt
+  expr: Call
+    callee: ExprKind::Variable
+      name: "f"
+    args=
+      ExprKind::Variable
+        name: "a"
+      ExprKind::Variable
+        name: "b"
+      ExprKind::Spread
+        value: ExprKind::Variable
+          name: "c"
+    tco: false
+    rest: false

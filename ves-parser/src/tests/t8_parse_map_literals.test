@@ -1,0 +1,45 @@
+a = { test: 1.0 }
+a = { ["test"]: 1.0 }
+a = { v: 0, ...o }
+
+%output
+
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      values=
+        MapEntry::Pair
+          key: Lit
+            token: "test"
+            value: LitValue::Str("test")
+          value: Lit
+            token: "1.0"
+            value: LitValue::Number(1.0)
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      values=
+        MapEntry::Pair
+          key: Lit
+            token: "\"test\""
+            value: LitValue::Str("test")
+          value: Lit
+            token: "1.0"
+            value: LitValue::Number(1.0)
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      values=
+        MapEntry::Pair
+          key: Lit
+            token: "v"
+            value: LitValue::Str("v")
+          value: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+        MapEntry::Spread
+          target: ExprKind::Variable
+            name: "o"

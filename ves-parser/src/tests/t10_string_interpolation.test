@@ -1,0 +1,20 @@
+f"test{2+2}"
+
+%output
+
+StmtKind::ExprStmt
+  expr: FString
+    fragments=
+      FStringFrag::Str
+        field0: Lit
+          token: "test"
+          value: LitValue::Str("test")
+      FStringFrag::Expr
+        field0: ExprKind::Binary
+          op: Add
+          left: Lit
+            token: "2"
+            value: LitValue::Number(2.0)
+          right: Lit
+            token: "2"
+            value: LitValue::Number(2.0)

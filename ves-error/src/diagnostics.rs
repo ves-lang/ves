@@ -13,7 +13,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
     use crate::VesErrorKind::*;
 
     let base = match &e.kind {
-        Lex | Parse | ResolutionSuggestWildcard => Diagnostic::error(),
+        Lex | Parse | ResolutionSuggestWildcard | OptionalAccessAssignment => Diagnostic::error(),
         AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
         UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),

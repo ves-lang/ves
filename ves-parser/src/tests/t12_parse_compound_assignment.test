@@ -1,0 +1,20 @@
+a += b += 5
+
+%output
+
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Binary
+      op: Add
+      left: ExprKind::Variable
+        name: "a"
+      right: Assignment
+        name: "b"
+        value: ExprKind::Binary
+          op: Add
+          left: ExprKind::Variable
+            name: "b"
+          right: Lit
+            token: "5"
+            value: LitValue::Number(5.0)

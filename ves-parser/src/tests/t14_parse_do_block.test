@@ -1,0 +1,45 @@
+do {}
+do { true }
+do { 
+    if cond() { 
+        "true" 
+    } else { 
+        "false" 
+    } 
+}
+
+
+%output
+
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: None
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: Lit
+      token: "true"
+      value: LitValue::Bool(true)
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: If
+      condition: Condition
+        value: Call
+          callee: ExprKind::Variable
+            name: "cond"
+          args=
+          tco: false
+          rest: false
+        pattern: ConditionPattern::Value
+      then: DoBlock
+        statements=
+        value: Lit
+          token: "\"true\""
+          value: LitValue::Str("true")
+      otherwise: DoBlock
+        statements=
+        value: Lit
+          token: "\"false\""
+          value: LitValue::Str("false")

@@ -1,0 +1,30 @@
+fn(a=0,b) {}
+fn(...a, b) {}
+fn a) {}
+fn(a {}
+
+%output
+
+error: Positional arguments may not appear after arguments with default values
+  ┌─ <source: #9ed601521a65842b>:1:8
+  │
+1 │ fn(a=0,b) {}
+  │        ^
+
+error: Rest parameter must appear last in parameter list
+  ┌─ <source: #9ed601521a65842b>:2:8
+  │
+2 │ fn(...a, b) {}
+  │        ^
+
+error: Expected an opening `(` after the function name or keyword
+  ┌─ <source: #9ed601521a65842b>:3:5
+  │
+3 │ fn a) {}
+  │     ^
+
+error: Expected a closing `)` in this position
+  ┌─ <source: #9ed601521a65842b>:4:6
+  │
+4 │ fn(a {}
+  │      ^

@@ -1,0 +1,113 @@
+if v { 0 }
+
+if v { 0 } else { 1 }
+if v0 { 0 } 
+else if v1 { 1 } 
+else if v2 { 2 } 
+else { 0 }
+
+if ok(v) = f() { v }
+if err(e) = f() { e }
+
+%output
+
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    otherwise: None
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    otherwise: DoBlock
+      statements=
+      value: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v0"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    otherwise: DoBlock
+      statements=
+      value: If
+        condition: Condition
+          value: ExprKind::Variable
+            name: "v1"
+          pattern: ConditionPattern::Value
+        then: DoBlock
+          statements=
+          value: Lit
+            token: "1"
+            value: LitValue::Number(1.0)
+        otherwise: DoBlock
+          statements=
+          value: If
+            condition: Condition
+              value: ExprKind::Variable
+                name: "v2"
+              pattern: ConditionPattern::Value
+            then: DoBlock
+              statements=
+              value: Lit
+                token: "2"
+                value: LitValue::Number(2.0)
+            otherwise: DoBlock
+              statements=
+              value: Lit
+                token: "0"
+                value: LitValue::Number(0.0)
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsOk
+        binding: "v"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "v"
+    otherwise: None
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsErr
+        binding: "e"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "e"
+    otherwise: None

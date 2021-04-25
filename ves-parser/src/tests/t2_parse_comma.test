@@ -1,0 +1,22 @@
+1.0e-5, none, true, false, "string"
+
+%output
+
+StmtKind::ExprStmt
+  expr: ExprKind::Comma
+    field0=
+      Lit
+        token: "1.0e-5"
+        value: LitValue::Number(0.00001)
+      Lit
+        token: "none"
+        value: LitValue::None
+      Lit
+        token: "true"
+        value: LitValue::Bool(true)
+      Lit
+        token: "false"
+        value: LitValue::Bool(false)
+      Lit
+        token: "\"string\""
+        value: LitValue::Str("string")

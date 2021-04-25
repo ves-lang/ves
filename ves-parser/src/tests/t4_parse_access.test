@@ -1,0 +1,17 @@
+a.b?.c[0]
+
+%output
+
+StmtKind::ExprStmt
+  expr: GetItem
+    node: GetProp
+      node: GetProp
+        node: ExprKind::Variable
+          name: "a"
+        field: "b"
+        is_optional: false
+      field: "c"
+      is_optional: true
+    key: Lit
+      token: "0"
+      value: LitValue::Number(0.0)

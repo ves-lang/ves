@@ -145,7 +145,7 @@ pub enum UnOpKind {
 }
 
 /// Represents the value of a literal.
-#[derive(Debug, Clone, PartialEq, AstToStr)]
+#[derive(Clone, PartialEq, AstToStr)]
 pub enum LitValue<'a> {
     /// A 64-bit floating pointer number.
     Number(f64),
@@ -155,6 +155,17 @@ pub enum LitValue<'a> {
     None,
     /// A utf-8 string.
     Str(Cow<'a, str>),
+}
+
+impl<'a> std::fmt::Debug for LitValue<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LitValue::Number(n) => write!(f, "LitValue::Number({:?})", n),
+            LitValue::Bool(b) => write!(f, "LitValue::Bool({:?})", b),
+            LitValue::None => write!(f, "LitValue::None"),
+            LitValue::Str(s) => write!(f, "LitValue::Str({:?})", s),
+        }
+    }
 }
 
 impl<'a> LitValue<'a> {
@@ -172,6 +183,7 @@ pub struct Lit<'a> {
     /// The token that produced the literal.
     pub token: Token<'a>,
     /// The value of the literal.
+    #[debug]
     pub value: LitValue<'a>,
 }
 
@@ -364,9 +376,9 @@ pub enum ConditionPattern<'a> {
     /// The value of the condition itself.
     Value,
     /// Whether the condition is `ok` plus a binding for the inner value.
-    IsOk(Token<'a>),
+    IsOk(#[rename = "binding"] Token<'a>),
     /// Whether the condition is `err` plus a binding for the inner value.
-    IsErr(Token<'a>),
+    IsErr(#[rename = "binding"] Token<'a>),
 }
 
 /// A condition of an if statement, while loop, or for loop.
@@ -464,7 +476,7 @@ pub enum ExprKind<'a> {
     /// A function call or struct constructor.
     Call(#[forward] Ptr<Call<'a>>),
     /// A spread expression, e.g. `...arr`.
-    Spread(ExprPtr<'a>),
+    Spread(#[rename = "value"] ExprPtr<'a>),
     /// A property access expression, e.g. `a.b` and `c?.d`.
     GetProp(#[forward] Ptr<GetProp<'a>>),
     /// A property assignment expression, e.g. `a.b = c`
@@ -476,9 +488,9 @@ pub enum ExprKind<'a> {
     /// A utf-8 string that contains one or more interpolation fragments.
     FString(#[forward] FString<'a>),
     /// An array literal.
-    Array(Vec<Expr<'a>>),
+    Array(#[rename = "values"] Vec<Expr<'a>>),
     /// A dictionary literal.
-    Map(Vec<MapEntry<'a>>),
+    Map(#[rename = "values"] Vec<MapEntry<'a>>),
     /// A variable access expression (includes self).
     Variable(#[rename = "name"] Token<'a>),
     /// A range specified, e.g. `0..10` or `start..end, -2`.

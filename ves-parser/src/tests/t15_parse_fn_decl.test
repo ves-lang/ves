@@ -1,0 +1,131 @@
+fn name(a, b = 0, ...c) {}
+fn name(a, b = 0, ...c) => 0
+fn(a, b = 0, ...c) {}
+fn(a, b = 0, ...c) => 0
+fn(a, b = 0, ...c,) => 0
+fn(){}
+fn(b = 0) {}
+fn(...args) {}
+
+%output
+
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: "c"
+    body=
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number(0.0)
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@3:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: "c"
+    body=
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@4:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number(0.0)
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@5:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number(0.0)
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@6:1]"
+    params: Params
+      positional=
+      default=
+      rest: None
+    body=
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@7:1]"
+    params: Params
+      positional=
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: None
+    body=
+    kind: Function
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@8:1]"
+    params: Params
+      positional=
+      default=
+      rest: "args"
+    body=
+    kind: Function
+

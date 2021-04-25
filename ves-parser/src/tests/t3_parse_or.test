@@ -1,0 +1,13 @@
+0 || 0
+
+%output
+
+StmtKind::ExprStmt
+  expr: ExprKind::Binary
+    op: Or
+    left: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    right: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
