@@ -1,9 +1,9 @@
 use crate::{
-    ast::{self, StmtKind, AST},
+    ast::{self, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
 use std::convert::Into;
-use ves_error::{ErrCtx, FileId, Span, VesError};
+use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
 
@@ -14,10 +14,11 @@ pub struct Parser<'a> {
     eof: Token<'a>,
     ex: ErrCtx,
     fid: FileId,
+    db: &'a VesFileDatabase<'a>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, fid: FileId) -> Parser<'a> {
+    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'a VesFileDatabase) -> Parser<'a> {
         let source = lexer.source();
         let end = if source.is_empty() {
             0
@@ -33,6 +34,7 @@ impl<'a> Parser<'a> {
             eof,
             ex: ErrCtx::new(),
             fid,
+            db,
         }
     }
 
@@ -69,7 +71,7 @@ impl<'a> Parser<'a> {
             TokenKind::Return,
         ]) {
             match self.previous.kind {
-                TokenKind::LeftBrace => self.block(),
+                TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Print => unimplemented!(),
                 TokenKind::Loop => unimplemented!(),
                 TokenKind::For => unimplemented!(),
@@ -85,8 +87,17 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn block(&mut self) -> ParseResult<ast::Stmt<'a>> {
+    fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
+        let body = self.block()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Block(body),
+            span: span_start..span_end,
+        })
+    }
+
+    fn block(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
         let mut body = vec![];
         // if the next token is a RightBrace, the block is empty
         if !self.check(&TokenKind::RightBrace) {
@@ -101,12 +112,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
-
-        let span_end = self.current.span.end;
-        Ok(ast::Stmt {
-            kind: StmtKind::Block(body),
-            span: span_start..span_end,
-        })
+        Ok(body)
     }
 
     fn expr_stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
@@ -164,7 +170,7 @@ impl<'a> Parser<'a> {
         ]) {
             match self.previous.kind {
                 TokenKind::Struct => unimplemented!(),
-                TokenKind::Fn => unimplemented!(),
+                TokenKind::Fn => self.fn_decl(ast::FnKind::Function),
                 TokenKind::If => self.if_expr(),
                 TokenKind::Do => self.do_block_expr(),
                 _ => unreachable!(),
@@ -172,6 +178,100 @@ impl<'a> Parser<'a> {
         } else {
             self.assignment()
         }
+    }
+
+    fn fn_decl(&mut self, kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let name = if self.match_(&TokenKind::Identifier) {
+            self.previous.clone()
+        } else {
+            let (line, column) = self.db.location(self.fid, &self.previous.span);
+            Token::new(
+                format!("[fn@{}:{}]", line, column),
+                self.previous.span.clone(),
+                TokenKind::Identifier,
+            )
+        };
+
+        self.consume(&TokenKind::LeftParen, "Expected '('")?;
+        let params = self.param_pack(true)?;
+        self.consume(&TokenKind::RightParen, "Expected ')'")?;
+        let body = if self.match_(&TokenKind::Arrow) {
+            let body_span_start = self.previous.span.start;
+            let expr = self.expr()?;
+            vec![ast::Stmt {
+                span: body_span_start..expr.span.end,
+                kind: ast::StmtKind::Return(Some(box expr)),
+            }]
+        } else {
+            self.consume(&TokenKind::LeftBrace, "Expected '{'")?;
+            self.block()?
+        };
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::Fn(box ast::FnInfo {
+                name,
+                params,
+                body,
+                kind,
+            }),
+        })
+    }
+
+    fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
+        let mut parsing_default = false;
+        let mut positional = vec![];
+        let mut default = vec![];
+        let mut rest = None;
+        if !self.check(&TokenKind::LeftParen) {
+            loop {
+                if self.match_(&TokenKind::Ellipsis) {
+                    if !rest_args {
+                        return Err(VesError::parse(
+                            "Rest arguments are not allowed here",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    // rest argument
+                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                    rest = Some(name);
+                } else {
+                    // positional or default argument
+                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                    let value = if self.match_(&TokenKind::Equal) {
+                        Some(self.expr()?)
+                    } else {
+                        None
+                    };
+                    match value {
+                        Some(value) => {
+                            parsing_default = true;
+                            default.push((name, value));
+                        }
+                        None => {
+                            if parsing_default {
+                                return Err(VesError::parse(
+                                    "Positional arguments may not appear after arguments with default values",
+                                    self.previous.span.clone(),
+                                    self.fid,
+                                ));
+                            }
+                            positional.push(name);
+                        }
+                    }
+                }
+                if !self.match_(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        Ok(ast::Params {
+            positional,
+            default,
+            rest,
+        })
     }
 
     fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
@@ -675,7 +775,7 @@ impl<'a> Parser<'a> {
                             },
                         })),
                         lexer::Frag::Sublexer(sublexer) => {
-                            let mut subparser = Parser::new(sublexer, self.fid);
+                            let mut subparser = Parser::new(sublexer, self.fid, self.db);
                             subparser.advance();
                             fragments.push(ast::FStringFrag::Expr(subparser.expr()?));
                         }
@@ -1003,10 +1103,13 @@ mod tests {
     // TODO: spans may be wrong
 
     macro_rules! assert_ast {
-        ($source:expr, $expected:expr) => {
+        ($source:expr, $expected:expr) => {{
+            let src = $source;
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.into());
             pretty_assertions::assert_eq!(
                 DisplayAsDebugWrapper(clean_tree(
-                    Parser::new(Lexer::new($source), FileId::anon())
+                    Parser::new(Lexer::new(src), fid, &db)
                         .parse()
                         .unwrap()
                         .body
@@ -1016,8 +1119,8 @@ mod tests {
                         .join("\n")
                 )),
                 DisplayAsDebugWrapper($expected.trim_start().to_owned())
-            )
-        };
+            );
+        }};
     }
 
     fn clean_tree(tree: String) -> String {
@@ -1138,14 +1241,17 @@ StmtKind::ExprStmt
     #[test]
     fn parse_invalid_assignments() {
         macro_rules! test_case {
-            ($source:literal) => {
-                let errors = Parser::new(Lexer::new($source), FileId::anon())
+            ($source:literal) => {{
+                let src = $source;
+                let mut db = VesFileDatabase::new();
+                let fid = db.add_snippet(src.into());
+                let errors = Parser::new(Lexer::new(src), fid, &db)
                     .parse()
                     .unwrap_err()
                     .errors;
                 assert!(errors.len() == 1);
                 assert_eq!(&errors[0].msg, &"Invalid assignment target");
-            };
+            }};
         }
         test_case!("a?.b = v");
         test_case!("a()?.b = v");
@@ -1502,34 +1608,55 @@ StmtKind::ExprStmt
     #[test]
     fn parse_do_block() {
         assert_ast!(
-            r#"a = do {}"#,
+            r#"do {}"#,
             r#"
 StmtKind::ExprStmt
-  expr: Assignment
-    name: "a"
-    value: DoBlock
-      statements=
-      value: None"#
+  expr: DoBlock
+    statements=
+    value: None"#
         );
         assert_ast!(
-            r#"a = do { true }"#,
+            r#"do { true }"#,
             r#"
 StmtKind::ExprStmt
-  expr: Assignment
-    name: "a"
-    value: DoBlock
-      statements=
-      value: Lit
-        token: "true"
-        value: LitValue::Bool
-          field0: true"#
+  expr: DoBlock
+    statements=
+    value: Lit
+      token: "true"
+      value: LitValue::Bool
+        field0: true"#
         );
 
-        // TODO: test these once other statements work, too
-        /* assert_ast!(
-            r#"a = do { if cond() { "true" } else { "false" } }"#
-        );
         assert_ast!(
+            r#"do { if cond() { "true" } else { "false" } }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: If
+      condition: Condition
+        value: Call
+          callee: ExprKind::Variable
+            name: "cond"
+          args=
+          tco: false
+          rest: false
+        pattern: ConditionPattern::Value
+      then: DoBlock
+        statements=
+        value: Lit
+          token: "\"true\""
+          value: LitValue::Str
+            field0: "true"
+      otherwise: DoBlock
+        statements=
+        value: Lit
+          token: "\"false\""
+          value: LitValue::Str
+            field0: "false""#
+        );
+        // TODO: test these once all statements are implemented
+        /* assert_ast!(
             r#"
             a = do {
                 mut sum = 0
@@ -1547,5 +1674,103 @@ StmtKind::ExprStmt
             }
             "#
         ); */
+    }
+
+    #[test]
+    fn parse_fn_decl() {
+        // basic
+        assert_ast!(
+            r#"fn name(a, b = 0, ...c) {}"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+    kind: Function"#
+        );
+        // arrow
+        assert_ast!(
+            r#"fn name(a, b = 0, ...c) => 0"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number
+            field0: 0
+    kind: Function"#
+        );
+        // anonymous
+        assert_ast!(
+            r#"fn(a, b = 0, ...c) {}"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@1:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+    kind: Function"#
+        );
+        // anonymous, arrow
+        assert_ast!(
+            r#"fn(a, b = 0, ...c) => 0"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@1:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number
+            field0: 0
+    kind: Function"#
+        );
     }
 }
