@@ -61,6 +61,8 @@ impl<'a> Parser<'a> {
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
         if self.match_any(&[
             TokenKind::LeftBrace,
+            TokenKind::Let,
+            TokenKind::Mut,
             TokenKind::Print,
             TokenKind::Loop,
             TokenKind::For,
@@ -72,6 +74,8 @@ impl<'a> Parser<'a> {
         ]) {
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
+                TokenKind::Let => unimplemented!(),
+                TokenKind::Mut => unimplemented!(),
                 TokenKind::Print => unimplemented!(),
                 TokenKind::Loop => unimplemented!(),
                 TokenKind::For => unimplemented!(),
@@ -180,11 +184,29 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn fn_decl(&mut self, kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+    /* fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
         let name = if self.match_(&TokenKind::Identifier) {
             self.previous.clone()
         } else {
+            let (line, column) = self.db.location(self.fid, &self.previous.span);
+            Token::new(
+                format!("[struct@{}:{}]", line, column),
+                self.previous.span.clone(),
+                TokenKind::Identifier,
+            )
+        };
+        // fields
+        if self.match_(&TokenKind::LeftParen) {}
+        let span_end = self.previous.span.end;
+    } */
+
+    fn fn_decl(&mut self, mut kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let name = if self.match_(&TokenKind::Identifier) {
+            self.previous.clone()
+        } else {
+            if matches!(kind, ast::FnKind::Method) {}
             let (line, column) = self.db.location(self.fid, &self.previous.span);
             Token::new(
                 format!("[fn@{}:{}]", line, column),
@@ -208,6 +230,11 @@ impl<'a> Parser<'a> {
             self.block()?
         };
         let span_end = self.previous.span.end;
+        if kind == ast::FnKind::Method
+            && (params.positional.is_empty() || params.positional[0].kind != TokenKind::Self_)
+        {
+            kind = ast::FnKind::Static;
+        }
         Ok(ast::Expr {
             span: span_start..span_end,
             kind: ast::ExprKind::Fn(box ast::FnInfo {
@@ -224,56 +251,61 @@ impl<'a> Parser<'a> {
         let mut positional = vec![];
         let mut default = vec![];
         let mut rest = None;
-        if !self.check(&TokenKind::LeftParen) {
-            loop {
-                if self.match_(&TokenKind::Ellipsis) {
-                    if !rest_args {
-                        return Err(VesError::parse(
-                            "Rest arguments are not allowed here",
-                            self.previous.span.clone(),
-                            self.fid,
-                        ));
-                    }
-                    // rest argument
-                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
-                    rest = Some(name);
-                    // rest params must be last
-                    if !self.check(&TokenKind::RightParen) {
-                        return Err(VesError::parse(
-                            "Rest parameter must appear last in parameter list",
-                            self.previous.span.clone(),
-                            self.fid,
-                        ));
-                    }
-                    break;
+        while !self.check(&TokenKind::LeftParen) {
+            if self.match_(&TokenKind::Ellipsis) {
+                if !rest_args {
+                    return Err(VesError::parse(
+                        "Rest arguments are not allowed here",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
+                }
+                // rest argument
+                let name = self.consume_any(
+                    &[TokenKind::Identifier, TokenKind::Self_],
+                    "Expected parameter name",
+                )?;
+                rest = Some(name);
+                break;
+            } else {
+                // positional or default argument
+                let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                let value = if self.match_(&TokenKind::Equal) {
+                    Some(self.expr()?)
                 } else {
-                    // positional or default argument
-                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
-                    let value = if self.match_(&TokenKind::Equal) {
-                        Some(self.expr()?)
-                    } else {
-                        None
-                    };
-                    match value {
-                        Some(value) => {
-                            parsing_default = true;
-                            default.push((name, value));
-                        }
-                        None => {
-                            if parsing_default {
-                                return Err(VesError::parse(
+                    None
+                };
+                match value {
+                    Some(value) => {
+                        parsing_default = true;
+                        default.push((name, value));
+                    }
+                    None => {
+                        if parsing_default {
+                            return Err(VesError::parse(
                                     "Positional arguments may not appear after arguments with default values",
                                     self.previous.span.clone(),
                                     self.fid,
                                 ));
-                            }
-                            positional.push(name);
                         }
+                        positional.push(name);
                     }
                 }
-                if !self.match_(&TokenKind::Comma) {
-                    break;
-                }
+            }
+            if !self.match_(&TokenKind::Comma) {
+                break;
+            }
+        }
+        // consume trailing comma
+        self.match_(&TokenKind::Comma);
+        if !self.check(&TokenKind::RightParen) {
+            // if we get here, it means we're not at the end of the param list
+            if rest.is_some() {
+                return Err(VesError::parse(
+                    "Rest parameter must appear last in parameter list",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
             }
         }
         Ok(ast::Params {
@@ -633,6 +665,7 @@ impl<'a> Parser<'a> {
                 TokenKind::LeftParen => {
                     // TODO: tail call
                     let args = self.arg_list()?;
+                    self.consume(&TokenKind::RightParen, "Expected ')'")?;
                     ast::Expr {
                         span: expr.span.start..self.previous.span.end,
                         kind: ast::ExprKind::Call(box ast::Call {
@@ -715,7 +748,8 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.consume(&TokenKind::RightParen, "Expected ')'")?;
+        // consume trailing comma
+        self.match_(&TokenKind::Comma);
         Ok(args)
     }
 
@@ -933,6 +967,24 @@ impl<'a> Parser<'a> {
                 self.fid,
             ))
         }
+    }
+
+    #[inline]
+    fn consume_any<S: Into<String>>(
+        &mut self,
+        kinds: &[TokenKind<'a>],
+        err_msg: S,
+    ) -> ParseResult<Token<'a>> {
+        for kind in kinds {
+            if self.check(kind) {
+                return Ok(self.advance());
+            }
+        }
+        Err(VesError::parse(
+            err_msg,
+            self.current.span.clone(),
+            self.fid,
+        ))
     }
 
     #[inline]
@@ -1759,6 +1811,32 @@ StmtKind::ExprStmt
         // anonymous, arrow
         assert_ast!(
             r#"fn(a, b = 0, ...c) => 0"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@1:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number
+            field0: 0
+    kind: Function"#
+        );
+        // trailing comma
+        assert_ast!(
+            r#"fn(a, b = 0, ...c,) => 0"#,
             r#"
 StmtKind::ExprStmt
   expr: FnInfo

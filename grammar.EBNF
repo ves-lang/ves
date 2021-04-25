@@ -50,8 +50,8 @@ expression = struct_decl
     | assignment
     ;
 
-struct_decl = "struct" IDENTIFIER names "{" struct_body "}" ;
-names = IDENTIFIER ("," IDENTIFIER)* ","? ;
+struct_decl = "struct" IDENTIFIER ( "(" names? default_params? ")" )? "{" struct_body "}" ;
+names = IDENTIFIER ("," IDENTIFIER )* ","? ;
 struct_doby = init_block | binding | instance_method | static_method ;
 init_block  = "init" block ;
 instance_method  =  IDENTIFIER "(" "self" ( ", " params? )? ")" fn_body ;
