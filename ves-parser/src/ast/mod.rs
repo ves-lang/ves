@@ -263,7 +263,7 @@ pub struct Assignment<'a> {
 }
 
 /// The possible parameters a function (or struct, excluding `rest`) can take.
-#[derive(Debug, Clone, PartialEq, AstToStr)]
+#[derive(Default, Debug, Clone, PartialEq, AstToStr)]
 pub struct Params<'a> {
     /// The positional arguments to this function / struct.
     pub positional: Vec<Token<'a>>,
@@ -271,6 +271,16 @@ pub struct Params<'a> {
     pub default: Vec<(Token<'a>, Expr<'a>)>,
     /// The rest argument to this function.
     pub rest: Option<Token<'a>>,
+}
+
+impl<'a> Params<'a> {
+    pub fn is_empty(&self) -> bool {
+        self.positional.is_empty() && self.default.is_empty() && self.rest.is_none()
+    }
+
+    pub fn is_instance_method_params(&self) -> bool {
+        !self.is_empty() && self.positional[0].lexeme == "self"
+    }
 }
 
 /// The possible kinds of a function.
@@ -333,19 +343,24 @@ impl<'a> Initializer<'a> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub struct StructStaticProps<'a> {
+    pub fields: Vec<(Token<'a>, Option<Expr<'a>>)>,
+    pub methods: Vec<FnInfo<'a>>,
+}
+
 /// A struct declaration statement or expression.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
-    /// The fields defined on this struct.
-    pub fields: Params<'a>,
-    /// The methods defined on this struct.
+    /// The fields and methods defined on this struct.
+    pub fields: Option<Params<'a>>,
     pub methods: Vec<FnInfo<'a>>,
     /// THe initializer block of this struct.
     pub initializer: Option<Initializer<'a>>,
     /// The static fields and methods defined on this struct.
-    pub r#static: Box<StructInfo<'a>>,
+    pub r#static: StructStaticProps<'a>,
 }
 
 /// A possible condition pattern.

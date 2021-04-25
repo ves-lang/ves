@@ -173,8 +173,8 @@ impl<'a> Parser<'a> {
             TokenKind::Do,
         ]) {
             match self.previous.kind {
-                TokenKind::Struct => unimplemented!(),
-                TokenKind::Fn => self.fn_decl(ast::FnKind::Function),
+                TokenKind::Struct => self.struct_decl(),
+                TokenKind::Fn => self.fn_decl_expr(),
                 TokenKind::If => self.if_expr(),
                 TokenKind::Do => self.do_block_expr(),
                 _ => unreachable!(),
@@ -184,9 +184,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /* fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let name = if self.match_(&TokenKind::Identifier) {
+        // parse struct name, or generate it
+        let struct_name = if self.match_(&TokenKind::Identifier) {
             self.previous.clone()
         } else {
             let (line, column) = self.db.location(self.fid, &self.previous.span);
@@ -196,17 +197,105 @@ impl<'a> Parser<'a> {
                 TokenKind::Identifier,
             )
         };
-        // fields
-        if self.match_(&TokenKind::LeftParen) {}
-        let span_end = self.previous.span.end;
-    } */
+        // parse fields
+        let fields = if self.match_(&TokenKind::LeftParen) {
+            let fields = self.param_pack(false)?;
+            self.consume(&TokenKind::RightParen, "Expected ')'")?;
+            Some(fields)
+        } else {
+            None
+        };
 
-    fn fn_decl(&mut self, mut kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+        // parse struct body
+        let mut methods = vec![];
+        let mut r#static = ast::StructStaticProps {
+            fields: vec![],
+            methods: vec![],
+        };
+        let mut initializer = None;
+        // if we come across a semi or don't come across a left brace,
+        // then the struct has no body
+        if !self.match_(&TokenKind::Semi) && self.match_(&TokenKind::LeftBrace) {
+            while !self.match_(&TokenKind::RightBrace) {
+                let prop_name = self.consume(
+                    &TokenKind::Identifier,
+                    "Expected method, static field or static method",
+                )?;
+
+                if prop_name.lexeme == "init" {
+                    // this must be an initializer
+                    if initializer.is_some() {
+                        return Err(VesError::parse(
+                            "Cannot have more than one initializer",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    let body = self.fn_decl_body()?;
+                    initializer = Some(ast::Initializer::new(ast::FnInfo {
+                        name: prop_name,
+                        params: ast::Params::default(),
+                        body,
+                        kind: ast::FnKind::Method,
+                    }));
+                } else if self.match_(&TokenKind::LeftParen) {
+                    // this is a method
+                    let params = self.param_pack(true)?;
+                    self.consume(&TokenKind::RightParen, "Expected ')'")?;
+                    let body = self.fn_decl_body()?;
+                    if params.is_instance_method_params() {
+                        methods.push(ast::FnInfo {
+                            name: prop_name,
+                            params,
+                            body,
+                            kind: ast::FnKind::Method,
+                        });
+                    } else {
+                        r#static.methods.push(ast::FnInfo {
+                            name: prop_name,
+                            params,
+                            body,
+                            kind: ast::FnKind::Static,
+                        });
+                    }
+                } else {
+                    // this is a static field
+                    let value = if self.match_(&TokenKind::Equal) {
+                        Some(self.expr()?)
+                    } else {
+                        None
+                    };
+                    r#static.fields.push((prop_name, value));
+                }
+            }
+        }
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            kind: ast::ExprKind::Struct(box ast::StructInfo {
+                name: struct_name,
+                fields,
+                methods,
+                initializer,
+                r#static,
+            }),
+            span: span_start..span_end,
+        })
+    }
+
+    fn fn_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
+        let decl = self.fn_decl()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            kind: ast::ExprKind::Fn(box decl),
+            span: span_start..span_end,
+        })
+    }
+
+    fn fn_decl(&mut self) -> ParseResult<ast::FnInfo<'a>> {
         let name = if self.match_(&TokenKind::Identifier) {
             self.previous.clone()
         } else {
-            if matches!(kind, ast::FnKind::Method) {}
             let (line, column) = self.db.location(self.fid, &self.previous.span);
             Token::new(
                 format!("[fn@{}:{}]", line, column),
@@ -218,32 +307,32 @@ impl<'a> Parser<'a> {
         self.consume(&TokenKind::LeftParen, "Expected '('")?;
         let params = self.param_pack(true)?;
         self.consume(&TokenKind::RightParen, "Expected ')'")?;
-        let body = if self.match_(&TokenKind::Arrow) {
+        let body = self.fn_decl_body()?;
+        Ok(ast::FnInfo {
+            name,
+            params,
+            body,
+            kind: ast::FnKind::Function,
+        })
+    }
+
+    fn fn_decl_body(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
+        if self.match_(&TokenKind::Arrow) {
             let body_span_start = self.previous.span.start;
             let expr = self.expr()?;
-            vec![ast::Stmt {
+            Ok(vec![ast::Stmt {
                 span: body_span_start..expr.span.end,
                 kind: ast::StmtKind::Return(Some(box expr)),
-            }]
+            }])
+        } else if self.match_(&TokenKind::LeftBrace) {
+            Ok(self.block()?)
         } else {
-            self.consume(&TokenKind::LeftBrace, "Expected '{'")?;
-            self.block()?
-        };
-        let span_end = self.previous.span.end;
-        if kind == ast::FnKind::Method
-            && (params.positional.is_empty() || params.positional[0].kind != TokenKind::Self_)
-        {
-            kind = ast::FnKind::Static;
+            Err(VesError::parse(
+                "Expected function body",
+                self.previous.span.clone(),
+                self.fid,
+            ))
         }
-        Ok(ast::Expr {
-            span: span_start..span_end,
-            kind: ast::ExprKind::Fn(box ast::FnInfo {
-                name,
-                params,
-                body,
-                kind,
-            }),
-        })
     }
 
     fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
@@ -251,7 +340,7 @@ impl<'a> Parser<'a> {
         let mut positional = vec![];
         let mut default = vec![];
         let mut rest = None;
-        while !self.check(&TokenKind::LeftParen) {
+        while !self.check(&TokenKind::RightParen) {
             if self.match_(&TokenKind::Ellipsis) {
                 if !rest_args {
                     return Err(VesError::parse(
@@ -261,15 +350,16 @@ impl<'a> Parser<'a> {
                     ));
                 }
                 // rest argument
-                let name = self.consume_any(
-                    &[TokenKind::Identifier, TokenKind::Self_],
-                    "Expected parameter name",
-                )?;
+                let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
                 rest = Some(name);
                 break;
             } else {
                 // positional or default argument
-                let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                // TODO: check if 'self' has a default value, which is an error (?)
+                let name = self.consume_any(
+                    &[TokenKind::Identifier, TokenKind::Self_],
+                    "Expected parameter name",
+                )?;
                 let value = if self.match_(&TokenKind::Equal) {
                     Some(self.expr()?)
                 } else {
@@ -1879,4 +1969,147 @@ StmtKind::ExprStmt
         // unclosed param list
         assert_ast_err!("fn(a {}", "Expected ')'");
     }
+
+    #[test]
+    fn parse_struct_decl() {
+        // empty
+        assert_ast!(
+            "struct Test",
+            r#"
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods="#
+        );
+        // with fields
+        assert_ast!(
+            "struct Test(a, b=0)",
+            r#"
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods="#
+        );
+        // with empty body
+        assert_ast!(
+            "struct Test {}",
+            r#"
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods="#
+        );
+        // with methods and fields
+        assert_ast!(
+            r#"
+            struct Test(a, b=0) {
+                // methods
+                m(self) {}
+                ma(self) => 0
+                // static methods
+                sm() {}
+                sma() => 0
+                // static field
+                sf = 0
+            }
+            "#,
+            r#"
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: None
+    methods=
+      FnInfo
+        name: "m"
+        params: Params
+          positional=
+            "self"
+          default=
+          rest: None
+        body=
+        kind: Method
+      FnInfo
+        name: "ma"
+        params: Params
+          positional=
+            "self"
+          default=
+          rest: None
+        body=
+          StmtKind::Return
+            field0: Lit
+              token: "0"
+              value: LitValue::Number
+                field0: 0
+        kind: Method
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+        tuple
+          field0: "sf"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      methods=
+        FnInfo
+          name: "sm"
+          params: Params
+            positional=
+            default=
+            rest: None
+          body=
+          kind: Static
+        FnInfo
+          name: "sma"
+          params: Params
+            positional=
+            default=
+            rest: None
+          body=
+            StmtKind::Return
+              field0: Lit
+                token: "0"
+                value: LitValue::Number
+                  field0: 0
+          kind: Static"#
+        )
+    }
+
+    // TODO: test parsing bad struct decls
 }
