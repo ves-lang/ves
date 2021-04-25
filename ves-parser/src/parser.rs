@@ -387,17 +387,23 @@ impl<'a> Parser<'a> {
         // expr < expr
         // expr >= expr
         // expr <= expr
+        // expr in expr
+        // expr is expr
         while self.match_any(&[
             TokenKind::More,
             TokenKind::Less,
             TokenKind::MoreEqual,
             TokenKind::LessEqual,
+            TokenKind::In,
+            TokenKind::Is,
         ]) {
             expr = match self.previous.kind {
                 TokenKind::More => binary!(expr, Gt, self.comparison()?),
                 TokenKind::Less => binary!(expr, Lt, self.comparison()?),
                 TokenKind::MoreEqual => binary!(expr, Ge, self.comparison()?),
                 TokenKind::LessEqual => binary!(expr, Le, self.comparison()?),
+                TokenKind::In => binary!(expr, In, self.comparison()?),
+                TokenKind::Is => binary!(expr, Is, self.comparison()?),
                 _ => unreachable!(),
             };
         }
