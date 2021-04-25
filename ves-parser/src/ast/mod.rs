@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use ast2str::AstToStr;
 use ves_error::{FileId, Files, VesFileDatabase};
@@ -29,12 +29,31 @@ pub struct AST<'a> {
     pub body: Vec<Stmt<'a>>,
     /// The id of the file the AST belongs to.
     pub file_id: FileId,
+    /// The set of all global variables declared in the source file.
+    pub globals: HashSet<Cow<'a, str>>,
 }
 
 impl<'a> AST<'a> {
     /// Creates a new [`AST`] form the given statements and [`FileId`].
     pub fn new(body: Vec<Stmt<'a>>, file_id: FileId) -> Self {
-        Self { body, file_id }
+        Self {
+            body,
+            file_id,
+            globals: HashSet::new(),
+        }
+    }
+
+    /// Creates a new [`AST`] form the given statements, globals, and [`FileId`].
+    pub fn with_globals(
+        body: Vec<Stmt<'a>>,
+        globals: HashSet<Cow<'a, str>>,
+        file_id: FileId,
+    ) -> Self {
+        Self {
+            body,
+            file_id,
+            globals,
+        }
     }
 
     /// Pretty-prints the AST into a string, using the file name and hash from the database.

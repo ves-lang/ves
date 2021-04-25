@@ -164,9 +164,7 @@ impl<'a> Resolver<'a> {
                     self.scope_kind = ScopeKind::Local;
                 }
                 self.env.push();
-                statements
-                    .iter_mut()
-                    .for_each(|stmt| self.resolve_stmt(stmt, ex));
+                self.resolve_block(statements, ex);
                 self.env.pop();
                 self.scope_kind = prev_kind;
             }
@@ -234,6 +232,57 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn resolve_block(&mut self, statements: &mut Vec<Stmt<'a>>, ex: &mut ErrCtx) {
+        if let Some(StmtKind::Return(Some(ref mut expr))) =
+            statements.last_mut().map(|s| &mut s.kind)
+        {
+            // TODO: detect more things here
+            #[allow(clippy::single_match)]
+            match &mut expr.kind {
+                ExprKind::Call(box Call { ref mut tco, .. }) => *tco = true,
+                ExprKind::If(box If {
+                    ref mut then,
+                    otherwise: Some(ref mut otherwise),
+                    ..
+                }) => {
+                    // If both do blocks of the if end with a call, we can enable TCO on both them without rewriting the AST since
+                    // the TCO call instruction automatically cleans up the stack. Thus, the following code:
+                    //
+                    //  return if (...) { call() } else { call() }
+                    //
+                    // Becomes equivalent to:
+                    //
+                    // if (...) { return tco_call() } else { return tco_call() }
+                    match (
+                        self.find_call_in_do_block(then),
+                        self.find_call_in_do_block(otherwise),
+                    ) {
+                        (Some(then_call), Some(else_call)) => {
+                            then_call.tco = true;
+                            else_call.tco = true;
+                        }
+                        _ => {}
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        statements
+            .iter_mut()
+            .for_each(|stmt| self.resolve_stmt(stmt, ex));
+    }
+
+    fn find_call_in_do_block<'b>(&self, block: &'b mut DoBlock<'a>) -> Option<&'b mut Call<'a>> {
+        match block.value {
+            Some(Expr {
+                kind: ExprKind::Call(box ref mut call),
+                ..
+            }) => Some(call),
+            _ => None,
+        }
+    }
+
     fn resolve_do_block(&mut self, block: &mut DoBlock<'a>, ex: &mut ErrCtx) {
         self.env.push();
         block
@@ -270,20 +319,53 @@ impl<'a> Resolver<'a> {
             ExprKind::Comma(exprs) => exprs
                 .iter_mut()
                 .for_each(|expr| self.resolve_expr(expr, ex)),
-            ExprKind::Call(_) => unimplemented!(),
-            ExprKind::Spread(_) => unimplemented!(),
-            ExprKind::GetProp(_) => unimplemented!(),
-            ExprKind::SetProp(_) => unimplemented!(),
-            ExprKind::GetItem(_) => unimplemented!(),
-            ExprKind::SetItem(_) => unimplemented!(),
-            ExprKind::FString(_) => unimplemented!(),
-            ExprKind::Array(_) => unimplemented!(),
+            ExprKind::Call(box Call {
+                ref mut callee,
+                ref mut args,
+                ..
+            }) => {
+                self.resolve_expr(callee, ex);
+                args.iter_mut().for_each(|a| self.resolve_expr(a, ex));
+            }
+            ExprKind::Spread(spread) => self.resolve_expr(spread, ex),
+            ExprKind::GetProp(prop) => self.resolve_expr(&mut prop.node, ex),
+            ExprKind::SetProp(prop) => {
+                self.resolve_expr(&mut prop.value, ex);
+                self.resolve_expr(&mut prop.node, ex);
+            }
+            ExprKind::GetItem(get) => {
+                self.resolve_expr(&mut get.node, ex);
+                self.resolve_expr(&mut get.key, ex);
+            }
+            ExprKind::SetItem(set) => {
+                self.resolve_expr(&mut set.node, ex);
+                self.resolve_expr(&mut set.key, ex);
+                self.resolve_expr(&mut set.value, ex);
+            }
+            ExprKind::FString(s) => s.fragments.iter_mut().for_each(|f| match f {
+                FStringFrag::Str(_) => (),
+                FStringFrag::Expr(ref mut expr) => self.resolve_expr(expr, ex),
+            }),
+            ExprKind::Array(arr) => arr.iter_mut().for_each(|expr| self.resolve_expr(expr, ex)),
             ExprKind::Map(_) => unimplemented!(),
-            ExprKind::Variable(_) => unimplemented!(),
-            ExprKind::Range(_) => unimplemented!(),
-            ExprKind::PrefixIncDec(_) => unimplemented!(),
-            ExprKind::PostfixIncDec(_) => unimplemented!(),
-            ExprKind::Assignment(_) => unimplemented!(),
+            ExprKind::Variable(v) => self.r#use(v, ex),
+            ExprKind::Range(box Range {
+                ref mut start,
+                ref mut end,
+                ref mut step,
+                ..
+            }) => {
+                self.resolve_expr(start, ex);
+                self.resolve_expr(end, ex);
+                self.resolve_expr(step, ex);
+                // TODO: lint for invalid range bounds?
+            }
+            ExprKind::PrefixIncDec(inc) => self.resolve_expr(&mut inc.expr, ex),
+            ExprKind::PostfixIncDec(inc) => self.resolve_expr(&mut inc.expr, ex),
+            ExprKind::Assignment(ass) => {
+                self.resolve_expr(&mut ass.value, ex);
+                self.assign(&ass.name, ex);
+            }
             ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, ex),
             ExprKind::AtIdent(ref name) => {
                 if self.env.get(&name.lexeme).is_none() {
@@ -349,6 +431,15 @@ impl<'a> Resolver<'a> {
                 }
                 v.assigned = true;
             }
+            None => self.undefined_variable_error(name, ex),
+        }
+    }
+
+    /// Marks the given variable as used.
+    #[inline]
+    fn r#use(&mut self, name: &Token<'a>, ex: &mut ErrCtx) {
+        match self.env.get_mut(&name.lexeme) {
+            Some(v) => v.used = true,
             None => self.undefined_variable_error(name, ex),
         }
     }
