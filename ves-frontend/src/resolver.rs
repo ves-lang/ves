@@ -193,7 +193,7 @@ impl<'a> Resolver<'a> {
                             kind: ExprKind::Variable(Token::new(
                                 "self",
                                 stmt.span.clone(),
-                                TokenKind::Identifier,
+                                TokenKind::Self_,
                             )),
                             span: stmt.span.clone(),
                         });
@@ -348,7 +348,19 @@ impl<'a> Resolver<'a> {
             }),
             ExprKind::Array(arr) => arr.iter_mut().for_each(|expr| self.resolve_expr(expr, ex)),
             ExprKind::Map(_) => unimplemented!(),
-            ExprKind::Variable(v) => self.r#use(v, ex),
+            ExprKind::Variable(v) => {
+                if matches!(v.kind, TokenKind::Self_)
+                    && !matches!(self.scope_kind, ScopeKind::Method | ScopeKind::Initializer)
+                {
+                    Self::error(
+                        "Cannot use `self` outside of an instance method or `init` block",
+                        v.span.clone(),
+                        ex,
+                    );
+                }
+
+                self.r#use(v, ex);
+            }
             ExprKind::Range(box Range {
                 ref mut start,
                 ref mut end,
