@@ -1,4 +1,4 @@
-use ves_parser::Span;
+use ves_parser::{ast::VarKind, Span};
 
 /// The kind of the loop currently being resolved.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -37,6 +37,16 @@ pub enum NameKind {
     Fn,
     /// A struct declaration
     Struct,
+}
+
+impl From<VarKind> for NameKind {
+    #[inline]
+    fn from(var: VarKind) -> Self {
+        match var {
+            VarKind::Let => NameKind::Let,
+            VarKind::Mut => NameKind::Mut,
+        }
+    }
 }
 
 /// The information about a variable's usage.

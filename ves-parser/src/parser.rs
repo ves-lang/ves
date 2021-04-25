@@ -1,8 +1,8 @@
 use crate::{
-    ast::{self, AST},
+    ast::{self, Global, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
-use std::convert::Into;
+use std::{collections::HashSet, convert::Into};
 use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
@@ -14,6 +14,8 @@ pub struct Parser<'a> {
     eof: Token<'a>,
     ex: ErrCtx,
     fid: FileId,
+    scope_depth: usize,
+    globals: HashSet<Global<'a>>,
     db: &'a VesFileDatabase<'a>,
 }
 
@@ -32,6 +34,8 @@ impl<'a> Parser<'a> {
             previous: eof.clone(),
             current: eof.clone(),
             eof,
+            scope_depth: 0,
+            globals: HashSet::new(),
             ex: ErrCtx::new(),
             fid,
             db,
@@ -54,7 +58,7 @@ impl<'a> Parser<'a> {
         if self.ex.had_error() {
             Err(self.ex)
         } else {
-            Ok(AST::new(body, self.fid))
+            Ok(AST::with_globals(body, self.globals, self.fid))
         }
     }
 
@@ -102,6 +106,8 @@ impl<'a> Parser<'a> {
     }
 
     fn block(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
+        self.scope_depth += 1;
+
         let mut body = vec![];
         // if the next token is a RightBrace, the block is empty
         if !self.check(&TokenKind::RightBrace) {
@@ -115,6 +121,7 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+        self.scope_depth -= 1;
         self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
         Ok(body)
     }
@@ -204,6 +211,7 @@ impl<'a> Parser<'a> {
     fn fn_decl(&mut self, mut kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
         let name = if self.match_(&TokenKind::Identifier) {
+            remember_if_global!(self, self.previous, ast::VarKind::Let);
             self.previous.clone()
         } else {
             if matches!(kind, ast::FnKind::Method) {}
@@ -386,6 +394,7 @@ impl<'a> Parser<'a> {
         // in any other case the value is `none`
 
         self.consume(&TokenKind::LeftBrace, "Expected block")?;
+        self.scope_depth += 1;
 
         let mut body = vec![];
         let mut last_stmt_had_semi = false;
@@ -406,6 +415,7 @@ impl<'a> Parser<'a> {
             }
         }
 
+        self.scope_depth -= 1;
         self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
 
         // if the last statement was not terminated by a semicolon,

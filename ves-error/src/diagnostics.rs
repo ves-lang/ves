@@ -15,6 +15,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
     let base = match &e.kind {
         Lex | Parse | ResolutionSuggestWildcard => Diagnostic::error(),
         AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
+        UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
         Resolution => unimplemented!(),

@@ -81,6 +81,8 @@ pub enum VesErrorKind {
     ResolutionSuggestWildcard,
     /// A warning issued when the user attempts to shadow an unused local variable.
     AttemptedToShadowUnusedLocal(Span),
+    /// Attempted to use a global variable before its declaration.
+    UsedGlobalBeforeDeclaration(Span),
     /// Represents an error that has occurred at runtime.
     Runtime,
     /// A runtime panic.

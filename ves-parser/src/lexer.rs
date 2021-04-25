@@ -11,7 +11,7 @@ pub use logos::Span;
 
 pub type Lexer<'a> = logos::Lexer<'a, TokenKind<'a>>;
 
-#[derive(Clone, Debug, PartialEq, AstToStr)]
+#[derive(Clone, Debug, PartialEq, Eq, AstToStr)]
 pub struct Token<'a> {
     #[forward]
     /// Slice of the source from which this token was parsed
@@ -20,6 +20,14 @@ pub struct Token<'a> {
     pub span: Span,
     /// The token kind which optionally also contains extra
     pub kind: TokenKind<'a>,
+}
+
+impl<'a> std::hash::Hash for Token<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.lexeme.hash(state);
+        self.span.hash(state);
+        //self.ind
+    }
 }
 
 impl<'a> Token<'a> {
@@ -43,7 +51,7 @@ impl<'a> NextTokenExt<'a> for logos::Lexer<'a, TokenKind<'a>> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Logos)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Logos)]
 pub enum TokenKind<'a> {
     #[token("+")]
     Plus,
@@ -317,6 +325,19 @@ pub enum Frag<'a> {
     Sublexer(logos::Lexer<'a, TokenKind<'a>>),
 }
 
+impl<'a> std::hash::Hash for Frag<'a> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            Frag::Str(t) => t.hash(state),
+            Frag::UnterminatedFragment(t) => t.hash(state),
+            Frag::Sublexer(l) => {
+                l.source().hash(state);
+                l.span().hash(state);
+            }
+        }
+    }
+}
+
 impl<'a> std::fmt::Debug for Frag<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(
@@ -344,6 +365,7 @@ impl<'a> PartialEq for Frag<'a> {
         }
     }
 }
+impl<'a> Eq for Frag<'a> {}
 
 fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Vec<Frag<'a>> {
     let global_start = lex.span().start;

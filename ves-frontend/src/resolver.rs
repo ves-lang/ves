@@ -53,6 +53,10 @@ impl<'a> Resolver<'a> {
         self.file_id = ast.file_id;
         let mut ex = ErrCtx::default();
 
+        for global in &ast.globals {
+            self.declare_global(&global.name, NameKind::from(global.kind));
+        }
+
         for stmt in &mut ast.body {
             self.resolve_stmt(stmt, &mut ex);
         }
@@ -84,14 +88,6 @@ impl<'a> Resolver<'a> {
                         );
                     }
 
-                    self.declare(
-                        &var.name,
-                        match var.kind {
-                            VarKind::Let => NameKind::Let,
-                            VarKind::Mut => NameKind::Mut,
-                        },
-                        ex,
-                    );
                     // Only `let` variables are marked as assigned at this point.
                     if var.initializer.is_some() && var.kind == VarKind::Let {
                         self.assign(&var.name, ex);
@@ -408,7 +404,7 @@ impl<'a> Resolver<'a> {
 
     fn declare(&mut self, name: &Token<'a>, kind: NameKind, ex: &mut ErrCtx) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if !vu.used {
+            if !vu.used && self.scope_kind != ScopeKind::Global {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowUnusedLocal(vu.span.clone()),
                     format!("Attempted to shadow an unused variable `{}`", name.lexeme),
@@ -419,11 +415,31 @@ impl<'a> Resolver<'a> {
             }
         }
 
+        // Globals are forward-declared
+        if self.scope_kind != ScopeKind::Global {
+            self.env.add(
+                name.lexeme.clone(),
+                VarUsage {
+                    kind,
+                    declared: true,
+                    assigned: false,
+                    used: false,
+                    span: name.span.clone(),
+                },
+            );
+        } else {
+            self.env.get_mut(&name.lexeme).unwrap().declared = true;
+        }
+    }
+
+    fn declare_global(&mut self, name: &Token<'a>, kind: NameKind) {
+        debug_assert!(self.scope_kind == ScopeKind::Global);
+
         self.env.add(
             name.lexeme.clone(),
             VarUsage {
                 kind,
-                declared: true,
+                declared: false,
                 assigned: false,
                 used: false,
                 span: name.span.clone(),
@@ -451,7 +467,17 @@ impl<'a> Resolver<'a> {
     #[inline]
     fn r#use(&mut self, name: &Token<'a>, ex: &mut ErrCtx) {
         match self.env.get_mut(&name.lexeme) {
-            Some(v) => v.used = true,
+            Some(v) => {
+                if !v.declared {
+                    Self::error_of_kind(
+                        VesErrorKind::UsedGlobalBeforeDeclaration(v.span.clone()),
+                        "Attempted to use the variable `{}` before its declaration",
+                        name.span.clone(),
+                        ex,
+                    );
+                }
+                v.used = true
+            }
             None => self.undefined_variable_error(name, ex),
         }
     }
@@ -585,6 +611,23 @@ pub mod tests {
         }
 
         loop { return; } // error
+        "#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_globals_are_forward_declared() {
+        let _source = r#"
+        
+        fn test() { 
+            print X; // ok
+            print Z; // error since Z is never declared
+        }
+
+        let X = 5;
+
+        print Y;     // error since Y hasn't been visited yet
+        let Y = 7;
         "#;
     }
 }

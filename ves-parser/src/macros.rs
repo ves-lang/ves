@@ -1,4 +1,16 @@
 #[macro_export]
+macro_rules! remember_if_global {
+    ($self:ident, $tok:expr, $kind:expr) => {
+        if $self.scope_depth == 0 {
+            $self.globals.insert(Global {
+                name: $tok.clone(),
+                kind: $kind,
+            });
+        }
+    };
+}
+
+#[macro_export]
 /// Creates an AST literal node from the provided LitValue
 macro_rules! literal {
     ($parser:ident, $value:expr) => {

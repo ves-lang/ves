@@ -21,6 +21,16 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     }
 }
 
+/// A global variable. This struct doesn't appear anywhere in the AST directly and is created
+/// by the parser every time it visits a global declaration.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Global<'a> {
+    /// The name of the global.
+    pub name: Token<'a>,
+    /// The kind of the global.
+    pub kind: VarKind,
+}
+
 /// An Abstract Syntax Tree for a Ves source file.
 #[derive(Debug, PartialEq, AstToStr)]
 pub struct AST<'a> {
@@ -30,7 +40,7 @@ pub struct AST<'a> {
     /// The id of the file the AST belongs to.
     pub file_id: FileId,
     /// The set of all global variables declared in the source file.
-    pub globals: HashSet<Cow<'a, str>>,
+    pub globals: HashSet<Global<'a>>,
 }
 
 impl<'a> AST<'a> {
@@ -46,7 +56,7 @@ impl<'a> AST<'a> {
     /// Creates a new [`AST`] form the given statements, globals, and [`FileId`].
     pub fn with_globals(
         body: Vec<Stmt<'a>>,
-        globals: HashSet<Cow<'a, str>>,
+        globals: HashSet<Global<'a>>,
         file_id: FileId,
     ) -> Self {
         Self {
@@ -496,7 +506,7 @@ pub struct Expr<'a> {
 }
 
 /// The kind of a variable declaration.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum VarKind {
     /// An immutable `let` variable.
     Let,
