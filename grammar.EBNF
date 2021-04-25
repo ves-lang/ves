@@ -35,12 +35,8 @@ loop_stmt = "loop" block ;
 
 control_stmt = ( "break" | "continue" ) label ;
 
-condition = ( 
-    ( 
-        "none" 
-        | ( "some" |  "ok" | "err" ) "(" IDENTIFIER ")"
-    ) "="
-)? expression ;
+# TODO: allow binding in condition
+condition = ( ( "ok" | "err" ) "(" IDENTIFIER ")" "=" )? expression ;
 
 defer_stmt = "defer" ( block | call );
 expr_stmt = comma ( ";" comma )* ;

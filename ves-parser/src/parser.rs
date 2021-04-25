@@ -1,9 +1,9 @@
 use crate::{
-    ast::{self, StmtKind, AST},
+    ast::{self, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
 use std::convert::Into;
-use ves_error::{ErrCtx, FileId, Span, VesError};
+use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
 
@@ -14,10 +14,11 @@ pub struct Parser<'a> {
     eof: Token<'a>,
     ex: ErrCtx,
     fid: FileId,
+    db: &'a VesFileDatabase<'a>,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, fid: FileId) -> Parser<'a> {
+    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'a VesFileDatabase) -> Parser<'a> {
         let source = lexer.source();
         let end = if source.is_empty() {
             0
@@ -33,6 +34,7 @@ impl<'a> Parser<'a> {
             eof,
             ex: ErrCtx::new(),
             fid,
+            db,
         }
     }
 
@@ -40,7 +42,7 @@ impl<'a> Parser<'a> {
         self.advance();
         let mut body = vec![];
         while !self.at_end() {
-            match self.stmt() {
+            match self.stmt(true) {
                 Ok(stmt) => body.push(stmt),
                 Err(e) => {
                     self.ex.record(e);
@@ -56,47 +58,51 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        #[allow(clippy::if_same_then_else)]
-        if self.match_(&TokenKind::LeftBrace) {
-            self.block()
-            // TODO: this
-        } else if self.match_(&TokenKind::Print) {
-            unimplemented!()
-            //self.print_statement()
-        } else if self.match_(&TokenKind::Loop) {
-            unimplemented!()
-            //self.loop_statement();
-        } else if self.match_(&TokenKind::For) {
-            unimplemented!()
-            //self.for_statement();
-        } else if self.match_(&TokenKind::While) {
-            unimplemented!()
-            //self.while_statement();
-        } else if self.match_(&TokenKind::Break) {
-            unimplemented!()
-            //self.break_statement();
-        } else if self.match_(&TokenKind::Continue) {
-            unimplemented!()
-            //self.continue_statement();
-        } else if self.match_(&TokenKind::Defer) {
-            unimplemented!()
-            //self.defer_statement();
-        } else if self.match_(&TokenKind::Return) {
-            unimplemented!()
-            //self.return_statement();
+    fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
+        if self.match_any(&[
+            TokenKind::LeftBrace,
+            TokenKind::Print,
+            TokenKind::Loop,
+            TokenKind::For,
+            TokenKind::While,
+            TokenKind::Break,
+            TokenKind::Continue,
+            TokenKind::Defer,
+            TokenKind::Return,
+        ]) {
+            match self.previous.kind {
+                TokenKind::LeftBrace => self.block_stmt(),
+                TokenKind::Print => unimplemented!(),
+                TokenKind::Loop => unimplemented!(),
+                TokenKind::For => unimplemented!(),
+                TokenKind::While => unimplemented!(),
+                TokenKind::Break => unimplemented!(),
+                TokenKind::Continue => unimplemented!(),
+                TokenKind::Defer => unimplemented!(),
+                TokenKind::Return => unimplemented!(),
+                _ => unreachable!(),
+            }
         } else {
-            self.expr_stmt()
+            self.expr_stmt(consume_semi)
         }
     }
 
-    fn block(&mut self) -> ParseResult<ast::Stmt<'a>> {
+    fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
+        let body = self.block()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Block(body),
+            span: span_start..span_end,
+        })
+    }
+
+    fn block(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
         let mut body = vec![];
         // if the next token is a RightBrace, the block is empty
         if !self.check(&TokenKind::RightBrace) {
-            while !self.at_end() {
-                match self.stmt() {
+            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
+                match self.stmt(true) {
                     Ok(stmt) => body.push(stmt),
                     Err(e) => {
                         self.ex.record(e);
@@ -106,20 +112,17 @@ impl<'a> Parser<'a> {
             }
         }
         self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
-
-        let span_end = self.current.span.end;
-        Ok(ast::Stmt {
-            kind: StmtKind::Block(body),
-            span: span_start..span_end,
-        })
+        Ok(body)
     }
 
-    fn expr_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+    fn expr_stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
         let expr = self.comma()?;
         let span_end = self.current.span.end;
 
-        self.skip_semi();
+        if consume_semi {
+            self.skip_semi();
+        }
 
         Ok(ast::Stmt {
             kind: ast::StmtKind::ExprStmt(Box::new(expr)),
@@ -159,13 +162,239 @@ impl<'a> Parser<'a> {
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         // TODO: this
-        match self.current.kind {
-            TokenKind::Struct => unimplemented!(), /* self.struct_decl() */
-            TokenKind::Fn => unimplemented!(),     /* self.fn_decl() */
-            TokenKind::If => unimplemented!(),     /* self.if_expr() */
-            TokenKind::Do => unimplemented!(),     /* self.do_block() */
-            _ => self.assignment(),
+        if self.match_any(&[
+            TokenKind::Struct,
+            TokenKind::Fn,
+            TokenKind::If,
+            TokenKind::Do,
+        ]) {
+            match self.previous.kind {
+                TokenKind::Struct => unimplemented!(),
+                TokenKind::Fn => self.fn_decl(ast::FnKind::Function),
+                TokenKind::If => self.if_expr(),
+                TokenKind::Do => self.do_block_expr(),
+                _ => unreachable!(),
+            }
+        } else {
+            self.assignment()
         }
+    }
+
+    fn fn_decl(&mut self, kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let name = if self.match_(&TokenKind::Identifier) {
+            self.previous.clone()
+        } else {
+            let (line, column) = self.db.location(self.fid, &self.previous.span);
+            Token::new(
+                format!("[fn@{}:{}]", line, column),
+                self.previous.span.clone(),
+                TokenKind::Identifier,
+            )
+        };
+
+        self.consume(&TokenKind::LeftParen, "Expected '('")?;
+        let params = self.param_pack(true)?;
+        self.consume(&TokenKind::RightParen, "Expected ')'")?;
+        let body = if self.match_(&TokenKind::Arrow) {
+            let body_span_start = self.previous.span.start;
+            let expr = self.expr()?;
+            vec![ast::Stmt {
+                span: body_span_start..expr.span.end,
+                kind: ast::StmtKind::Return(Some(box expr)),
+            }]
+        } else {
+            self.consume(&TokenKind::LeftBrace, "Expected '{'")?;
+            self.block()?
+        };
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::Fn(box ast::FnInfo {
+                name,
+                params,
+                body,
+                kind,
+            }),
+        })
+    }
+
+    fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
+        let mut parsing_default = false;
+        let mut positional = vec![];
+        let mut default = vec![];
+        let mut rest = None;
+        if !self.check(&TokenKind::LeftParen) {
+            loop {
+                if self.match_(&TokenKind::Ellipsis) {
+                    if !rest_args {
+                        return Err(VesError::parse(
+                            "Rest arguments are not allowed here",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    // rest argument
+                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                    rest = Some(name);
+                    // rest params must be last
+                    if !self.check(&TokenKind::RightParen) {
+                        return Err(VesError::parse(
+                            "Rest parameter must appear last in parameter list",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    break;
+                } else {
+                    // positional or default argument
+                    let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                    let value = if self.match_(&TokenKind::Equal) {
+                        Some(self.expr()?)
+                    } else {
+                        None
+                    };
+                    match value {
+                        Some(value) => {
+                            parsing_default = true;
+                            default.push((name, value));
+                        }
+                        None => {
+                            if parsing_default {
+                                return Err(VesError::parse(
+                                    "Positional arguments may not appear after arguments with default values",
+                                    self.previous.span.clone(),
+                                    self.fid,
+                                ));
+                            }
+                            positional.push(name);
+                        }
+                    }
+                }
+                if !self.match_(&TokenKind::Comma) {
+                    break;
+                }
+            }
+        }
+        Ok(ast::Params {
+            positional,
+            default,
+            rest,
+        })
+    }
+
+    fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let condition = self.condition()?;
+        let then = self.do_block()?;
+        let mut otherwise = None;
+        if self.match_(&TokenKind::Else) {
+            if self.match_(&TokenKind::If) {
+                // `else if`
+                let nested = self.if_expr()?;
+                otherwise = Some(ast::DoBlock {
+                    statements: vec![],
+                    value: Some(nested),
+                });
+            } else {
+                // `else`
+                otherwise = Some(self.do_block()?);
+            }
+        }
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::If(box ast::If {
+                condition,
+                then,
+                otherwise,
+            }),
+        })
+    }
+
+    fn condition(&mut self) -> ParseResult<ast::Condition<'a>> {
+        if self.match_any(&[TokenKind::Ok, TokenKind::Err]) {
+            let which = self.previous.clone();
+            self.consume(&TokenKind::LeftParen, "Expected '('")?;
+            let ident = self.consume(&TokenKind::Identifier, "Expected identifier")?;
+            self.consume(&TokenKind::RightParen, "Expected ')'")?;
+            self.consume(&TokenKind::Equal, "Expected assignment")?;
+            let value = self.expr()?;
+            Ok(ast::Condition {
+                value,
+                pattern: match which.kind {
+                    TokenKind::Ok => ast::ConditionPattern::IsOk(ident),
+                    TokenKind::Err => ast::ConditionPattern::IsErr(ident),
+                    _ => unreachable!(),
+                },
+            })
+            // destructuring
+        } else {
+            let value = self.expr()?;
+            Ok(ast::Condition {
+                value,
+                pattern: ast::ConditionPattern::Value,
+            })
+        }
+    }
+
+    fn do_block_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+        let span_start = self.previous.span.start;
+        let inner = self.do_block()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::DoBlock(box inner),
+        })
+    }
+
+    fn do_block(&mut self) -> ParseResult<ast::DoBlock<'a>> {
+        // the value of the block is the last expression statement,
+        // but only if it is not terminated by a semicolon.
+        // in any other case the value is `none`
+
+        self.consume(&TokenKind::LeftBrace, "Expected block")?;
+
+        let mut body = vec![];
+        let mut last_stmt_had_semi = false;
+        // if the next token is a RightBrace, the block is empty
+        if !self.check(&TokenKind::RightBrace) {
+            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
+                // `false` means the statements don't consume their semicolons.
+                match self.stmt(false) {
+                    Ok(stmt) => {
+                        body.push(stmt);
+                        last_stmt_had_semi = self.match_(&TokenKind::Semi);
+                    }
+                    Err(e) => {
+                        self.ex.record(e);
+                        self.synchronize();
+                    }
+                }
+            }
+        }
+
+        self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
+
+        // if the last statement was not terminated by a semicolon,
+        // and it's an expression, then that's the value.
+        let mut value = None;
+        if !last_stmt_had_semi {
+            if let Some(last_stmt) = body.pop() {
+                if let ast::StmtKind::ExprStmt(expr) = last_stmt.kind {
+                    value = Some(*expr);
+                } else {
+                    // since we pop the last statement, we have to push it back
+                    // if it isn't an expression.
+                    body.push(last_stmt);
+                }
+            }
+        };
+
+        Ok(ast::DoBlock {
+            statements: body,
+            value,
+        })
     }
 
     fn assignment(&mut self) -> ParseResult<ast::Expr<'a>> {
@@ -188,7 +417,7 @@ impl<'a> Parser<'a> {
                 ast::ExprKind::Variable(ref token) => ast::Expr {
                     kind: ast::ExprKind::Assignment(box ast::Assignment {
                         name: token.clone(),
-                        value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                        value: desugar_assignment(operator, expr.clone(), self.expr()?),
                     }),
                     span: span_start..self.current.span.end,
                 },
@@ -198,7 +427,7 @@ impl<'a> Parser<'a> {
                         kind: ast::ExprKind::SetItem(box ast::SetItem {
                             node: get.node.clone(),
                             key: get.key.clone(),
-                            value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                            value: desugar_assignment(operator, expr.clone(), self.expr()?),
                         }),
                         span: span_start..self.current.span.end,
                     }
@@ -212,7 +441,7 @@ impl<'a> Parser<'a> {
                         kind: ast::ExprKind::SetProp(box ast::SetProp {
                             node: get.node.clone(),
                             field: get.field.clone(),
-                            value: desugar_assignment(operator, expr.clone(), self.assignment()?),
+                            value: desugar_assignment(operator, expr.clone(), self.expr()?),
                         }),
                         span: span_start..self.current.span.end,
                     }
@@ -267,17 +496,23 @@ impl<'a> Parser<'a> {
         // expr < expr
         // expr >= expr
         // expr <= expr
+        // expr in expr
+        // expr is expr
         while self.match_any(&[
             TokenKind::More,
             TokenKind::Less,
             TokenKind::MoreEqual,
             TokenKind::LessEqual,
+            TokenKind::In,
+            TokenKind::Is,
         ]) {
             expr = match self.previous.kind {
                 TokenKind::More => binary!(expr, Gt, self.comparison()?),
                 TokenKind::Less => binary!(expr, Lt, self.comparison()?),
                 TokenKind::MoreEqual => binary!(expr, Ge, self.comparison()?),
                 TokenKind::LessEqual => binary!(expr, Le, self.comparison()?),
+                TokenKind::In => binary!(expr, In, self.comparison()?),
+                TokenKind::Is => binary!(expr, Is, self.comparison()?),
                 _ => unreachable!(),
             };
         }
@@ -463,7 +698,6 @@ impl<'a> Parser<'a> {
     }
 
     fn arg_list(&mut self) -> ParseResult<ast::Args<'a>> {
-        // TODO: spread args
         let span_start = self.previous.span.start;
         let mut args = vec![];
         if !self.check(&TokenKind::RightParen) {
@@ -550,7 +784,7 @@ impl<'a> Parser<'a> {
                             },
                         })),
                         lexer::Frag::Sublexer(sublexer) => {
-                            let mut subparser = Parser::new(sublexer, self.fid);
+                            let mut subparser = Parser::new(sublexer, self.fid, self.db);
                             subparser.advance();
                             fragments.push(ast::FStringFrag::Expr(subparser.expr()?));
                         }
@@ -585,17 +819,16 @@ impl<'a> Parser<'a> {
             });
         }
         // map literals (JS-style object literals)
-        // TODO: spread operator in maps (also JS-style)
         if self.match_(&TokenKind::LeftBrace) {
             let span_start = self.previous.span.start;
-            let mut pairs = vec![self.parse_pair()?];
+            let mut entries = vec![self.parse_map_entry()?];
             while self.match_(&TokenKind::Comma) {
-                pairs.push(self.parse_pair()?);
+                entries.push(self.parse_map_entry()?);
             }
             self.consume(&TokenKind::RightBrace, "Expected '}'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
-                kind: ast::ExprKind::Map(pairs),
+                kind: ast::ExprKind::Map(entries),
                 span: span_start..span_end,
             });
         }
@@ -624,44 +857,48 @@ impl<'a> Parser<'a> {
         ))
     }
 
-    fn parse_pair(&mut self) -> ParseResult<(ast::Expr<'a>, ast::Expr<'a>)> {
-        let mut identifier = None;
-        let key = if self.match_(&TokenKind::Identifier) {
-            // simple keys may be identifiers
-            let key_token = self.previous.clone();
-            identifier = Some(key_token.clone());
-            literal!(self, ast::LitValue::Str(key_token.lexeme))
+    fn parse_map_entry(&mut self) -> ParseResult<ast::MapEntry<'a>> {
+        if self.match_(&TokenKind::Ellipsis) {
+            Ok(ast::MapEntry::Spread(self.expr()?))
         } else {
-            // keys may also be expressions wrapped in []
-            self.consume(
-                &TokenKind::LeftBracket,
-                "Expected '[' before key expression",
-            )?;
-            let key = self.expr()?;
-            self.consume(
-                &TokenKind::RightBracket,
-                "Expected ']' after key expression",
-            )?;
-            key
-        };
+            let mut identifier = None;
+            let key = if self.match_(&TokenKind::Identifier) {
+                // simple keys may be identifiers
+                let key_token = self.previous.clone();
+                identifier = Some(key_token.clone());
+                literal!(self, ast::LitValue::Str(key_token.lexeme))
+            } else {
+                // keys may also be expressions wrapped in []
+                self.consume(
+                    &TokenKind::LeftBracket,
+                    "Expected '[' before key expression",
+                )?;
+                let key = self.expr()?;
+                self.consume(
+                    &TokenKind::RightBracket,
+                    "Expected ']' after key expression",
+                )?;
+                key
+            };
 
-        let value = if self.match_(&TokenKind::Colon) {
-            self.expr()?
-        } else if let Some(identifier) = identifier {
-            // if ':' is omitted, the value is the value bound to the identifier key
-            // which means the key must be a simple identifier
-            ast::Expr {
-                span: self.previous.span.clone(),
-                kind: ast::ExprKind::Variable(identifier),
-            }
-        } else {
-            return Err(VesError::parse(
-                "Map entries without a value must have an identifier key",
-                self.previous.span.clone(),
-                self.fid,
-            ));
-        };
-        Ok((key, value))
+            let value = if self.match_(&TokenKind::Colon) {
+                self.expr()?
+            } else if let Some(identifier) = identifier {
+                // if ':' is omitted, the value is the value bound to the identifier key
+                // which means the key must be a simple identifier
+                ast::Expr {
+                    span: self.previous.span.clone(),
+                    kind: ast::ExprKind::Variable(identifier),
+                }
+            } else {
+                return Err(VesError::parse(
+                    "Map entries without a value must have an identifier key",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
+            };
+            Ok(ast::MapEntry::Pair(key, value))
+        }
     }
 
     fn try_unescape(&mut self, string: &mut String, span: Span) {
@@ -872,14 +1109,16 @@ mod tests {
         .unwrap();
     }
 
-    // TODO: assert errors, too
     // TODO: spans may be wrong
 
     macro_rules! assert_ast {
-        ($source:expr, $expected:expr) => {
+        ($source:expr, $expected:expr) => {{
+            let src = $source;
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.into());
             pretty_assertions::assert_eq!(
                 DisplayAsDebugWrapper(clean_tree(
-                    Parser::new(Lexer::new($source), FileId::anon())
+                    Parser::new(Lexer::new(src), fid, &db)
                         .parse()
                         .unwrap()
                         .body
@@ -889,8 +1128,22 @@ mod tests {
                         .join("\n")
                 )),
                 DisplayAsDebugWrapper($expected.trim_start().to_owned())
-            )
-        };
+            );
+        }};
+    }
+
+    macro_rules! assert_ast_err {
+        ($source:literal, $error:literal) => {{
+            let src = $source;
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.into());
+            let errors = Parser::new(Lexer::new(src), fid, &db)
+                .parse()
+                .unwrap_err()
+                .errors;
+            assert!(errors.len() == 1);
+            assert_eq!(&errors[0].msg, $error);
+        }};
     }
 
     fn clean_tree(tree: String) -> String {
@@ -1010,20 +1263,10 @@ StmtKind::ExprStmt
 
     #[test]
     fn parse_invalid_assignments() {
-        macro_rules! test_case {
-            ($source:literal) => {
-                let errors = Parser::new(Lexer::new($source), FileId::anon())
-                    .parse()
-                    .unwrap_err()
-                    .errors;
-                assert!(errors.len() == 1);
-                assert_eq!(&errors[0].msg, &"Invalid assignment target");
-            };
-        }
-        test_case!("a?.b = v");
-        test_case!("a()?.b = v");
-        test_case!("[a,b,c].f()?.x = v");
-        test_case!("a()?.b().c = v");
+        assert_ast_err!("a?.b = v", "Invalid assignment target");
+        assert_ast_err!("a()?.b = v", "Invalid assignment target");
+        assert_ast_err!("[a,b,c].f()?.x = v", "Invalid assignment target");
+        assert_ast_err!("a()?.b().c = v", "Invalid assignment target");
     }
 
     #[test]
@@ -1073,12 +1316,12 @@ StmtKind::ExprStmt
     name: "a"
     value: ExprKind::Map
       field0=
-        tuple
-          field0: Lit
+        MapEntry::Pair
+          key: Lit
             token: "test"
             value: LitValue::Str
               field0: "test"
-          field1: Lit
+          value: Lit
             token: "1.0"
             value: LitValue::Number
               field0: 1"#
@@ -1092,15 +1335,37 @@ StmtKind::ExprStmt
     name: "a"
     value: ExprKind::Map
       field0=
-        tuple
-          field0: Lit
+        MapEntry::Pair
+          key: Lit
             token: "\"test\""
             value: LitValue::Str
               field0: "test"
-          field1: Lit
+          value: Lit
             token: "1.0"
             value: LitValue::Number
               field0: 1"#
+        );
+        // spread
+        assert_ast!(
+            r#"a = { v: 0, ...o }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      field0=
+        MapEntry::Pair
+          key: Lit
+            token: "v"
+            value: LitValue::Str
+              field0: "v"
+          value: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+        MapEntry::Spread
+          target: ExprKind::Variable
+            name: "o""#
         );
     }
 
@@ -1213,5 +1478,327 @@ StmtKind::ExprStmt
             value: LitValue::Number
               field0: 5"#
         );
+    }
+
+    #[test]
+    fn parse_if_expr() {
+        // simple
+        assert_ast!(
+            r#"if v { 0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: None"#
+        );
+        // with else
+        assert_ast!(
+            r#"if v { 0 } else { 1 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: DoBlock
+      statements=
+      value: Lit
+        token: "1"
+        value: LitValue::Number
+          field0: 1"#
+        );
+        // more branches
+        assert_ast!(
+            r#"if v0 { 0 } else if v1 { 1 } else if v2 { 2 } else { 0 }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: ExprKind::Variable
+        name: "v0"
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+      value: Lit
+        token: "0"
+        value: LitValue::Number
+          field0: 0
+    otherwise: DoBlock
+      statements=
+      value: If
+        condition: Condition
+          value: ExprKind::Variable
+            name: "v1"
+          pattern: ConditionPattern::Value
+        then: DoBlock
+          statements=
+          value: Lit
+            token: "1"
+            value: LitValue::Number
+              field0: 1
+        otherwise: DoBlock
+          statements=
+          value: If
+            condition: Condition
+              value: ExprKind::Variable
+                name: "v2"
+              pattern: ConditionPattern::Value
+            then: DoBlock
+              statements=
+              value: Lit
+                token: "2"
+                value: LitValue::Number
+                  field0: 2
+            otherwise: DoBlock
+              statements=
+              value: Lit
+                token: "0"
+                value: LitValue::Number
+                  field0: 0"#
+        );
+        // destructuring
+        assert_ast!(
+            r#"if ok(v) = f() { v }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsOk
+        field0: "v"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "v"
+    otherwise: None"#
+        );
+        assert_ast!(
+            r#"if err(e) = f() { e }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "f"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::IsErr
+        field0: "e"
+    then: DoBlock
+      statements=
+      value: ExprKind::Variable
+        name: "e"
+    otherwise: None"#
+        );
+    }
+
+    #[test]
+    fn parse_do_block() {
+        assert_ast!(
+            r#"do {}"#,
+            r#"
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: None"#
+        );
+        assert_ast!(
+            r#"do { true }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: Lit
+      token: "true"
+      value: LitValue::Bool
+        field0: true"#
+        );
+
+        assert_ast!(
+            r#"do { if cond() { "true" } else { "false" } }"#,
+            r#"
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+    value: If
+      condition: Condition
+        value: Call
+          callee: ExprKind::Variable
+            name: "cond"
+          args=
+          tco: false
+          rest: false
+        pattern: ConditionPattern::Value
+      then: DoBlock
+        statements=
+        value: Lit
+          token: "\"true\""
+          value: LitValue::Str
+            field0: "true"
+      otherwise: DoBlock
+        statements=
+        value: Lit
+          token: "\"false\""
+          value: LitValue::Str
+            field0: "false""#
+        );
+        // TODO: test these once all statements are implemented
+        /* assert_ast!(
+            r#"
+            a = do {
+                mut sum = 0
+                for i in 0..10 { sum += i }
+                sum
+            }
+            "#
+        );
+        assert_ast!(
+            r#"
+            a = do {
+                mut sum = 0
+                for i in 0..10 { sum += i }
+                sum; // notice the semicolon
+            }
+            "#
+        ); */
+    }
+
+    #[test]
+    fn parse_fn_decl() {
+        // basic
+        assert_ast!(
+            r#"fn name(a, b = 0, ...c) {}"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+    kind: Function"#
+        );
+        // arrow
+        assert_ast!(
+            r#"fn name(a, b = 0, ...c) => 0"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "name"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number
+            field0: 0
+    kind: Function"#
+        );
+        // anonymous
+        assert_ast!(
+            r#"fn(a, b = 0, ...c) {}"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@1:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+    kind: Function"#
+        );
+        // anonymous, arrow
+        assert_ast!(
+            r#"fn(a, b = 0, ...c) => 0"#,
+            r#"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "[fn@1:1]"
+    params: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number
+              field0: 0
+      rest: "c"
+    body=
+      StmtKind::Return
+        field0: Lit
+          token: "0"
+          value: LitValue::Number
+            field0: 0
+    kind: Function"#
+        );
+    }
+
+    #[test]
+    fn parse_bad_fn_decl() {
+        // positional after default
+        assert_ast_err!(
+            "fn(a=0,b) {}",
+            "Positional arguments may not appear after arguments with default values"
+        );
+        // rest not last
+        assert_ast_err!(
+            "fn(...a, b) {}",
+            "Rest parameter must appear last in parameter list"
+        );
+        // unopened param list
+        assert_ast_err!("fn a) {}", "Expected '('");
+        // unclosed param list
+        assert_ast_err!("fn(a {}", "Expected ')'");
     }
 }

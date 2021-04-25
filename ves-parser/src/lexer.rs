@@ -160,6 +160,11 @@ pub enum TokenKind<'a> {
     /// No value (same as nil/null)
     #[token("none")]
     None,
+    /// Represents the concept of any value other than `none`
+    ///
+    /// Not an actual value, only used in `is some` checks
+    #[token("some")]
+    Some,
     /// Boolean 'true'
     #[token("true")]
     True,
