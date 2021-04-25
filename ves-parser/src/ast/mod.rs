@@ -334,14 +334,10 @@ pub struct StructInfo<'a> {
 pub enum ConditionPattern<'a> {
     /// The value of the condition itself.
     Value,
-    /// Whether the condition is `none`.
-    IsNone,
     /// Whether the condition is `ok` plus a binding for the inner value.
     IsOk(Token<'a>),
     /// Whether the condition is `err` plus a binding for the inner value.
     IsErr(Token<'a>),
-    /// Whether the condition is `some` plus a binding for the value (some is implicit).
-    IsSome(Token<'a>),
 }
 
 /// A condition of an if statement, while loop, or for loop.
@@ -400,6 +396,12 @@ pub struct Range<'a> {
     pub inclusive: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum MapEntry<'a> {
+    Pair(#[rename = "key"] Expr<'a>, #[rename = "value"] Expr<'a>),
+    Spread(#[rename = "target"] Expr<'a>),
+}
+
 /// The kind of an expression.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub enum ExprKind<'a> {
@@ -447,7 +449,7 @@ pub enum ExprKind<'a> {
     /// An array literal.
     Array(Vec<Expr<'a>>),
     /// A dictionary literal.
-    Map(Vec<(Expr<'a>, Expr<'a>)>),
+    Map(Vec<MapEntry<'a>>),
     /// A variable access expression (includes self).
     Variable(#[rename = "name"] Token<'a>),
     /// A range specified, e.g. `0..10` or `start..end, -2`.

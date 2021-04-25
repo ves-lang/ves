@@ -297,9 +297,7 @@ impl<'a> Resolver<'a> {
     fn resolve_condition(&mut self, condition: &mut Condition<'a>, ex: &mut ErrCtx) {
         self.resolve_expr(&mut condition.value, ex);
         match &condition.pattern {
-            ConditionPattern::IsErr(v)
-            | ConditionPattern::IsOk(v)
-            | ConditionPattern::IsSome(v) => {
+            ConditionPattern::IsErr(v) | ConditionPattern::IsOk(v) => {
                 self.declare(v, NameKind::Let, ex);
                 self.assign(v, ex);
             }
