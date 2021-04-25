@@ -122,7 +122,7 @@ impl<'a> Parser<'a> {
             }
         }
         self.scope_depth -= 1;
-        self.consume(&TokenKind::RightBrace, "Expected '}' after a block")?;
+        self.consume(&TokenKind::RightBrace, "Expected a '}' after a block")?;
         Ok(body)
     }
 
@@ -180,8 +180,8 @@ impl<'a> Parser<'a> {
             TokenKind::Do,
         ]) {
             match self.previous.kind {
-                TokenKind::Struct => unimplemented!(),
-                TokenKind::Fn => self.fn_decl(ast::FnKind::Function),
+                TokenKind::Struct => self.struct_decl(),
+                TokenKind::Fn => self.fn_decl_expr(),
                 TokenKind::If => self.if_expr(),
                 TokenKind::Do => self.do_block_expr(),
                 _ => unreachable!(),
@@ -191,9 +191,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /* fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let name = if self.match_(&TokenKind::Identifier) {
+        // parse struct name, or generate it
+        let struct_name = if self.match_(&TokenKind::Identifier) {
             self.previous.clone()
         } else {
             let (line, column) = self.db.location(self.fid, &self.previous.span);
@@ -203,18 +204,112 @@ impl<'a> Parser<'a> {
                 TokenKind::Identifier,
             )
         };
-        // fields
-        if self.match_(&TokenKind::LeftParen) {}
-        let span_end = self.previous.span.end;
-    } */
+        // parse fields
+        let fields = if self.match_(&TokenKind::LeftParen) {
+            let fields = self.param_pack(false)?;
+            self.consume(
+                &TokenKind::RightParen,
+                "Expected a closing `)` in this position",
+            )?;
+            Some(fields)
+        } else {
+            None
+        };
 
-    fn fn_decl(&mut self, mut kind: ast::FnKind) -> ParseResult<ast::Expr<'a>> {
+        // parse struct body
+        let mut methods = vec![];
+        let mut r#static = ast::StructStaticProps {
+            fields: vec![],
+            methods: vec![],
+        };
+        let mut initializer = None;
+        // if we come across a semi or don't come across a left brace,
+        // then the struct has no body
+        if !self.match_(&TokenKind::Semi) && self.match_(&TokenKind::LeftBrace) {
+            while !self.match_(&TokenKind::RightBrace) {
+                let prop_name = self.consume(
+                    &TokenKind::Identifier,
+                    "Expected method, static field or static method",
+                )?;
+
+                if prop_name.lexeme == "init" {
+                    // this must be an initializer
+                    if initializer.is_some() {
+                        return Err(VesError::parse(
+                            "Cannot have more than one initializer",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    let body = self.fn_decl_body()?;
+                    initializer = Some(ast::Initializer::new(ast::FnInfo {
+                        name: prop_name,
+                        params: ast::Params::default(),
+                        body,
+                        kind: ast::FnKind::Method,
+                    }));
+                } else if self.match_(&TokenKind::LeftParen) {
+                    // this is a method
+                    let params = self.param_pack(true)?;
+                    self.consume(
+                        &TokenKind::RightParen,
+                        "Expected a closing `)` in this position",
+                    )?;
+                    let body = self.fn_decl_body()?;
+                    if params.is_instance_method_params() {
+                        methods.push(ast::FnInfo {
+                            name: prop_name,
+                            params,
+                            body,
+                            kind: ast::FnKind::Method,
+                        });
+                    } else {
+                        r#static.methods.push(ast::FnInfo {
+                            name: prop_name,
+                            params,
+                            body,
+                            kind: ast::FnKind::Static,
+                        });
+                    }
+                } else {
+                    // this is a static field
+                    let value = if self.match_(&TokenKind::Equal) {
+                        Some(self.expr()?)
+                    } else {
+                        None
+                    };
+                    r#static.fields.push((prop_name, value));
+                }
+            }
+        }
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            kind: ast::ExprKind::Struct(box ast::StructInfo {
+                name: struct_name,
+                fields,
+                methods,
+                initializer,
+                r#static,
+            }),
+            span: span_start..span_end,
+        })
+    }
+
+    fn fn_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
+        let decl = self.fn_decl()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            kind: ast::ExprKind::Fn(box decl),
+            span: span_start..span_end,
+        })
+    }
+
+    fn fn_decl(&mut self) -> ParseResult<ast::FnInfo<'a>> {
         let name = if self.match_(&TokenKind::Identifier) {
             remember_if_global!(self, self.previous, ast::VarKind::Let);
             self.previous.clone()
         } else {
-            if matches!(kind, ast::FnKind::Method) {}
             let (line, column) = self.db.location(self.fid, &self.previous.span);
             Token::new(
                 format!("[fn@{}:{}]", line, column),
@@ -232,32 +327,32 @@ impl<'a> Parser<'a> {
             &TokenKind::RightParen,
             "Expected a closing `)` in this position",
         )?;
-        let body = if self.match_(&TokenKind::Arrow) {
+        let body = self.fn_decl_body()?;
+        Ok(ast::FnInfo {
+            name,
+            params,
+            body,
+            kind: ast::FnKind::Function,
+        })
+    }
+
+    fn fn_decl_body(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
+        if self.match_(&TokenKind::Arrow) {
             let body_span_start = self.previous.span.start;
             let expr = self.expr()?;
-            vec![ast::Stmt {
+            Ok(vec![ast::Stmt {
                 span: body_span_start..expr.span.end,
                 kind: ast::StmtKind::Return(Some(box expr)),
-            }]
+            }])
+        } else if self.match_(&TokenKind::LeftBrace) {
+            Ok(self.block()?)
         } else {
-            self.consume(&TokenKind::LeftBrace, "Expected an opening `{`")?;
-            self.block()?
-        };
-        let span_end = self.previous.span.end;
-        if kind == ast::FnKind::Method
-            && (params.positional.is_empty() || params.positional[0].kind != TokenKind::Self_)
-        {
-            kind = ast::FnKind::Static;
+            Err(VesError::parse(
+                "Expected function body",
+                self.previous.span.clone(),
+                self.fid,
+            ))
         }
-        Ok(ast::Expr {
-            span: span_start..span_end,
-            kind: ast::ExprKind::Fn(box ast::FnInfo {
-                name,
-                params,
-                body,
-                kind,
-            }),
-        })
     }
 
     fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
@@ -275,15 +370,16 @@ impl<'a> Parser<'a> {
                     ));
                 }
                 // rest argument
-                let name = self.consume_any(
-                    &[TokenKind::Identifier, TokenKind::Self_],
-                    "Expected a parameter name",
-                )?;
+                let name = self.consume(&TokenKind::Identifier, "Expected a parameter name")?;
                 rest = Some(name);
                 break;
             } else {
                 // positional or default argument
-                let name = self.consume(&TokenKind::Identifier, "Expected parameter name")?;
+                // TODO: check if 'self' has a default value, which is an error (?)
+                let name = self.consume_any(
+                    &[TokenKind::Identifier, TokenKind::Self_],
+                    "Expected parameter name",
+                )?;
                 let value = if self.match_(&TokenKind::Equal) {
                     Some(self.expr()?)
                 } else {
@@ -399,7 +495,10 @@ impl<'a> Parser<'a> {
         // but only if it is not terminated by a semicolon.
         // in any other case the value is `none`
 
-        self.consume(&TokenKind::LeftBrace, "Expected block")?;
+        self.consume(
+            &TokenKind::LeftBrace,
+            "Expected an opening `{` after the `do` keyword",
+        )?;
         self.scope_depth += 1;
 
         let mut body = vec![];
@@ -1163,7 +1262,7 @@ fn check_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> AssignmentK
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pretty_assertions::assert_eq;
+    use infra::*;
 
     macro_rules! test_ok {
         ($test_name:ident $( $attr:ident ),*) => {
@@ -1196,7 +1295,6 @@ mod tests {
     test_ok!(t7_parse_array_literal);
     test_ok!(t8_parse_map_literals);
     test_ok!(t9_precedence);
-
     test_ok!(t10_string_interpolation);
     test_ok!(t11_parse_call);
     test_ok!(t12_parse_compound_assignment);
@@ -1225,125 +1323,114 @@ mod tests {
     test_ok!(t15_parse_fn_decl);
     test_err!(t16_parse_bad_fn_decl);
 
-    // #[test]
-    // fn parse_bad_fn_decl() {
-    //     // positional after default
-    //     assert_ast_err!(
-    //         "fn(a=0,b) {}",
-    //         "Positional arguments may not appear after arguments with default values"
-    //     );
-    //     // rest not last
-    //     assert_ast_err!(
-    //         "fn(...a, b) {}",
-    //         "Rest parameter must appear last in parameter list"
-    //     );
-    //     // unopened param list
-    //     assert_ast_err!("fn a) {}", "Expected '('");
-    //     // unclosed param list
-    //     assert_ast_err!("fn(a {}", "Expected ')'");
-    // }
+    // TODO: init {} blocks
+    // TODO: test parsing bad struct decls
+    test_ok!(t17_parse_struct_decl);
 
-    use ast2str::ast2str_lib::symbols;
-    use ast2str::AstToStr;
-    use lazy_static::lazy_static;
-    use regex::Regex;
+    mod infra {
+        use super::*;
+        pub use ast2str::ast2str_lib::symbols;
+        pub use ast2str::AstToStr;
+        pub use lazy_static::lazy_static;
+        pub use regex::Regex;
 
-    #[derive(Clone, PartialEq)]
-    struct DisplayAsDebugWrapper<T>(T);
+        #[derive(Clone, PartialEq)]
+        struct DisplayAsDebugWrapper<T>(T);
 
-    impl<T> std::fmt::Debug for DisplayAsDebugWrapper<T>
-    where
-        T: std::fmt::Display,
-    {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "{}", self.0)
+        impl<T> std::fmt::Debug for DisplayAsDebugWrapper<T>
+        where
+            T: std::fmt::Display,
+        {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
+            }
         }
-    }
 
-    impl<T> std::ops::Deref for DisplayAsDebugWrapper<T> {
-        type Target = T;
+        impl<T> std::ops::Deref for DisplayAsDebugWrapper<T> {
+            type Target = T;
 
-        fn deref(&self) -> &Self::Target {
-            &self.0
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
         }
-    }
 
-    lazy_static! {
-        static ref RE: Regex = Regex::new(
-            &[
-                symbols::HORIZONTAL_BAR,
-                symbols::VERTICAL_BAR,
-                symbols::BRANCH,
-                symbols::LEFT_UPPER_CORNER,
-                symbols::LEFT_BOTTOM_CORNER,
-                symbols::RIGHT_UPPER_CORNER,
-                symbols::RIGHT_BOTTOM_CORNER,
-                symbols::CROSS,
-                symbols::DOWNWARDS_POINTING_ARROW,
-            ]
-            .join("|")
-        )
-        .unwrap();
-    }
-
-    fn clean_tree(tree: String) -> String {
-        RE.replace_all(&tree, " ")
-            .lines()
-            .map(|l| l.trim_end())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-    static TESTS_DIR: &str = "src/tests";
-
-    fn load_test_file(name: &str) -> (String, String) {
-        let path = std::path::PathBuf::from(CRATE_ROOT)
-            .join(TESTS_DIR)
-            .join(format!("{}.test", name));
-        let source = std::fs::read_to_string(&path)
-            .map_err(|e| format!("Failed to read the `{}`: {}", path.display(), e))
+        lazy_static! {
+            pub static ref RE: Regex = Regex::new(
+                &[
+                    symbols::HORIZONTAL_BAR,
+                    symbols::VERTICAL_BAR,
+                    symbols::BRANCH,
+                    symbols::LEFT_UPPER_CORNER,
+                    symbols::LEFT_BOTTOM_CORNER,
+                    symbols::RIGHT_UPPER_CORNER,
+                    symbols::RIGHT_BOTTOM_CORNER,
+                    symbols::CROSS,
+                    symbols::DOWNWARDS_POINTING_ARROW,
+                ]
+                .join("|")
+            )
             .unwrap();
-        let (code, expected) = source.split_once("%output\n").expect(
+        }
+
+        pub fn clean_tree(tree: String) -> String {
+            RE.replace_all(&tree, " ")
+                .lines()
+                .map(|l| l.trim_end())
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+
+        static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+        static TESTS_DIR: &str = "src/tests";
+
+        pub fn load_test_file(name: &str) -> (String, String) {
+            let path = std::path::PathBuf::from(CRATE_ROOT)
+                .join(TESTS_DIR)
+                .join(format!("{}.test", name));
+            let source = std::fs::read_to_string(&path)
+                .map_err(|e| format!("Failed to read the `{}`: {}", path.display(), e))
+                .unwrap();
+            let (code, expected) = source.split_once("%output\n").expect(
             "Invalid test file format. Make sure that your test contains the %output directive.",
         );
-        (code.trim().to_owned(), expected.trim().to_owned())
-    }
+            (code.trim().to_owned(), expected.trim().to_owned())
+        }
 
-    fn test_err(test_name: &str, src: String, expected: String) {
-        let src = std::borrow::Cow::Borrowed(&src[..]);
-        let mut db = VesFileDatabase::new();
-        let fid = db.add_snippet(src.clone());
-        let errors = Parser::new(Lexer::new(&*src), fid, &db)
-            .parse()
-            .expect_err("Test succeeded unexpectedly");
-        let output = db.report_to_string(&errors).unwrap();
-        pretty_assertions::assert_eq!(
-            DisplayAsDebugWrapper(output.trim()),
-            DisplayAsDebugWrapper(&expected[..]),
-            "Failed the error test `{}`",
-            test_name
-        );
-    }
+        pub fn test_err(test_name: &str, src: String, expected: String) {
+            let src = std::borrow::Cow::Borrowed(&src[..]);
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.clone());
+            let errors = Parser::new(Lexer::new(&*src), fid, &db)
+                .parse()
+                .expect_err("Test succeeded unexpectedly");
+            let output = db.report_to_string(&errors).unwrap();
+            pretty_assertions::assert_eq!(
+                DisplayAsDebugWrapper(output.trim()),
+                DisplayAsDebugWrapper(&expected[..]),
+                "Failed the error test `{}`",
+                test_name
+            );
+        }
 
-    fn test_ok(test_name: &str, src: String, expected: String) {
-        let src = std::borrow::Cow::Borrowed(&src[..]);
-        let mut db = VesFileDatabase::new();
-        let fid = db.add_snippet(src.clone());
-        pretty_assertions::assert_eq!(
-            DisplayAsDebugWrapper(clean_tree(
-                Parser::new(Lexer::new(&src), fid, &db)
-                    .parse()
-                    .unwrap()
-                    .body
-                    .into_iter()
-                    .map(|stmt| stmt.ast_to_str())
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            )),
-            DisplayAsDebugWrapper(expected),
-            "Failed the test `{}`",
-            test_name
-        );
+        pub fn test_ok(test_name: &str, src: String, expected: String) {
+            let src = std::borrow::Cow::Borrowed(&src[..]);
+            let mut db = VesFileDatabase::new();
+            let fid = db.add_snippet(src.clone());
+            pretty_assertions::assert_eq!(
+                DisplayAsDebugWrapper(clean_tree(
+                    Parser::new(Lexer::new(&src), fid, &db)
+                        .parse()
+                        .unwrap()
+                        .body
+                        .into_iter()
+                        .map(|stmt| stmt.ast_to_str())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                )),
+                DisplayAsDebugWrapper(expected),
+                "Failed the test `{}`",
+                test_name
+            );
+        }
     }
 }

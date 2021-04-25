@@ -1,0 +1,120 @@
+struct Test
+struct Test(a, b=0)
+struct Test {}
+
+struct Test(a, b=0) {
+    // methods
+    m(self) {}
+    ma(self) => 0
+
+    // static methods
+    sm() {}
+    sma() => 0
+
+    // static field
+    sf = 0
+}
+
+%output
+
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods=
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods=
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods=
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Test"
+    fields: Params
+      positional=
+        "a"
+      default=
+        tuple
+          field0: "b"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      rest: None
+    methods=
+      FnInfo
+        name: "m"
+        params: Params
+          positional=
+            "self"
+          default=
+          rest: None
+        body=
+        kind: Method
+      FnInfo
+        name: "ma"
+        params: Params
+          positional=
+            "self"
+          default=
+          rest: None
+        body=
+          StmtKind::Return
+            return_value: Lit
+              token: "0"
+              value: LitValue::Number(0.0)
+        kind: Method
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+        tuple
+          field0: "sf"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+      methods=
+        FnInfo
+          name: "sm"
+          params: Params
+            positional=
+            default=
+            rest: None
+          body=
+          kind: Static
+        FnInfo
+          name: "sma"
+          params: Params
+            positional=
+            default=
+            rest: None
+          body=
+            StmtKind::Return
+              return_value: Lit
+                token: "0"
+                value: LitValue::Number(0.0)
+          kind: Static

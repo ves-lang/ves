@@ -39,7 +39,7 @@ StmtKind::ExprStmt
       rest: "c"
     body=
       StmtKind::Return
-        field0: Lit
+        return_value: Lit
           token: "0"
           value: LitValue::Number(0.0)
     kind: Function
@@ -73,7 +73,7 @@ StmtKind::ExprStmt
       rest: "c"
     body=
       StmtKind::Return
-        field0: Lit
+        return_value: Lit
           token: "0"
           value: LitValue::Number(0.0)
     kind: Function
@@ -92,7 +92,7 @@ StmtKind::ExprStmt
       rest: "c"
     body=
       StmtKind::Return
-        field0: Lit
+        return_value: Lit
           token: "0"
           value: LitValue::Number(0.0)
     kind: Function
