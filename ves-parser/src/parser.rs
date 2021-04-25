@@ -3,7 +3,7 @@ use crate::{
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
 use std::convert::Into;
-use ves_error::{ErrCtx, FileId, VesError};
+use ves_error::{ErrCtx, FileId, Span, VesError};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
 
@@ -524,18 +524,15 @@ impl<'a> Parser<'a> {
         }
         // string literal
         if self.match_(&TokenKind::String) {
-            return Ok(literal!(
-                self,
-                ast::LitValue::Str(
-                    self.previous
-                        .lexeme
-                        .trim_start_matches(|v| v == '"' || v == '\'')
-                        .trim_end_matches(|v| v == '"' || v == '\'')
-                        // QQQ(moscow): is there a way to avoid the string copy here?
-                        .to_string()
-                        .into()
-                )
-            ));
+            let mut literal = self
+                .previous
+                .lexeme
+                .trim_start_matches(|v| v == '"' || v == '\'')
+                .trim_end_matches(|v| v == '"' || v == '\'')
+                .to_string();
+            let span = self.previous.span.clone();
+            self.try_unescape(&mut literal, span);
+            return Ok(literal!(self, ast::LitValue::Str(literal.into())));
         }
         if self.match_(&TokenKind::InterpolatedString(vec![])) {
             let span_start = self.previous.span.start;
@@ -546,7 +543,11 @@ impl<'a> Parser<'a> {
                     match frag {
                         lexer::Frag::Str(v) => fragments.push(ast::FStringFrag::Str(ast::Lit {
                             token: v.clone(),
-                            value: ast::LitValue::Str(v.lexeme.clone()),
+                            value: {
+                                let mut lexeme = v.lexeme.to_string();
+                                self.try_unescape(&mut lexeme, v.span);
+                                ast::LitValue::Str(lexeme.into())
+                            },
                         })),
                         lexer::Frag::Sublexer(sublexer) => {
                             let mut subparser = Parser::new(sublexer, self.fid);
@@ -661,6 +662,16 @@ impl<'a> Parser<'a> {
             ));
         };
         Ok((key, value))
+    }
+
+    fn try_unescape(&mut self, string: &mut String, span: Span) {
+        if super::lexer::unescape_in_place(string).is_none() {
+            self.ex.record(VesError::parse(
+                "Invalid unicode escape sequence",
+                span,
+                self.fid,
+            ));
+        }
     }
 
     #[inline]

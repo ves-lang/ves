@@ -460,8 +460,8 @@ pub enum ExprKind<'a> {
     Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.
     Grouping(ExprPtr<'a>),
-    /// A loop label, e.g. `@outer`
-    Label(#[rename = "value"] Token<'a>),
+    /// An "at identifier", e.g. `@outer`
+    AtIdent(#[rename = "name"] Token<'a>),
 }
 
 /// An expression.
@@ -552,16 +552,14 @@ pub enum StmtKind<'a> {
     ExprStmt(#[rename = "expr"] ExprPtr<'a>),
     /// A print statement.
     Print(ExprPtr<'a>),
-    /// An if statement.
-    If(#[forward] Ptr<If<'a>>),
     /// A return statement.
     Return(Option<ExprPtr<'a>>),
     /// A break statement.
     Break(#[rename = "label"] Token<'a>),
     /// A continue statement.
     Continue(#[rename = "label"] Token<'a>),
-    /// A `defer` statement
-    Defer(#[forward] Ptr<Call<'a>>),
+    /// A `defer` statement. Must store only `Call` expressions.
+    Defer(#[rename = "call"] Ptr<Expr<'a>>),
     /// An empty node that compiles to nothing.
     /// Used by the constant folder to remove dead code.
     _Empty,

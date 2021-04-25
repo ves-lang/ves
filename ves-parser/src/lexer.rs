@@ -73,8 +73,6 @@ pub enum TokenKind<'a> {
     LeftBracket,
     #[token("]")]
     RightBracket,
-    #[regex("@")]
-    At,
     #[token(":")]
     Colon,
     #[token(",")]
@@ -135,6 +133,9 @@ pub enum TokenKind<'a> {
     /// May contain numbers except for the first character
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")]
     Identifier,
+    /// An normal identifier prefixed with an `@` sign.
+    #[regex("@[a-zA-Z_][a-zA-Z0-9_]*")]
+    AtIdentifier,
     #[regex("[0-9]+\\.\\.=?[0-9]+", priority = 3)]
     #[token("..")]
     #[token("..=")]
@@ -423,6 +424,63 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Vec<Fra
     frags
 }
 
+// Adapted from https://docs.rs/snailquote/0.3.0/x86_64-pc-windows-msvc/src/snailquote/lib.rs.html.
+/// Unescaped the given string in-place. Returns `None` if the string contains an invalid escape sequence.
+pub(crate) fn unescape_in_place(s: &mut String) -> Option<()> {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            if let Some(next) = chars.next() {
+                let escape = match next {
+                    'a' => Some('\u{07}'),
+                    'b' => Some('\u{08}'),
+                    'v' => Some('\u{0B}'),
+                    'f' => Some('\u{0C}'),
+                    'n' => Some('\n'),
+                    'r' => Some('\r'),
+                    't' => Some('\t'),
+                    'e' | 'E' => Some('\u{1B}'),
+                    'u' => Some(parse_unicode(&mut chars)?),
+                    _ => None,
+                };
+                match escape {
+                    Some(esc) => {
+                        out.push(esc);
+                    }
+                    None => {
+                        out.push(ch);
+                        out.push(next);
+                    }
+                }
+            }
+        } else {
+            out.push(ch);
+        }
+    }
+    *s = out;
+    Some(())
+}
+
+// Adapted from https://docs.rs/snailquote/0.3.0/x86_64-pc-windows-msvc/src/snailquote/lib.rs.html.
+fn parse_unicode<I>(chars: &mut I) -> Option<char>
+where
+    I: Iterator<Item = char>,
+{
+    match chars.next() {
+        Some('{') => {}
+        _ => {
+            return None;
+        }
+    }
+
+    let unicode_seq: String = chars.take_while(|&c| c != '}').collect();
+
+    u32::from_str_radix(&unicode_seq, 16)
+        .ok()
+        .and_then(char::from_u32)
+}
+
 #[rustfmt::skip]
 #[cfg(test)]
 mod tests {
@@ -587,7 +645,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(At, "@"), token!(Identifier, "label"), token!(Colon, ":"),
+                token!(AtIdentifier, "@label"), token!(Colon, ":"),
                 token!(Loop, "loop"), token!(LeftBrace, "{"), token!(RightBrace, "}"),
             ]
         );

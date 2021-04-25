@@ -1,7 +1,11 @@
 use std::borrow::Cow;
 
 use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
-use ves_parser::{ast::*, lexer::Token, Span};
+use ves_parser::{
+    ast::*,
+    lexer::{Token, TokenKind},
+    Span,
+};
 
 use crate::env::Env;
 use crate::resolver_definitions::{LoopKind, NameKind, ScopeKind, VarUsage};
@@ -24,8 +28,6 @@ pub struct Resolver<'a> {
     loop_kind: LoopKind,
     /// Whether a struct is currently being resolved.
     is_in_struct: bool,
-    /// The stack of loop labels currently in use.
-    labels: Vec<Token<'a>>,
     /// The name of the function currently being resolved.
     function_name: Option<Cow<'a, str>>,
     /// The name of the struct currently being resolved.
@@ -41,7 +43,6 @@ impl<'a> Resolver<'a> {
             loop_kind: LoopKind::None,
             scope_kind: ScopeKind::Global,
             is_in_struct: false,
-            labels: Vec::new(),
             file_id: FileId::anon(),
             env: Env::default(),
         }
@@ -97,23 +98,220 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
-            StmtKind::For(_) => unimplemented!(),
-            StmtKind::ForEach(_) => unimplemented!(),
-            StmtKind::While(_) => unimplemented!(),
-            StmtKind::Block(_) => unimplemented!(),
-            StmtKind::ExprStmt(_) => unimplemented!(),
-            StmtKind::Print(_) => unimplemented!(),
-            StmtKind::If(_) => unimplemented!(),
-            StmtKind::Return(_) => unimplemented!(),
-            StmtKind::Break(_) => unimplemented!(),
-            StmtKind::Continue(_) => unimplemented!(),
-            StmtKind::Defer(_) => unimplemented!(),
-            StmtKind::_Empty => unimplemented!(),
+            StmtKind::For(r#for) => {
+                self.env.push();
+
+                r#for.initializers.iter_mut().for_each(|init| {
+                    self.resolve_expr(&mut init.value, ex);
+                    self.declare(&init.name, NameKind::Mut, ex);
+                    self.assign(&init.name, ex);
+                });
+
+                if let Some(ref mut cond) = r#for.condition {
+                    self.resolve_expr(cond, ex);
+                }
+                if let Some(ref mut inc) = r#for.increment {
+                    self.resolve_expr(inc, ex);
+                }
+
+                self.declare_loop_label(&r#for.label, ex);
+
+                let prev_loop = self.loop_kind;
+                self.loop_kind = LoopKind::For;
+                self.resolve_stmt(&mut r#for.body, ex);
+                self.loop_kind = prev_loop;
+
+                self.env.pop();
+            }
+            StmtKind::ForEach(r#for) => {
+                self.env.push();
+
+                self.resolve_expr(&mut r#for.iterator, ex);
+
+                self.declare(&r#for.variable, NameKind::Let, ex);
+                self.assign(&r#for.variable, ex);
+
+                self.declare_loop_label(&r#for.label, ex);
+
+                let prev_loop = self.loop_kind;
+                self.loop_kind = LoopKind::ForEach;
+                self.resolve_stmt(&mut r#for.body, ex);
+                self.loop_kind = prev_loop;
+
+                self.env.pop();
+            }
+            StmtKind::While(box While {
+                ref mut condition,
+                ref mut body,
+                ref label,
+            }) => {
+                self.env.push();
+
+                self.resolve_condition(condition, ex);
+
+                self.declare_loop_label(label, ex);
+
+                let prev_loop = self.loop_kind;
+                self.loop_kind = LoopKind::While;
+                self.resolve_stmt(body, ex);
+                self.loop_kind = prev_loop;
+
+                self.env.pop();
+            }
+            StmtKind::Block(statements) => {
+                let prev_kind = self.scope_kind;
+                if self.scope_kind == ScopeKind::Global {
+                    self.scope_kind = ScopeKind::Local;
+                }
+                self.env.push();
+                statements
+                    .iter_mut()
+                    .for_each(|stmt| self.resolve_stmt(stmt, ex));
+                self.env.pop();
+                self.scope_kind = prev_kind;
+            }
+            StmtKind::ExprStmt(expr) => self.resolve_expr(expr, ex),
+            StmtKind::Print(expr) => self.resolve_expr(expr, ex),
+            StmtKind::Return(value) => {
+                if let Some(ref mut expr) = value {
+                    self.resolve_expr(expr, ex);
+                }
+
+                match self.scope_kind {
+                    ScopeKind::Global | ScopeKind::Local => {
+                        Self::error("Cannot return outside of a function", stmt.span.clone(), ex);
+                    }
+                    // init {} blocks cannot return values
+                    ScopeKind::Initializer if value.is_some() => {
+                        Self::error(
+                            "Cannot return a value from an init block",
+                            stmt.span.clone(),
+                            ex,
+                        );
+                    }
+                    // But empty returns are fine, so we need to patch them to return `self`.
+                    ScopeKind::Initializer => {
+                        *value = Some(box Expr {
+                            kind: ExprKind::Variable(Token::new(
+                                "self",
+                                stmt.span.clone(),
+                                TokenKind::Identifier,
+                            )),
+                            span: stmt.span.clone(),
+                        });
+                    }
+                    ScopeKind::Function | ScopeKind::AssocMethod | ScopeKind::Method => {}
+                }
+            }
+            StmtKind::Break(label) => {
+                if let LoopKind::None = self.loop_kind {
+                    Self::error("Cannot break outside of a loop", stmt.span.clone(), ex);
+                }
+                if self.env.get(&label.lexeme).is_none() {
+                    self.undefined_variable_error(label, ex);
+                }
+            }
+            StmtKind::Continue(label) => {
+                if let LoopKind::None = self.loop_kind {
+                    Self::error("Cannot continue outside of a loop", stmt.span.clone(), ex);
+                }
+                if self.env.get(&label.lexeme).is_none() {
+                    self.undefined_variable_error(label, ex);
+                }
+            }
+            StmtKind::Defer(defer) => {
+                // This should never happen, but we'll look out for it just in case.
+                if !matches!(defer.kind, ExprKind::Call(_)) {
+                    Self::error(
+                        "A defer statement may only contain call expressions",
+                        defer.span.clone(),
+                        ex,
+                    );
+                }
+                self.resolve_expr(defer, ex);
+            }
+            StmtKind::_Empty => {}
         }
     }
 
-    fn resolve_expr(&mut self, _expr: &mut Expr<'a>, _ex: &mut ErrCtx) {
-        unimplemented!()
+    fn resolve_do_block(&mut self, block: &mut DoBlock<'a>, ex: &mut ErrCtx) {
+        self.env.push();
+        block
+            .statements
+            .iter_mut()
+            .for_each(|stmt| self.resolve_stmt(stmt, ex));
+        if let Some(ref mut value) = block.value {
+            self.resolve_expr(value, ex);
+        }
+        self.env.pop();
+    }
+
+    fn resolve_expr(&mut self, expr: &mut Expr<'a>, ex: &mut ErrCtx) {
+        match &mut expr.kind {
+            ExprKind::Struct(_) => unimplemented!(),
+            ExprKind::Fn(_) => unimplemented!(),
+            ExprKind::If(r#if) => {
+                self.env.push();
+
+                self.resolve_condition(&mut r#if.condition, ex);
+                self.resolve_do_block(&mut r#if.then, ex);
+                if let Some(ref mut r#else) = r#if.otherwise {
+                    self.resolve_do_block(r#else, ex)
+                }
+
+                self.env.pop();
+            }
+            ExprKind::DoBlock(block) => self.resolve_do_block(block, ex),
+            ExprKind::Binary(_, ref mut left, ref mut right) => {
+                self.resolve_expr(left, ex);
+                self.resolve_expr(right, ex);
+            }
+            ExprKind::Unary(_, ref mut operand) => self.resolve_expr(operand, ex),
+            ExprKind::Comma(exprs) => exprs
+                .iter_mut()
+                .for_each(|expr| self.resolve_expr(expr, ex)),
+            ExprKind::Call(_) => unimplemented!(),
+            ExprKind::Spread(_) => unimplemented!(),
+            ExprKind::GetProp(_) => unimplemented!(),
+            ExprKind::SetProp(_) => unimplemented!(),
+            ExprKind::GetItem(_) => unimplemented!(),
+            ExprKind::SetItem(_) => unimplemented!(),
+            ExprKind::FString(_) => unimplemented!(),
+            ExprKind::Array(_) => unimplemented!(),
+            ExprKind::Map(_) => unimplemented!(),
+            ExprKind::Variable(_) => unimplemented!(),
+            ExprKind::Range(_) => unimplemented!(),
+            ExprKind::PrefixIncDec(_) => unimplemented!(),
+            ExprKind::PostfixIncDec(_) => unimplemented!(),
+            ExprKind::Assignment(_) => unimplemented!(),
+            ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, ex),
+            ExprKind::AtIdent(ref name) => {
+                if self.env.get(&name.lexeme).is_none() {
+                    self.undefined_variable_error(name, ex);
+                }
+            }
+            ExprKind::Lit(_) => {}
+        }
+    }
+
+    fn resolve_condition(&mut self, condition: &mut Condition<'a>, ex: &mut ErrCtx) {
+        self.resolve_expr(&mut condition.value, ex);
+        match &condition.pattern {
+            ConditionPattern::IsErr(v)
+            | ConditionPattern::IsOk(v)
+            | ConditionPattern::IsSome(v) => {
+                self.declare(v, NameKind::Let, ex);
+                self.assign(v, ex);
+            }
+            _ => (),
+        }
+    }
+
+    fn declare_loop_label(&mut self, label: &Option<Token<'a>>, ex: &mut ErrCtx) {
+        if let Some(ref lbl) = label {
+            self.declare(lbl, NameKind::Let, ex);
+            self.assign(lbl, ex);
+        }
     }
 
     fn declare(&mut self, name: &Token<'a>, kind: NameKind, ex: &mut ErrCtx) {
@@ -121,10 +319,7 @@ impl<'a> Resolver<'a> {
             if !vu.used {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowUnusedLocal(vu.span.clone()),
-                    format!(
-                        "Attempted to shadow an unused local variable `{}`",
-                        name.lexeme
-                    ),
+                    format!("Attempted to shadow an unused variable `{}`", name.lexeme),
                     name.span.clone(),
                     ex,
                 )
@@ -163,7 +358,10 @@ impl<'a> Resolver<'a> {
     fn undefined_variable_error(&self, token: &Token<'a>, ex: &mut ErrCtx) {
         if !is_reserved_identifier(&token) {
             Self::error(
-                format!("Undefined variable `{}`", token.lexeme),
+                match token.kind {
+                    TokenKind::AtIdentifier => format!("Undefined loop label `{}`", token.lexeme),
+                    _ => format!("Undefined variable `{}`", token.lexeme),
+                },
                 token.span.clone(),
                 ex,
             );
@@ -199,6 +397,93 @@ pub mod tests {
     #[ignore]
     #[test]
     fn test_cannot_assign_to_let() {
-        // TODO: test this after the parser is ready.
+        let _source = r#"
+        let x = 5
+        x = 3
+    "#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_let_requires_an_initializer() {
+        let _source = r#"
+        mut x; // ok
+        let y; // error
+        let z = true; // ok
+    "#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_undefined_variables_are_rejected() {
+        let _source = r#"
+        let global = 7
+        
+        {
+            mut local = 5
+            local = 3
+            
+            print global, local
+        }
+        
+        print global
+        print local
+        print undefined
+"#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_shadowing_unused_variable_warning() {
+        let _source = r#"
+        let unused = 42
+        let unused = "new value";
+    "#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_undefined_loop_labels_are_detected() {
+        let _source = r#"
+            loop { 
+                break @label;
+            }
+            @label: loop { 
+                break @label;
+            }
+        "#;
+    }
+
+    #[ignore]
+    #[test]
+    fn test_return_is_allowed_only_in_functions() {
+        let _source = r#"
+        struct S(x) { 
+            init { 
+                if (false) { return 5; } // error
+                return; // ek
+            }
+
+            method1(self) { loop { return;  } } // ok
+            method2(self) => none;  // ok
+            method3() { return; } // ok
+            method4() => none;  // ok
+        }
+
+        fn func1() { return; }
+        fn func2() => none;
+
+        print fn() { return }; // ok
+        print fn() => none; // ok
+
+
+        return; // error
+
+        do {
+            return; // error
+        }
+
+        loop { return; } // error
+        "#;
     }
 }
