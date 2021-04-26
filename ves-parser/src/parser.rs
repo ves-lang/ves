@@ -7,6 +7,12 @@ use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
 
+// TODO: unify style and conventions in this file
+// span_start, span_end
+// do bounded constructs close themselves?
+// -> e.g. blocks/param packs, do they consume the closing '}', ')'?
+//    or is it up to the caller?
+
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     previous: Token<'a>,
@@ -63,6 +69,21 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
+        let label = if self.match_(&TokenKind::AtIdentifier) {
+            self.consume(&TokenKind::Colon, "Expected ':'")?;
+            Some(self.previous.clone())
+        } else {
+            None
+        };
+        if label.is_some() && !self.check_any(&[TokenKind::Loop, TokenKind::For, TokenKind::While])
+        {
+            return Err(VesError::parse(
+                "Only loops may have labels",
+                self.previous.span.clone(),
+                self.fid,
+            ));
+        }
+
         if self.match_any(&[
             TokenKind::LeftBrace,
             TokenKind::Let,
@@ -76,11 +97,12 @@ impl<'a> Parser<'a> {
             TokenKind::Defer,
             TokenKind::Return,
         ]) {
+            // TODO: this
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
                 TokenKind::Print => self.print_stmt(),
-                TokenKind::Loop => unimplemented!(),
+                TokenKind::Loop => self.loop_stmt(label),
                 TokenKind::For => unimplemented!(),
                 TokenKind::While => unimplemented!(),
                 TokenKind::Break => unimplemented!(),
@@ -98,13 +120,35 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        let start = self.previous.span.start;
-        let args = self.comma()?;
+    fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let body = self.block()?;
+        let span_end = self.previous.span.end;
         Ok(ast::Stmt {
-            kind: ast::StmtKind::Print(box args),
-            span: start..self.previous.span.end,
+            kind: ast::StmtKind::Block(body),
+            span: span_start..span_end,
         })
+    }
+
+    fn block(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
+        self.scope_depth += 1;
+
+        let mut body = vec![];
+        // if the next token is a RightBrace, the block is empty
+        if !self.check(&TokenKind::RightBrace) {
+            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
+                match self.stmt(true) {
+                    Ok(stmt) => body.push(stmt),
+                    Err(e) => {
+                        self.ex.record(e);
+                        self.synchronize();
+                    }
+                }
+            }
+        }
+        self.scope_depth -= 1;
+        self.consume(&TokenKind::RightBrace, "Expected a '}' after a block")?;
+        Ok(body)
     }
 
     fn var_decl(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -123,6 +167,28 @@ impl<'a> Parser<'a> {
         Ok(ast::Stmt {
             kind: ast::StmtKind::Var(bindings),
             span: span_start..self.previous.span.end,
+        })
+    }
+
+    fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let start = self.previous.span.start;
+        let args = self.comma()?;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Print(box args),
+            span: start..self.previous.span.end,
+        })
+    }
+
+    fn loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+
+        self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+        let body = self.block_stmt()?;
+
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Loop(box ast::Loop { body, label }),
+            span: span_start..span_end,
         })
     }
 
@@ -159,37 +225,6 @@ impl<'a> Parser<'a> {
             name: ident,
             initializer: init,
         })
-    }
-
-    fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        let span_start = self.previous.span.start;
-        let body = self.block()?;
-        let span_end = self.previous.span.end;
-        Ok(ast::Stmt {
-            kind: ast::StmtKind::Block(body),
-            span: span_start..span_end,
-        })
-    }
-
-    fn block(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
-        self.scope_depth += 1;
-
-        let mut body = vec![];
-        // if the next token is a RightBrace, the block is empty
-        if !self.check(&TokenKind::RightBrace) {
-            while !self.at_end() && !self.check(&TokenKind::RightBrace) {
-                match self.stmt(true) {
-                    Ok(stmt) => body.push(stmt),
-                    Err(e) => {
-                        self.ex.record(e);
-                        self.synchronize();
-                    }
-                }
-            }
-        }
-        self.scope_depth -= 1;
-        self.consume(&TokenKind::RightBrace, "Expected a '}' after a block")?;
-        Ok(body)
     }
 
     fn expr_stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
@@ -238,7 +273,6 @@ impl<'a> Parser<'a> {
     }
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
-        // TODO: this
         if self.match_any(&[
             TokenKind::Struct,
             TokenKind::Fn,
@@ -660,6 +694,8 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     // TODO: do not run this twice
+                    // NOTE(moscow): I don't think checking it multiple times is a problem,
+                    // because a really deep property/item access is only like 3-4 nodes
                     let kind = check_assignment_target(&expr, false);
                     return Err(self.invalid_assignment_error(kind, expr.span));
                 }
@@ -1213,6 +1249,16 @@ impl<'a> Parser<'a> {
         std::mem::discriminant(kind) == std::mem::discriminant(&self.current.kind)
     }
 
+    #[inline(always)]
+    fn check_any(&mut self, kinds: &[TokenKind<'a>]) -> bool {
+        for kind in kinds {
+            if std::mem::discriminant(kind) == std::mem::discriminant(&self.current.kind) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// In case of an error, consume tokens until we reach one
     /// which has a high chance of beginning a new valid segment
     /// of the source code
@@ -1382,6 +1428,8 @@ mod tests {
     test_err!(t19_let_variables_must_be_initialized);
     test_ok!(t20_parse_print_statement);
     test_err!(t21_parse_bad_struct_decl);
+    test_ok!(t22_parse_loop);
+    test_err!(t23_parse_bad_loop);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"

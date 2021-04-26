@@ -1,0 +1,16 @@
+@label /* no colon */ loop {}
+loop /* no body */
+
+%output
+
+error: Expected ':'
+  ┌─ <source: #11c464382bf1328a>:1:23
+  │
+1 │ @label /* no colon */ loop {}
+  │                       ^^^^
+
+error: Expected loop body
+  ┌─ <source: #11c464382bf1328a>:2:18
+  │
+2 │ loop /* no body */
+  │                  ^

@@ -1,0 +1,13 @@
+loop {}
+@label: loop {}
+
+%output
+
+Loop
+  body: StmtKind::Block
+    statements=
+  label: None
+Loop
+  body: StmtKind::Block
+    statements=
+  label: ":"
