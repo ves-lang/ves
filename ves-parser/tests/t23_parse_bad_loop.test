@@ -8,46 +8,61 @@ for /* no header */ {}
 for i /* not initialized */ ;; {}
 for i = 0, /* trailing comma is invalid here */ ;; {}
 
+while /* no condition */ {}
+while true /* no body */ ;
+
 %output
 
 error: Expected a ':' after the label
-  ┌─ <source: #d7e33a829884c725>:1:23
+  ┌─ <source: #9f58d84e530cf088>:1:23
   │
 1 │ @label /* no colon */ loop {}
   │                       ^^^^
 
 error: Expected a loop body after the keyword
-  ┌─ <source: #d7e33a829884c725>:2:20
+  ┌─ <source: #9f58d84e530cf088>:2:20
   │
 2 │ loop /* no body */ ;
   │                    ^
 
 error: Expected identifier
-  ┌─ <source: #d7e33a829884c725>:4:22
+  ┌─ <source: #9f58d84e530cf088>:4:22
   │
 4 │ for /* no binding */ in 0..10 {}
   │                      ^^
 
 error: Expected loop body
-  ┌─ <source: #d7e33a829884c725>:5:30
+  ┌─ <source: #9f58d84e530cf088>:5:30
   │
 5 │ for i in 0..10 /* no body */ ;
   │                              ^
 
 error: Expected ';'
-  ┌─ <source: #d7e33a829884c725>:7:21
+  ┌─ <source: #9f58d84e530cf088>:7:21
   │
 7 │ for /* no header */ {}
   │                     ^
 
 error: Expected an identifier
-  ┌─ <source: #d7e33a829884c725>:9:49
+  ┌─ <source: #9f58d84e530cf088>:9:49
   │
 9 │ for i = 0, /* trailing comma is invalid here */ ;; {}
   │                                                 ^
 
 error: Unexpected token `;` (Semi)
-  ┌─ <source: #d7e33a829884c725>:9:50
+  ┌─ <source: #9f58d84e530cf088>:9:50
   │
 9 │ for i = 0, /* trailing comma is invalid here */ ;; {}
   │                                                  ^
+
+error: Expected '[' before key expression
+   ┌─ <source: #9f58d84e530cf088>:11:27
+   │
+11 │ while /* no condition */ {}
+   │                           ^
+
+error: Expected loop body
+   ┌─ <source: #9f58d84e530cf088>:12:26
+   │
+12 │ while true /* no body */ ;
+   │                          ^

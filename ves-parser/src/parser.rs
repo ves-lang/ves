@@ -105,7 +105,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Print => self.print_stmt(),
                 TokenKind::Loop => self.loop_stmt(label),
                 TokenKind::For => self.for_loop_stmt(label),
-                TokenKind::While => unimplemented!(),
+                TokenKind::While => self.while_loop_stmt(label),
                 TokenKind::Break => self.break_or_continue_stmt(ast::StmtKind::Break),
                 TokenKind::Continue => self.break_or_continue_stmt(ast::StmtKind::Continue),
                 TokenKind::Defer => unimplemented!(),
@@ -310,6 +310,22 @@ impl<'a> Parser<'a> {
                 span: span_start..span_end,
             })
         }
+    }
+
+    fn while_loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let condition = self.condition()?;
+        self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+        let body = self.block_stmt()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::While(box ast::While {
+                condition,
+                body,
+                label,
+            }),
+            span: span_start..span_end,
+        })
     }
 
     fn binding_expression(&mut self, kind: VarKind) -> ParseResult<ast::Var<'a>> {

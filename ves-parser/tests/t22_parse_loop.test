@@ -17,6 +17,10 @@ for ; true; ++i {}
 for ;; ++i {}
 for a = 0, b = 0, c = 0, d = 0;; {}
 
+while true {}
+while ok(v) = f() {}
+while err(v) = f() {}
+
 %output
 
 Loop
@@ -226,6 +230,41 @@ For
         value: LitValue::Number(0.0)
   condition: None
   increment: None
+  body: StmtKind::Block
+    statements=
+  label: None
+While
+  condition: Condition
+    value: Lit
+      token: "true"
+      value: LitValue::Bool(true)
+    pattern: ConditionPattern::Value
+  body: StmtKind::Block
+    statements=
+  label: None
+While
+  condition: Condition
+    value: Call
+      callee: ExprKind::Variable
+        name: "f"
+      args=
+      tco: false
+      rest: false
+    pattern: ConditionPattern::IsOk
+      binding: "v"
+  body: StmtKind::Block
+    statements=
+  label: None
+While
+  condition: Condition
+    value: Call
+      callee: ExprKind::Variable
+        name: "f"
+      args=
+      tco: false
+      rest: false
+    pattern: ConditionPattern::IsErr
+      binding: "v"
   body: StmtKind::Block
     statements=
   label: None
