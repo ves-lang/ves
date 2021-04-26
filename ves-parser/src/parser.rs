@@ -268,8 +268,47 @@ impl<'a> Parser<'a> {
                 span: span_start..span_end,
             })
         } else {
-            unimplemented!()
-            // for
+            let mut initializers = vec![];
+            // since we already (maybe) parsed one binding identifier,
+            // only continue if it actually exists
+            if let Some(binding) = binding {
+                if self.match_(&TokenKind::Equal) {
+                    let name = binding;
+                    let value = self.expr()?;
+                    initializers.push(ast::Assignment { name, value });
+                }
+                while self.match_(&TokenKind::Comma) {
+                    let name = self.consume(&TokenKind::Identifier, "Expected an identifier")?;
+                    self.consume(&TokenKind::Equal, "Expected '=' in binding")?;
+                    let value = self.expr()?;
+                    initializers.push(ast::Assignment { name, value });
+                }
+            }
+            self.consume(&TokenKind::Semi, "Expected ';'")?;
+            let condition = if !self.check(&TokenKind::Semi) {
+                Some(self.expr()?)
+            } else {
+                None
+            };
+            self.consume(&TokenKind::Semi, "Expected ';'")?;
+            let increment = if !self.check(&TokenKind::LeftBrace) {
+                Some(self.expr()?)
+            } else {
+                None
+            };
+            self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+            let body = self.block_stmt()?;
+            let span_end = self.previous.span.end;
+            Ok(ast::Stmt {
+                kind: ast::StmtKind::For(box ast::For {
+                    initializers,
+                    condition,
+                    increment,
+                    body,
+                    label,
+                }),
+                span: span_start..span_end,
+            })
         }
     }
 

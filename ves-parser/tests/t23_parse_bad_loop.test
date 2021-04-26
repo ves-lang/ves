@@ -1,16 +1,53 @@
 @label /* no colon */ loop {}
-loop /* no body */
+loop /* no body */ ;
+
+for /* no binding */ in 0..10 {}
+for i in 0..10 /* no body */ ;
+
+for /* no header */ {}
+for i /* not initialized */ ;; {}
+for i = 0, /* trailing comma is invalid here */ ;; {}
 
 %output
 
 error: Expected a ':' after the label
-  ┌─ <source: #11c464382bf1328a>:1:23
+  ┌─ <source: #d7e33a829884c725>:1:23
   │
 1 │ @label /* no colon */ loop {}
   │                       ^^^^
 
 error: Expected a loop body after the keyword
-  ┌─ <source: #11c464382bf1328a>:2:18
+  ┌─ <source: #d7e33a829884c725>:2:20
   │
-2 │ loop /* no body */
-  │                  ^
+2 │ loop /* no body */ ;
+  │                    ^
+
+error: Expected identifier
+  ┌─ <source: #d7e33a829884c725>:4:22
+  │
+4 │ for /* no binding */ in 0..10 {}
+  │                      ^^
+
+error: Expected loop body
+  ┌─ <source: #d7e33a829884c725>:5:30
+  │
+5 │ for i in 0..10 /* no body */ ;
+  │                              ^
+
+error: Expected ';'
+  ┌─ <source: #d7e33a829884c725>:7:21
+  │
+7 │ for /* no header */ {}
+  │                     ^
+
+error: Expected an identifier
+  ┌─ <source: #d7e33a829884c725>:9:49
+  │
+9 │ for i = 0, /* trailing comma is invalid here */ ;; {}
+  │                                                 ^
+
+error: Unexpected token `;` (Semi)
+  ┌─ <source: #d7e33a829884c725>:9:50
+  │
+9 │ for i = 0, /* trailing comma is invalid here */ ;; {}
+  │                                                  ^

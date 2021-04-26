@@ -9,6 +9,14 @@ for i in start..end {}
 for i in 0..10, 5 {}
 for i in 0..=10, 5 {}
 
+for ;; {}
+for i = 0;; {}
+for i = 0; true; ++i {}
+for ; true; {}
+for ; true; ++i {}
+for ;; ++i {}
+for a = 0, b = 0, c = 0, d = 0;; {}
+
 %output
 
 Loop
@@ -124,6 +132,100 @@ ForEach
       token: "5"
       value: LitValue::Number(5.0)
     inclusive: true
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+  condition: None
+  increment: None
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+    Assignment
+      name: "i"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+  condition: None
+  increment: None
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+    Assignment
+      name: "i"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+  condition: Lit
+    token: "true"
+    value: LitValue::Bool(true)
+  increment: IncDec
+    expr: ExprKind::Variable
+      name: "i"
+    kind: Increment
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+  condition: Lit
+    token: "true"
+    value: LitValue::Bool(true)
+  increment: None
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+  condition: Lit
+    token: "true"
+    value: LitValue::Bool(true)
+  increment: IncDec
+    expr: ExprKind::Variable
+      name: "i"
+    kind: Increment
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+  condition: None
+  increment: IncDec
+    expr: ExprKind::Variable
+      name: "i"
+    kind: Increment
+  body: StmtKind::Block
+    statements=
+  label: None
+For
+  initializers=
+    Assignment
+      name: "a"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    Assignment
+      name: "b"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    Assignment
+      name: "c"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+    Assignment
+      name: "d"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+  condition: None
+  increment: None
   body: StmtKind::Block
     statements=
   label: None
