@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
 
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
         let label = if self.match_(&TokenKind::AtIdentifier) {
-            self.consume(&TokenKind::Colon, "Expected ':'")?;
+            self.consume(&TokenKind::Colon, "Expected a ':' after the label")?;
             Some(self.previous.clone())
         } else {
             None
@@ -182,7 +182,10 @@ impl<'a> Parser<'a> {
     fn loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
 
-        self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+        self.consume(
+            &TokenKind::LeftBrace,
+            "Expected a loop body after the keyword",
+        )?;
         let body = self.block_stmt()?;
 
         let span_end = self.previous.span.end;
@@ -324,10 +327,20 @@ impl<'a> Parser<'a> {
         // then the struct has no body
         if !self.match_(&TokenKind::Semi) && self.match_(&TokenKind::LeftBrace) {
             while !self.match_(&TokenKind::RightBrace) {
-                let prop_name = self.consume(
-                    &TokenKind::Identifier,
-                    "Expected method, static field or static method",
-                )?;
+                let prop_name = self
+                    .consume(
+                        &TokenKind::Identifier,
+                        "Expected a method, static field or static method declaration",
+                    )
+                    .map_err(|mut e| {
+                        if self.current.kind == TokenKind::Fn {
+                            e.kind = ves_error::VesErrorKind::FnBeforeMethod;
+                            e.msg =
+                                "Instance and static methods do not require `fn` to be declared"
+                                    .into();
+                        }
+                        e
+                    })?;
 
                 if prop_name.lexeme == "init" {
                     // this must be an initializer
@@ -439,7 +452,7 @@ impl<'a> Parser<'a> {
             Ok(self.block()?)
         } else {
             Err(VesError::parse(
-                "Expected function body",
+                "Expected a function body",
                 self.previous.span.clone(),
                 self.fid,
             ))
@@ -468,7 +481,7 @@ impl<'a> Parser<'a> {
                 // positional or default argument
                 let name = self.consume_any(
                     &[TokenKind::Identifier, TokenKind::Self_],
-                    "Expected parameter name",
+                    "Expected a parameter name",
                 )?;
                 let value = if self.match_(&TokenKind::Equal) {
                     if in_method && name.lexeme == "self" {

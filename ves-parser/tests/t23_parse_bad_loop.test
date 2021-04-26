@@ -3,13 +3,13 @@ loop /* no body */
 
 %output
 
-error: Expected ':'
+error: Expected a ':' after the label
   ┌─ <source: #11c464382bf1328a>:1:23
   │
 1 │ @label /* no colon */ loop {}
   │                       ^^^^
 
-error: Expected loop body
+error: Expected a loop body after the keyword
   ┌─ <source: #11c464382bf1328a>:2:18
   │
 2 │ loop /* no body */

@@ -19,7 +19,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | ResolutionSuggestWildcard
         | OptionalAccessAssignment
         | LetWithoutValue
-        | LetReassignment => Diagnostic::error(),
+        | LetReassignment
+        | FnBeforeMethod => Diagnostic::error(),
         AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
         UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
@@ -39,6 +40,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         d = let_no_value_diag(db, d, &e);
     } else if e.kind == LetReassignment {
         d = let_reassignment_diag(db, d, &e);
+    } else if e.kind == FnBeforeMethod {
+        d = fn_before_method_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -96,5 +99,18 @@ fn let_reassignment_diag<'a>(
         .push(Label::secondary(e.file_id, e.span.clone()).with_message(
             "help: Consider replacing `let` with `mut` to make the variable mutable",
         ));
+    diag
+}
+
+fn fn_before_method_diag<'a>(
+    _db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    _e: &VesError,
+) -> Diagnostic<FileId> {
+    let lbl = diag.labels.pop().unwrap();
+    diag.labels.push(Label {
+        message: "help: omit the `fn` keyword".into(),
+        ..lbl
+    });
     diag
 }
