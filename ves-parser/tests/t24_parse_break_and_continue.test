@@ -1,5 +1,7 @@
-break
-continue
+loop {
+    break
+    continue
+}
 
 @label: loop { 
     break @label
@@ -8,3 +10,19 @@ continue
 
 %output
 
+Loop
+  body: StmtKind::Block
+    statements=
+      StmtKind::Break
+        label: None
+      StmtKind::Continue
+        label: None
+  label: None
+Loop
+  body: StmtKind::Block
+    statements=
+      StmtKind::Break
+        label: "@label"
+      StmtKind::Continue
+        label: "@label"
+  label: "@label"

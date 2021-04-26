@@ -126,13 +126,11 @@ impl<'a> Parser<'a> {
         F: Fn(Option<Token<'a>>) -> ast::StmtKind,
     {
         let start = self.previous.span.start;
-        println!("{:?} {:?}", self.previous, self.current);
         let label = if self.match_(&TokenKind::AtIdentifier) {
             Some(self.previous.clone())
         } else {
             None
         };
-        println!("{:?} {:?}\n\n", self.previous, self.current);
 
         Ok(ast::Stmt {
             kind: constructor(label),
