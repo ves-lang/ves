@@ -144,7 +144,6 @@ pub enum TokenKind<'a> {
     /// An normal identifier prefixed with an `@` sign.
     #[regex("@[a-zA-Z_][a-zA-Z0-9_]*")]
     AtIdentifier,
-    #[regex("[0-9]+\\.\\.=?[0-9]+", priority = 3)]
     #[token("..")]
     #[token("..=")]
     Range,
@@ -160,8 +159,9 @@ pub enum TokenKind<'a> {
     String,
     /// Floating point (IEEE754) numeric literal
     /// TODO: underscores
+    /// TODO: allow '0.' and '.0' in a way that is not ambiguous with ranges
     #[regex(
-        "-?((((([0-9]+)(\\.[0-9]*)?)|(\\.[0-9]+))([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
+        "-?(((([0-9]+)(\\.[0-9]+)?)([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
         priority = 2
     )]
     Number,
@@ -587,7 +587,8 @@ mod tests {
             vec![
                 token!(Identifier, "ident"), token!(Dot, "."), token!(Identifier, "ident"),
                 token!(Identifier, "ident"), token!(MaybeDot, "?."), token!(Identifier, "ident"),
-                token!(Range, "0..0"), token!(Range, "0..=0"),
+                token!(Number, "0"), token!(Range, ".."), token!(Number, "0"),
+                token!(Number, "0"), token!(Range, "..="), token!(Number, "0"),
                 token!(Ellipsis, "..."), token!(Identifier, "ident")
             ]
         );
@@ -623,7 +624,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(Range, "0..1")
+                token!(Number, "0"), token!(Range, ".."), token!(Number, "1")
             ]
         );
     }

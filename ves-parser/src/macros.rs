@@ -22,6 +22,15 @@ macro_rules! literal {
             }),
         }
     };
+    ($parser:ident, $value:expr, $token:expr) => {
+        ast::Expr {
+            span: $parser.previous.span.clone(),
+            kind: ast::ExprKind::Lit(box ast::Lit {
+                token: $token,
+                value: $value,
+            }),
+        }
+    };
 }
 
 #[macro_export]

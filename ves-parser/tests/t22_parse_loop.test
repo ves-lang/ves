@@ -1,6 +1,14 @@
 loop {}
 @label: loop {}
 
+for i in 0..=10 {}
+for i in 0..10 {}
+for i in start..10 {}
+for i in 0..end {}
+for i in start..end {}
+for i in 0..10, 5 {}
+for i in 0..=10, 5 {}
+
 %output
 
 Loop
@@ -11,3 +19,111 @@ Loop
   body: StmtKind::Block
     statements=
   label: ":"
+ForEach
+  variable: "i"
+  iterator: Range
+    start: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    end: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+    step: Lit
+      token: "1"
+      value: LitValue::Number(1.0)
+    inclusive: true
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    end: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+    step: Lit
+      token: "1"
+      value: LitValue::Number(1.0)
+    inclusive: false
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: ExprKind::Variable
+      name: "start"
+    end: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+    step: Lit
+      token: "1"
+      value: LitValue::Number(1.0)
+    inclusive: false
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    end: ExprKind::Variable
+      name: "end"
+    step: Lit
+      token: "1"
+      value: LitValue::Number(1.0)
+    inclusive: false
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: ExprKind::Variable
+      name: "start"
+    end: ExprKind::Variable
+      name: "end"
+    step: Lit
+      token: "1"
+      value: LitValue::Number(1.0)
+    inclusive: false
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    end: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+    step: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+    inclusive: false
+  body: StmtKind::Block
+    statements=
+  label: None
+ForEach
+  variable: "i"
+  iterator: Range
+    start: Lit
+      token: "0"
+      value: LitValue::Number(0.0)
+    end: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+    step: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+    inclusive: true
+  body: StmtKind::Block
+    statements=
+  label: None

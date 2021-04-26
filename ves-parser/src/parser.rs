@@ -5,7 +5,7 @@ use crate::{
 use std::{collections::HashSet, convert::Into};
 use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
-type ParseResult<T> = std::result::Result<T, VesError>;
+pub type ParseResult<T> = std::result::Result<T, VesError>;
 
 // TODO: unify style and conventions in this file
 // span_start, span_end
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
                 TokenKind::Print => self.print_stmt(),
                 TokenKind::Loop => self.loop_stmt(label),
-                TokenKind::For => unimplemented!(),
+                TokenKind::For => self.for_loop_stmt(label),
                 TokenKind::While => unimplemented!(),
                 TokenKind::Break => unimplemented!(),
                 TokenKind::Continue => unimplemented!(),
@@ -190,6 +190,64 @@ impl<'a> Parser<'a> {
             kind: ast::StmtKind::Loop(box ast::Loop { body, label }),
             span: span_start..span_end,
         })
+    }
+
+    fn for_loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+
+        let (binding, binding_span) = if self.match_(&TokenKind::Identifier) {
+            (Some(self.previous.clone()), self.previous.span.clone())
+        } else {
+            (None, self.current.span.clone())
+        };
+
+        if self.match_(&TokenKind::In) {
+            let variable = binding
+                .ok_or_else(|| VesError::parse("Expected identifier", binding_span, self.fid))?;
+            // for-each
+            let iter_start = self.current.span.start;
+            let start = self.expr()?;
+            let iterator = if self.match_(&TokenKind::Range) {
+                let inclusive = self.previous.lexeme == "..=";
+                let end = self.expr()?;
+                let step = if self.match_(&TokenKind::Comma) {
+                    self.expr()?
+                } else {
+                    literal!(
+                        self,
+                        ast::LitValue::Number(1f64),
+                        Token::new("1", self.previous.span.clone(), TokenKind::Number)
+                    )
+                };
+                let iter_end = self.previous.span.end;
+                ast::Expr {
+                    kind: ast::ExprKind::Range(box ast::Range {
+                        start,
+                        end,
+                        step,
+                        inclusive,
+                    }),
+                    span: iter_start..iter_end,
+                }
+            } else {
+                start
+            };
+            self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+            let body = self.block_stmt()?;
+            let span_end = self.previous.span.end;
+            Ok(ast::Stmt {
+                kind: ast::StmtKind::ForEach(box ast::ForEach {
+                    variable,
+                    iterator,
+                    body,
+                    label,
+                }),
+                span: span_start..span_end,
+            })
+        } else {
+            unimplemented!()
+            // for
+        }
     }
 
     fn binding_expression(&mut self, kind: VarKind) -> ParseResult<ast::Var<'a>> {
