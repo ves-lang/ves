@@ -1,5 +1,5 @@
 use crate::{
-    ast::{self, Global, AST},
+    ast::{self, Global, VarKind, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
 use std::{collections::HashSet, convert::Into};
@@ -78,8 +78,7 @@ impl<'a> Parser<'a> {
         ]) {
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
-                TokenKind::Let => unimplemented!(),
-                TokenKind::Mut => unimplemented!(),
+                TokenKind::Let | TokenKind::Mut => self.var_decl(),
                 TokenKind::Print => unimplemented!(),
                 TokenKind::Loop => unimplemented!(),
                 TokenKind::For => unimplemented!(),
@@ -93,6 +92,60 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt(consume_semi)
         }
+    }
+
+    fn var_decl(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let kind = if self.previous.kind == TokenKind::Let {
+            VarKind::Let
+        } else {
+            VarKind::Mut
+        };
+        let mut bindings = vec![self.binding_expression(kind)?];
+
+        while self.match_(&TokenKind::Comma) {
+            bindings.push(self.binding_expression(kind)?);
+        }
+
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Var(bindings),
+            span: span_start..self.previous.span.end,
+        })
+    }
+
+    fn binding_expression(&mut self, kind: VarKind) -> ParseResult<ast::Var<'a>> {
+        let ident = self.consume(
+            &TokenKind::Identifier,
+            "Expected a variable name after the keyword or comma",
+        );
+
+        let init = if self.match_(&TokenKind::Equal) {
+            let ident = ident.clone();
+            Some(self.expr().map_err(|e| {
+                let _ = ident.map_err(|e| self.record(e));
+                e
+            })?)
+        } else {
+            None
+        };
+
+        let ident = ident?;
+        if kind == VarKind::Let && init.is_none() {
+            self.record(VesError::let_without_value(
+                format!(
+                    "Immutable variable `{}` must be initialized at declaration",
+                    ident.lexeme
+                ),
+                ident.span.clone(),
+                self.fid,
+            ));
+        }
+
+        Ok(ast::Var {
+            kind,
+            name: ident,
+            initializer: init,
+        })
     }
 
     fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -1101,6 +1154,11 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
+    fn record(&mut self, e: VesError) {
+        self.ex.record(e);
+    }
+
+    #[inline]
     fn consume_any<S: Into<String>>(
         &mut self,
         kinds: &[TokenKind<'a>],
@@ -1326,6 +1384,8 @@ mod tests {
     // TODO: init {} blocks
     // TODO: test parsing bad struct decls
     test_ok!(t17_parse_struct_decl);
+    test_ok!(t18_parse_var_decl);
+    test_err!(t19_let_variables_must_be_initialized);
 
     mod infra {
         use super::*;

@@ -1,0 +1,26 @@
+let first = 5  // ok
+let second // error
+
+let first = 5, second, third = 10
+
+%output
+
+error: Immutable variable `second` must be initialized at declaration
+  ┌─ <source: #67e7b419ce8b9b23>:2:5
+  │
+2 │ let second // error
+  │     ^^^^^^
+  │     │
+  │     help: consider using `mut` or explicitly initializing the variable with `none`
+  │
+  = note: `let` variables cannot be changed so they must have a value
+
+error: Immutable variable `second` must be initialized at declaration
+  ┌─ <source: #67e7b419ce8b9b23>:4:16
+  │
+4 │ let first = 5, second, third = 10
+  │                ^^^^^^
+  │                │
+  │                help: consider using `mut` or explicitly initializing the variable with `none`
+  │
+  = note: `let` variables cannot be changed so they must have a value

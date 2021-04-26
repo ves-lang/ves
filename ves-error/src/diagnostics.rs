@@ -13,7 +13,9 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
     use crate::VesErrorKind::*;
 
     let base = match &e.kind {
-        Lex | Parse | ResolutionSuggestWildcard | OptionalAccessAssignment => Diagnostic::error(),
+        Lex | Parse | ResolutionSuggestWildcard | OptionalAccessAssignment | LetWithoutValue => {
+            Diagnostic::error()
+        }
         AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
         UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
@@ -30,6 +32,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
 
     if e.kind == ResolutionSuggestWildcard {
         d = add_wildcard_label(db, d, &e);
+    } else if e.kind == LetWithoutValue {
+        d = let_no_value_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -60,5 +64,20 @@ fn add_wildcard_label<'a>(
             variable,
         )),
     );
+    diag
+}
+
+/// Adds a note explaining the error.
+fn let_no_value_diag<'a>(
+    _db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    diag.notes
+        .push("note: `let` variables cannot be changed so they must have a value".into());
+    diag.labels
+        .push(Label::secondary(e.file_id, e.span.clone()).with_message(
+            "help: consider using `mut` or explicitly initializing the variable with `none`",
+        ));
     diag
 }

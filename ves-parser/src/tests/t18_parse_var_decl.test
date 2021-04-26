@@ -1,0 +1,96 @@
+let first = 5
+mut second = 10
+
+mut m1, m2, m3
+mut m1, m2 = value, m3
+mut m1 = 1, m2 = 2, m3 = 3
+
+let l1 = 1, l2 = 2, l3 = 3
+
+%output
+
+StmtKind::Var
+  declarations=
+    Var
+      name: "first"
+      kind: Let
+      initializer: Lit
+        token: "5"
+        value: LitValue::Number(5.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "second"
+      kind: Mut
+      initializer: Lit
+        token: "10"
+        value: LitValue::Number(10.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "m1"
+      kind: Mut
+      initializer: None
+    Var
+      name: "m2"
+      kind: Mut
+      initializer: None
+    Var
+      name: "m3"
+      kind: Mut
+      initializer: None
+StmtKind::Var
+  declarations=
+    Var
+      name: "m1"
+      kind: Mut
+      initializer: None
+    Var
+      name: "m2"
+      kind: Mut
+      initializer: ExprKind::Variable
+        name: "value"
+    Var
+      name: "m3"
+      kind: Mut
+      initializer: None
+StmtKind::Var
+  declarations=
+    Var
+      name: "m1"
+      kind: Mut
+      initializer: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+    Var
+      name: "m2"
+      kind: Mut
+      initializer: Lit
+        token: "2"
+        value: LitValue::Number(2.0)
+    Var
+      name: "m3"
+      kind: Mut
+      initializer: Lit
+        token: "3"
+        value: LitValue::Number(3.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "l1"
+      kind: Let
+      initializer: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+    Var
+      name: "l2"
+      kind: Let
+      initializer: Lit
+        token: "2"
+        value: LitValue::Number(2.0)
+    Var
+      name: "l3"
+      kind: Let
+      initializer: Lit
+        token: "3"
+        value: LitValue::Number(3.0)

@@ -85,6 +85,8 @@ pub enum VesErrorKind {
     AttemptedToShadowUnusedLocal(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
+    /// A `let` variable without an initializer
+    LetWithoutValue,
     /// Represents an error that has occurred at runtime.
     Runtime,
     /// A runtime panic.
@@ -130,6 +132,11 @@ impl VesError {
     /// Creates a new [`VesErrorKind::Parse`] error.
     pub fn parse<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
         VesError::new(msg, span, VesErrorKind::Parse, file_id)
+    }
+
+    /// Creates a new [`VesErrorKind::LetWithoutValue`] error.
+    pub fn let_without_value<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::LetWithoutValue, file_id)
     }
 
     /// Creates a new [`VesErrorKind::Resolution`] error.
