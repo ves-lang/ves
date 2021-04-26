@@ -172,7 +172,9 @@ impl<'a> Parser<'a> {
 
     fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let start = self.previous.span.start;
+        self.consume(&TokenKind::LeftParen, "Expected '('")?;
         let args = self.comma()?;
+        self.consume(&TokenKind::RightParen, "Expected '('")?;
         Ok(ast::Stmt {
             kind: ast::StmtKind::Print(box args),
             span: start..self.previous.span.end,

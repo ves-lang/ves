@@ -1,9 +1,9 @@
-print 1
-print 1, 2
-print do { print 3; 4 }
-print fn(){}
-print (struct S)
-print a, b; print c, d
+print(1)
+print(1, 2)
+print(do { print(3); 4 })
+print(fn(){})
+print(struct S)
+print(a, b); print(c, d)
 
 %output
 
@@ -40,15 +40,14 @@ StmtKind::Print
     body=
     kind: Function
 StmtKind::Print
-  value: ExprKind::Grouping
-    inner: StructInfo
-      name: "S"
-      fields: None
+  value: StructInfo
+    name: "S"
+    fields: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
       methods=
-      initializer: None
-      r#static: StructStaticProps
-        fields=
-        methods=
 StmtKind::Print
   value: ExprKind::Comma
     operands=
