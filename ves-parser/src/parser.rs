@@ -70,15 +70,16 @@ impl<'a> Parser<'a> {
 
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
         let label = if self.match_(&TokenKind::AtIdentifier) {
+            let previous = self.previous.clone();
             self.consume(&TokenKind::Colon, "Expected a ':' after the label")?;
-            Some(self.previous.clone())
+            Some(previous)
         } else {
             None
         };
         if label.is_some() && !self.check_any(&[TokenKind::Loop, TokenKind::For, TokenKind::While])
         {
             return Err(VesError::parse(
-                "Only loops may have labels",
+                "Only loops may be assigned a label",
                 self.previous.span.clone(),
                 self.fid,
             ));
@@ -105,8 +106,8 @@ impl<'a> Parser<'a> {
                 TokenKind::Loop => self.loop_stmt(label),
                 TokenKind::For => unimplemented!(),
                 TokenKind::While => unimplemented!(),
-                TokenKind::Break => unimplemented!(),
-                TokenKind::Continue => unimplemented!(),
+                TokenKind::Break => self.break_or_continue_stmt(ast::StmtKind::Break),
+                TokenKind::Continue => self.break_or_continue_stmt(ast::StmtKind::Continue),
                 TokenKind::Defer => unimplemented!(),
                 TokenKind::Return => unimplemented!(),
                 _ => unreachable!(),
@@ -118,6 +119,25 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt(consume_semi)
         }
+    }
+
+    fn break_or_continue_stmt<F>(&mut self, constructor: F) -> ParseResult<ast::Stmt<'a>>
+    where
+        F: Fn(Option<Token<'a>>) -> ast::StmtKind,
+    {
+        let start = self.previous.span.start;
+        println!("{:?} {:?}", self.previous, self.current);
+        let label = if self.match_(&TokenKind::AtIdentifier) {
+            Some(self.previous.clone())
+        } else {
+            None
+        };
+        println!("{:?} {:?}\n\n", self.previous, self.current);
+
+        Ok(ast::Stmt {
+            kind: constructor(label),
+            span: start..self.previous.span.end,
+        })
     }
 
     fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -1443,6 +1463,7 @@ mod tests {
     test_err!(t21_parse_bad_struct_decl);
     test_ok!(t22_parse_loop);
     test_err!(t23_parse_bad_loop);
+    test_ok!(t24_parse_break_and_continue);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"

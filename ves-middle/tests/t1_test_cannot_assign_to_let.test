@@ -2,7 +2,7 @@ let x = "ok"
 x = "error"
 
 let y = "ok"
-mut y = "ok"
+mut y = "warning"
 y = "ok"
 
 let z = "ok"
@@ -19,7 +19,7 @@ z = "error"
 %output
 
 error: Cannot assign twice to the immutable variable x
-  ┌─ <source: #fe7e17c68f174bb0>:2:1
+  ┌─ <source: #a03d8e32d2dad17b>:2:1
   │
 2 │ x = "error"
   │ ^
@@ -27,7 +27,7 @@ error: Cannot assign twice to the immutable variable x
   │ help: Consider replacing `let` with `mut` to make the variable mutable
 
 error: Cannot assign twice to the immutable variable z
-   ┌─ <source: #fe7e17c68f174bb0>:15:5
+   ┌─ <source: #a03d8e32d2dad17b>:15:5
    │
 15 │     z = "error"
    │     ^
@@ -35,9 +35,18 @@ error: Cannot assign twice to the immutable variable z
    │     help: Consider replacing `let` with `mut` to make the variable mutable
 
 error: Cannot assign twice to the immutable variable z
-   ┌─ <source: #fe7e17c68f174bb0>:17:1
+   ┌─ <source: #a03d8e32d2dad17b>:17:1
    │
 17 │ z = "error"
    │ ^
    │ │
    │ help: Consider replacing `let` with `mut` to make the variable mutable
+
+warning: Attempted to shadow an unused variable `y`
+  ┌─ <source: #a03d8e32d2dad17b>:5:5
+  │
+4 │ let y = "ok"
+  │     - First declared on line 4
+5 │ mut y = "warning"
+  │     ^ Later shadowed here
+

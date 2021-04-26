@@ -624,9 +624,9 @@ pub enum StmtKind<'a> {
     /// A return statement.
     Return(#[rename = "return_value"] Option<ExprPtr<'a>>),
     /// A break statement.
-    Break(#[rename = "label"] Token<'a>),
+    Break(#[rename = "label"] Option<Token<'a>>),
     /// A continue statement.
-    Continue(#[rename = "label"] Token<'a>),
+    Continue(#[rename = "label"] Option<Token<'a>>),
     /// A `defer` statement. Must store only `Call` expressions.
     Defer(#[rename = "call"] Ptr<Expr<'a>>),
     /// An empty node that compiles to nothing.

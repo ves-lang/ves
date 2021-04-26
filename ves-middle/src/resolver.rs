@@ -219,16 +219,20 @@ impl<'a> Resolver<'a> {
                 if let LoopKind::None = self.loop_kind {
                     Self::error("Cannot break outside of a loop", stmt.span.clone(), ex);
                 }
-                if self.env.get(&label.lexeme).is_none() {
-                    self.undefined_variable_error(label, ex);
+                if let Some(name) = label.as_ref() {
+                    if self.env.get(&name.lexeme).is_none() {
+                        self.undefined_variable_error(name, ex);
+                    }
                 }
             }
             StmtKind::Continue(label) => {
                 if let LoopKind::None = self.loop_kind {
                     Self::error("Cannot continue outside of a loop", stmt.span.clone(), ex);
                 }
-                if self.env.get(&label.lexeme).is_none() {
-                    self.undefined_variable_error(label, ex);
+                if let Some(name) = label.as_ref() {
+                    if self.env.get(&name.lexeme).is_none() {
+                        self.undefined_variable_error(name, ex);
+                    }
                 }
             }
             StmtKind::Defer(defer) => {
@@ -309,10 +313,41 @@ impl<'a> Resolver<'a> {
         self.env.pop();
     }
 
+    fn resolve_function(&mut self, f: &mut FnInfo<'a>, ex: &mut ErrCtx) {
+        self.declare(&f.name, NameKind::Fn, ex);
+        self.assign(&f.name, ex);
+
+        let prev_kind = self.scope_kind;
+        self.scope_kind = match f.kind {
+            FnKind::Method => ScopeKind::Method,
+            FnKind::Static => ScopeKind::AssocMethod,
+            FnKind::Function => ScopeKind::Function,
+        };
+        self.env.push();
+
+        for param in f
+            .params
+            .positional
+            .iter()
+            .chain(f.params.default.iter().map(|p| &p.0))
+            .chain(f.params.rest.iter())
+        {
+            self.declare(&param, NameKind::Let, ex);
+            self.assign(&param, ex);
+        }
+
+        self.resolve_block(&mut f.body, ex);
+
+        self.env.pop();
+        self.scope_kind = prev_kind;
+    }
+
     fn resolve_expr(&mut self, expr: &mut Expr<'a>, ex: &mut ErrCtx) {
         match &mut expr.kind {
             ExprKind::Struct(_) => unimplemented!(),
-            ExprKind::Fn(_) => unimplemented!(),
+            ExprKind::Fn(box ref mut r#fn) => {
+                self.resolve_function(r#fn, ex);
+            }
             ExprKind::If(r#if) => {
                 self.env.push();
 
@@ -414,6 +449,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn declare_loop_label(&mut self, label: &Option<Token<'a>>, ex: &mut ErrCtx) {
+        println!("??? {:?}", label);
         if let Some(ref lbl) = label {
             self.declare(lbl, NameKind::Let, ex);
             self.assign(lbl, ex);
@@ -422,9 +458,9 @@ impl<'a> Resolver<'a> {
 
     fn declare(&mut self, name: &Token<'a>, kind: NameKind, ex: &mut ErrCtx) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if !vu.used && self.scope_kind != ScopeKind::Global {
+            if !vu.used && vu.declared {
                 Self::error_of_kind(
-                    VesErrorKind::AttemptedToShadowUnusedLocal(vu.span.clone()),
+                    VesErrorKind::AttemptedToShadowUnusedVariable(vu.span.clone()),
                     format!("Attempted to shadow an unused variable `{}`", name.lexeme),
                     name.span.clone(),
                     ex,
@@ -500,7 +536,7 @@ impl<'a> Resolver<'a> {
     fn r#use(&mut self, name: &Token<'a>, ex: &mut ErrCtx) {
         match self.env.get_mut(&name.lexeme) {
             Some(v) => {
-                if !v.declared {
+                if !v.declared && self.scope_kind == ScopeKind::Global {
                     Self::error_of_kind(
                         VesErrorKind::UsedGlobalBeforeDeclaration(v.span.clone()),
                         "Attempted to use the variable `{}` before its declaration",
@@ -568,7 +604,7 @@ pub mod tests {
             Ok(warnings) => {
                 let diagnostics = db.report_to_string(&warnings).unwrap();
                 Ok(format!(
-                    "{}\n{}",
+                    "{}{}",
                     diagnostics,
                     ast.body
                         .into_iter()
@@ -586,15 +622,9 @@ pub mod tests {
     test_err!(t1_test_cannot_assign_to_let);
     test_err!(t2_test_variables_must_be_defined);
     test_err!(t3_test_globals_are_forward_declared);
-
-    #[ignore]
-    #[test]
-    fn test_shadowing_unused_variable_warning() {
-        let _source = r#"
-        let unused = 42
-        let unused = "new value";
-    "#;
-    }
+    test_ok!(t4_test_shadowing_unused_variable_warning);
+    test_err!(t5_cannot_break_outside_of_a_loop);
+    test_err!(t6_test_undefined_loop_labels_are_detected);
 
     #[ignore]
     #[test]

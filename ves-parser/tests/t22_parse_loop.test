@@ -10,4 +10,4 @@ Loop
 Loop
   body: StmtKind::Block
     statements=
-  label: ":"
+  label: "@label"

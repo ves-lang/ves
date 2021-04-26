@@ -1,0 +1,10 @@
+break
+continue
+
+@label: loop { 
+    break @label
+    continue @label
+}
+
+%output
+

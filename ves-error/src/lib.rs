@@ -86,7 +86,7 @@ pub enum VesErrorKind {
     /// An attempt to assign to an optional access.
     OptionalAccessAssignment,
     /// A warning issued when the user attempts to shadow an unused local variable.
-    AttemptedToShadowUnusedLocal(Span),
+    AttemptedToShadowUnusedVariable(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
     /// A `let` variable without an initializer
