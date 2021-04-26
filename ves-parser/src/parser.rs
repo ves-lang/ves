@@ -272,11 +272,8 @@ impl<'a> Parser<'a> {
         };
         // parse fields
         let fields = if self.match_(&TokenKind::LeftParen) {
-            let fields = self.param_pack(false)?;
-            self.consume(
-                &TokenKind::RightParen,
-                "Expected a closing `)` in this position",
-            )?;
+            let fields = self.param_pack(false, false)?;
+            self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
             Some(fields)
         } else {
             None
@@ -316,11 +313,8 @@ impl<'a> Parser<'a> {
                     }));
                 } else if self.match_(&TokenKind::LeftParen) {
                     // this is a method
-                    let params = self.param_pack(true)?;
-                    self.consume(
-                        &TokenKind::RightParen,
-                        "Expected a closing `)` in this position",
-                    )?;
+                    let params = self.param_pack(true, true)?;
+                    self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
                     let body = self.fn_decl_body()?;
                     if params.is_instance_method_params() {
                         methods.push(ast::FnInfo {
@@ -388,11 +382,8 @@ impl<'a> Parser<'a> {
             &TokenKind::LeftParen,
             "Expected an opening `(` after the function name or keyword",
         )?;
-        let params = self.param_pack(true)?;
-        self.consume(
-            &TokenKind::RightParen,
-            "Expected a closing `)` in this position",
-        )?;
+        let params = self.param_pack(true, false)?;
+        self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
         let body = self.fn_decl_body()?;
         Ok(ast::FnInfo {
             name,
@@ -421,7 +412,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
+    fn param_pack(&mut self, rest_args: bool, in_method: bool) -> ParseResult<ast::Params<'a>> {
         let mut parsing_default = false;
         let mut positional = vec![];
         let mut default = vec![];
@@ -441,12 +432,18 @@ impl<'a> Parser<'a> {
                 break;
             } else {
                 // positional or default argument
-                // TODO: check if 'self' has a default value, which is an error (?)
                 let name = self.consume_any(
                     &[TokenKind::Identifier, TokenKind::Self_],
                     "Expected parameter name",
                 )?;
                 let value = if self.match_(&TokenKind::Equal) {
+                    if in_method && name.lexeme == "self" {
+                        return Err(VesError::parse(
+                            "'self' may not have a default value",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
                     Some(self.expr()?)
                 } else {
                     None
@@ -812,8 +809,8 @@ impl<'a> Parser<'a> {
                 TokenKind::Increment | TokenKind::Decrement => {
                     let kind = self.previous.kind.clone();
                     let expr = self.call()?;
-                    let ass_kind = check_assignment_target(&expr, true);
-                    if ass_kind == AssignmentKind::Valid {
+                    let assign_kind = check_assignment_target(&expr, true);
+                    if assign_kind == AssignmentKind::Valid {
                         ast::Expr {
                             span: op.span.start..expr.span.end,
                             kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
@@ -822,9 +819,8 @@ impl<'a> Parser<'a> {
                             }),
                         }
                     } else {
-                        return Err(
-                            self.invalid_assignment_error(ass_kind, op.span.start..expr.span.end)
-                        );
+                        return Err(self
+                            .invalid_assignment_error(assign_kind, op.span.start..expr.span.end));
                     }
                 }
                 _ => unreachable!(),
@@ -1383,7 +1379,14 @@ mod tests {
     test_ok!(t11_parse_call);
     test_ok!(t12_parse_compound_assignment);
     test_ok!(t13_if_expr);
-
+    test_ok!(t14_parse_do_block);
+    test_ok!(t15_parse_fn_decl);
+    test_err!(t16_parse_bad_fn_decl);
+    test_ok!(t17_parse_struct_decl);
+    test_ok!(t18_parse_var_decl);
+    test_err!(t19_let_variables_must_be_initialized);
+    test_ok!(t20_parse_print_statement);
+    test_err!(t21_parse_bad_struct_decl);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"
@@ -1403,14 +1406,4 @@ mod tests {
         }
         "#
     ); */
-    test_ok!(t14_parse_do_block);
-    test_ok!(t15_parse_fn_decl);
-    test_err!(t16_parse_bad_fn_decl);
-
-    // TODO: init {} blocks
-    // TODO: test parsing bad struct decls
-    test_ok!(t17_parse_struct_decl);
-    test_ok!(t18_parse_var_decl);
-    test_err!(t19_let_variables_must_be_initialized);
-    test_ok!(t20_parse_print_statement);
 }

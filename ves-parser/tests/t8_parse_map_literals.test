@@ -1,6 +1,7 @@
 a = { test: 1.0 }
 a = { ["test"]: 1.0 }
 a = { v: 0, ...o }
+a = { v }
 
 %output
 
@@ -43,3 +44,14 @@ StmtKind::ExprStmt
         MapEntry::Spread
           target: ExprKind::Variable
             name: "o"
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: ExprKind::Map
+      values=
+        MapEntry::Pair
+          key: Lit
+            token: "v"
+            value: LitValue::Str("v")
+          value: ExprKind::Variable
+            name: "v"
