@@ -135,7 +135,7 @@ impl<'a> Parser<'a> {
         let init = if self.match_(&TokenKind::Equal) {
             let ident = ident.clone();
             Some(self.expr().map_err(|e| {
-                let _ = ident.map_err(|e| self.record(e));
+                let _ = ident.map_err(|e| self.ex.record(e));
                 e
             })?)
         } else {
@@ -144,7 +144,7 @@ impl<'a> Parser<'a> {
 
         let ident = ident?;
         if kind == VarKind::Let && init.is_none() {
-            self.record(VesError::let_without_value(
+            self.ex.record(VesError::let_without_value(
                 format!(
                     "Immutable variable `{}` must be initialized at declaration",
                     ident.lexeme
@@ -1170,11 +1170,6 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    fn record(&mut self, e: VesError) {
-        self.ex.record(e);
-    }
-
-    #[inline]
     fn consume_any<S: Into<String>>(
         &mut self,
         kinds: &[TokenKind<'a>],
@@ -1250,7 +1245,7 @@ impl<'a> Parser<'a> {
         std::mem::swap(&mut self.previous, &mut self.current);
         self.current = self.lexer.next_token().unwrap_or_else(|| self.eof.clone());
         if self.previous.kind == TokenKind::Error {
-            self.record(VesError::lex(
+            self.ex.record(VesError::lex(
                 format!("Unexpected character sequence `{}`", self.previous.lexeme),
                 self.previous.span.clone(),
                 self.fid,
