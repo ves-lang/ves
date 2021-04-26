@@ -27,7 +27,7 @@ loop_stmt = ( label ":" )? (
 label = "@" IDENTIFIER ;
 for_stmt = ( for_each | for_loop );
 for_each = "for" IDENTIFIER "in" for_range block ; 
-for_loop = "for" binding* ";" expression? ";" expression blcok ;
+for_loop = "for" ( binding "," )* ";" expression? ";" expression blcok ;
 for_range = expression ( ( ".." | "..=" ) expression ( "," experssion )? )? ;
 
 while_stmt = "while" condition block ;
