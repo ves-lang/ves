@@ -100,6 +100,18 @@ impl<'a> Resolver<'a> {
                     }
                 }
             }
+            StmtKind::Loop(r#loop) => {
+                self.env.push();
+
+                self.declare_loop_label(&r#loop.label, ex);
+
+                let prev_loop = self.loop_kind;
+                self.loop_kind = LoopKind::Loop;
+                self.resolve_stmt(&mut r#loop.body, ex);
+                self.loop_kind = prev_loop;
+
+                self.env.pop();
+            }
             StmtKind::For(r#for) => {
                 self.env.push();
 

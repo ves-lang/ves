@@ -553,6 +553,15 @@ pub struct Var<'a> {
     pub initializer: Option<Expr<'a>>,
 }
 
+/// A loop statement.
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub struct Loop<'a> {
+    /// The body of the loop.
+    pub body: Stmt<'a>,
+    /// The loop label for this loop.
+    pub label: Option<Token<'a>>,
+}
+
 /// A for loop statement.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct For<'a> {
@@ -581,7 +590,7 @@ pub struct ForEach<'a> {
     pub label: Option<Token<'a>>,
 }
 
-/// A foreach loop statement, e.g. `for a in 0..10 {}`
+/// A while loop statement, e.g. `while true {}`
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct While<'a> {
     /// The condition of the loop.
@@ -598,6 +607,8 @@ pub enum StmtKind<'a> {
     /// One or more variable declarations, e.g. `let a, b = 3, c`.
     /// All variables are guaranteed to be either all const or all non-const.
     Var(#[rename = "declarations"] Vec<Var<'a>>),
+    /// A loop statement.
+    Loop(#[forward] Ptr<Loop<'a>>),
     /// A for loop statement.
     For(#[forward] Ptr<For<'a>>),
     /// A foreach loop statement.
