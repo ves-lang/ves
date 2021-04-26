@@ -13,5 +13,4 @@ ast2str = { git = "https://github.com/optimalstrategy/ast2str" }
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"
-regex = "1.4.6"
-lazy_static = "1.4.0"
+ves_testing = { package = "ves-testing", path = "../ves-testing" }

@@ -6,4 +6,8 @@ pub mod ast;
 pub mod lexer;
 pub mod parser;
 
+pub use lexer::Lexer;
 pub use lexer::Span;
+pub use parser::Parser;
+
+pub use ast2str::AstToStr;

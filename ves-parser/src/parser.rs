@@ -1320,29 +1320,27 @@ fn check_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> AssignmentK
 #[cfg(test)]
 mod tests {
     use super::*;
-    use infra::*;
+    use ast2str::AstToStr;
+    use ves_testing::make_test_macros;
 
-    macro_rules! test_ok {
-        ($test_name:ident $( $attr:ident ),*) => {
-            $(#[$attr])*
-            #[test]
-            fn $test_name() {
-                let (source, output) = load_test_file(stringify!($test_name));
-                test_ok(stringify!(test_name), source, output);
-            }
-        };
+    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+    static TESTS_DIR: &str = "tests";
+
+    fn parse<'a>(
+        src: std::borrow::Cow<'a, str>,
+        fid: FileId,
+        db: &mut VesFileDatabase<'a>,
+    ) -> Result<String, ErrCtx> {
+        Parser::new(Lexer::new(&src), fid, &db).parse().map(|ast| {
+            ast.body
+                .into_iter()
+                .map(|stmt| stmt.ast_to_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
     }
 
-    macro_rules! test_err {
-        ($test_name:ident $( $attr:ident ),*) => {
-            $(#[$attr])*
-            #[test]
-            fn $test_name() {
-                let (source, output) = load_test_file(stringify!($test_name));
-                test_err(stringify!(test_name), source, output);
-            }
-        };
-    }
+    make_test_macros!(CRATE_ROOT, TESTS_DIR, parse, parse);
 
     test_ok!(t1_parse_block);
     test_ok!(t2_parse_comma);
@@ -1386,111 +1384,4 @@ mod tests {
     test_ok!(t17_parse_struct_decl);
     test_ok!(t18_parse_var_decl);
     test_err!(t19_let_variables_must_be_initialized);
-
-    mod infra {
-        use super::*;
-        pub use ast2str::ast2str_lib::symbols;
-        pub use ast2str::AstToStr;
-        pub use lazy_static::lazy_static;
-        pub use regex::Regex;
-
-        #[derive(Clone, PartialEq)]
-        struct DisplayAsDebugWrapper<T>(T);
-
-        impl<T> std::fmt::Debug for DisplayAsDebugWrapper<T>
-        where
-            T: std::fmt::Display,
-        {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "{}", self.0)
-            }
-        }
-
-        impl<T> std::ops::Deref for DisplayAsDebugWrapper<T> {
-            type Target = T;
-
-            fn deref(&self) -> &Self::Target {
-                &self.0
-            }
-        }
-
-        lazy_static! {
-            pub static ref RE: Regex = Regex::new(
-                &[
-                    symbols::HORIZONTAL_BAR,
-                    symbols::VERTICAL_BAR,
-                    symbols::BRANCH,
-                    symbols::LEFT_UPPER_CORNER,
-                    symbols::LEFT_BOTTOM_CORNER,
-                    symbols::RIGHT_UPPER_CORNER,
-                    symbols::RIGHT_BOTTOM_CORNER,
-                    symbols::CROSS,
-                    symbols::DOWNWARDS_POINTING_ARROW,
-                ]
-                .join("|")
-            )
-            .unwrap();
-        }
-
-        pub fn clean_tree(tree: String) -> String {
-            RE.replace_all(&tree, " ")
-                .lines()
-                .map(|l| l.trim_end())
-                .collect::<Vec<_>>()
-                .join("\n")
-        }
-
-        static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-        static TESTS_DIR: &str = "src/tests";
-
-        pub fn load_test_file(name: &str) -> (String, String) {
-            let path = std::path::PathBuf::from(CRATE_ROOT)
-                .join(TESTS_DIR)
-                .join(format!("{}.test", name));
-            let source = std::fs::read_to_string(&path)
-                .map_err(|e| format!("Failed to read the `{}`: {}", path.display(), e))
-                .unwrap();
-            let (code, expected) = source.split_once("%output\n").expect(
-            "Invalid test file format. Make sure that your test contains the %output directive.",
-        );
-            (code.trim().to_owned(), expected.trim().to_owned())
-        }
-
-        pub fn test_err(test_name: &str, src: String, expected: String) {
-            let src = std::borrow::Cow::Borrowed(&src[..]);
-            let mut db = VesFileDatabase::new();
-            let fid = db.add_snippet(src.clone());
-            let errors = Parser::new(Lexer::new(&*src), fid, &db)
-                .parse()
-                .expect_err("Test succeeded unexpectedly");
-            let output = db.report_to_string(&errors).unwrap();
-            pretty_assertions::assert_eq!(
-                DisplayAsDebugWrapper(output.trim()),
-                DisplayAsDebugWrapper(&expected[..]),
-                "Failed the error test `{}`",
-                test_name
-            );
-        }
-
-        pub fn test_ok(test_name: &str, src: String, expected: String) {
-            let src = std::borrow::Cow::Borrowed(&src[..]);
-            let mut db = VesFileDatabase::new();
-            let fid = db.add_snippet(src.clone());
-            pretty_assertions::assert_eq!(
-                DisplayAsDebugWrapper(clean_tree(
-                    Parser::new(Lexer::new(&src), fid, &db)
-                        .parse()
-                        .unwrap()
-                        .body
-                        .into_iter()
-                        .map(|stmt| stmt.ast_to_str())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                )),
-                DisplayAsDebugWrapper(expected),
-                "Failed the test `{}`",
-                test_name
-            );
-        }
-    }
 }

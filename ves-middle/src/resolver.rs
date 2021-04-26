@@ -51,7 +51,10 @@ impl<'a> Resolver<'a> {
     /// Resolves the given AST. Returns the used [`ErrCtx`] containing warnings, errors, and suggestions.
     pub fn resolve(mut self, ast: &mut AST<'a>) -> Result<ErrCtx, ErrCtx> {
         self.file_id = ast.file_id;
-        let mut ex = ErrCtx::default();
+        let mut ex = ErrCtx {
+            local_file_id: self.file_id,
+            ..Default::default()
+        };
 
         for global in &ast.globals {
             self.declare_global(&global.name, NameKind::from(global.kind));
@@ -87,6 +90,8 @@ impl<'a> Resolver<'a> {
                             ex,
                         );
                     }
+
+                    self.declare(&var.name, NameKind::from(var.kind), ex);
 
                     // Only `let` variables are marked as assigned at this point.
                     if var.initializer.is_some() && var.kind == VarKind::Let {
@@ -415,8 +420,20 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        // Globals are forward-declared
-        if self.scope_kind != ScopeKind::Global {
+        let existing = self.env.get_mut(&name.lexeme);
+        let should_shadow = if self.scope_kind == ScopeKind::Global {
+            // Check if the global is actually being declared for the first time after its forward declaration.
+            if let Some(false) = existing.as_ref().map(|e| e.declared) {
+                existing.unwrap().declared = true;
+                false
+            } else {
+                // if this is not the first declaration, allow shadowing
+                true
+            }
+        } else {
+            true
+        };
+        if should_shadow {
             self.env.add(
                 name.lexeme.clone(),
                 VarUsage {
@@ -427,8 +444,6 @@ impl<'a> Resolver<'a> {
                     span: name.span.clone(),
                 },
             );
-        } else {
-            self.env.get_mut(&name.lexeme).unwrap().declared = true;
         }
     }
 
@@ -451,10 +466,14 @@ impl<'a> Resolver<'a> {
         match self.env.get_mut(&name.lexeme) {
             Some(v) => {
                 if v.is_let() && v.assigned {
-                    Self::error(
-                        format!("Cannot assign twice to the immutable variable {}. Consider replacing `let` with `mut`", name.lexeme),
+                    Self::error_of_kind(
+                        VesErrorKind::LetReassignment,
+                        format!(
+                            "Cannot assign twice to the immutable variable {}",
+                            name.lexeme
+                        ),
                         name.span.clone(),
-                        ex
+                        ex,
                     );
                 }
                 v.assigned = true;
@@ -518,17 +537,40 @@ impl<'a> Default for Resolver<'a> {
 
 #[cfg(test)]
 pub mod tests {
-    // use super::*;
-    // use ves_parser::ast::Ptr;
+    use super::*;
+    use ves_error::VesFileDatabase;
+    use ves_parser::{AstToStr, Lexer, Parser};
+    use ves_testing::make_test_macros;
 
-    #[ignore]
-    #[test]
-    fn test_cannot_assign_to_let() {
-        let _source = r#"
-        let x = 5
-        x = 3
-    "#;
+    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+    static TESTS_DIR: &str = "tests";
+
+    fn parse_and_resolve<'a>(
+        src: Cow<'a, str>,
+        fid: FileId,
+        db: &mut VesFileDatabase<'a>,
+    ) -> Result<String, ErrCtx> {
+        let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
+        match Resolver::new().resolve(&mut ast) {
+            Ok(warnings) => {
+                let diagnostics = db.report_to_string(&warnings).unwrap();
+                Ok(format!(
+                    "{}\n{}",
+                    diagnostics,
+                    ast.body
+                        .into_iter()
+                        .map(|stmt| stmt.ast_to_str())
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                ))
+            }
+            Err(errors) => Err(errors),
+        }
     }
+
+    make_test_macros!(CRATE_ROOT, TESTS_DIR, parse_and_resolve, parse_and_resolve);
+
+    test_err!(t1_test_cannot_assign_to_let);
 
     #[ignore]
     #[test]

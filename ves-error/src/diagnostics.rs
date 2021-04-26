@@ -13,14 +13,17 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
     use crate::VesErrorKind::*;
 
     let base = match &e.kind {
-        Lex | Parse | ResolutionSuggestWildcard | OptionalAccessAssignment | LetWithoutValue => {
-            Diagnostic::error()
-        }
+        Lex
+        | Parse
+        | Resolution
+        | ResolutionSuggestWildcard
+        | OptionalAccessAssignment
+        | LetWithoutValue
+        | LetReassignment => Diagnostic::error(),
         AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
         UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
-        Resolution => unimplemented!(),
         Runtime => unimplemented!(),
         Panic => unimplemented!(),
         Traceback => unimplemented!(),
@@ -34,6 +37,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         d = add_wildcard_label(db, d, &e);
     } else if e.kind == LetWithoutValue {
         d = let_no_value_diag(db, d, &e);
+    } else if e.kind == LetReassignment {
+        d = let_reassignment_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -78,6 +83,18 @@ fn let_no_value_diag<'a>(
     diag.labels
         .push(Label::secondary(e.file_id, e.span.clone()).with_message(
             "help: consider using `mut` or explicitly initializing the variable with `none`",
+        ));
+    diag
+}
+
+fn let_reassignment_diag<'a>(
+    _db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    diag.labels
+        .push(Label::secondary(e.file_id, e.span.clone()).with_message(
+            "help: Consider replacing `let` with `mut` to make the variable mutable",
         ));
     diag
 }

@@ -860,6 +860,7 @@ dependencies = [
  "ahash",
  "ves-error",
  "ves-parser",
+ "ves-testing",
 ]
 
 [[package]]
@@ -867,12 +868,11 @@ name = "ves-parser"
 version = "0.1.0"
 dependencies = [
  "ast2str",
- "lazy_static",
  "logos",
  "plain-msgbox",
  "pretty_assertions",
- "regex",
  "ves-error",
+ "ves-testing",
 ]
 
 [[package]]
@@ -884,6 +884,17 @@ dependencies = [
  "const-random",
  "hashbrown",
  "static_assertions",
+]
+
+[[package]]
+name = "ves-testing"
+version = "0.1.0"
+dependencies = [
+ "ast2str",
+ "lazy_static",
+ "pretty_assertions",
+ "regex",
+ "ves-error",
 ]
 
 [[package]]
