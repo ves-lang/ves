@@ -8,7 +8,6 @@ use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 pub type ParseResult<T> = std::result::Result<T, VesError>;
 
 // TODO: unify style and conventions in this file
-// span_start, span_end
 // do bounded constructs close themselves?
 // -> e.g. blocks/param packs, do they consume the closing '}', ')'?
 //    or is it up to the caller?
