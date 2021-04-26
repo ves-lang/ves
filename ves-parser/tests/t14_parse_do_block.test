@@ -7,7 +7,9 @@ do {
         "false" 
     } 
 }
-
+do {
+    true; // semi means the value will be 'none' here
+}
 
 %output
 
@@ -43,3 +45,11 @@ StmtKind::ExprStmt
         value: Lit
           token: "\"false\""
           value: LitValue::Str("false")
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+      StmtKind::ExprStmt
+        expr: Lit
+          token: "true"
+          value: LitValue::Bool(true)
+    value: None

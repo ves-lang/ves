@@ -23,7 +23,7 @@ error: Expected an opening `(` after the function name or keyword
 3 │ fn a) {}
   │     ^
 
-error: Expected a closing `)` in this position
+error: Expected a closing `)`
   ┌─ <source: #9ed601521a65842b>:4:6
   │
 4 │ fn(a {}

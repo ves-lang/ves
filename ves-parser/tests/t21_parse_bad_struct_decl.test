@@ -1,0 +1,44 @@
+struct t0(a, b /* unclosed */ ;
+struct t1 { fn nope() {} }
+struct t2 { m( /*unclosed*/ }
+struct t3 { m() /* no body */ }
+struct t4(...a) /* rest params invalid in struct field */
+struct t5 { m(self = "bad") {} }
+
+%output
+
+error: Expected a closing `)`
+  ┌─ <source: #dd6e76285d7e8acd>:1:31
+  │
+1 │ struct t0(a, b /* unclosed */ ;
+  │                               ^
+
+error: Expected method, static field or static method
+  ┌─ <source: #dd6e76285d7e8acd>:2:13
+  │
+2 │ struct t1 { fn nope() {} }
+  │             ^^
+
+error: Expected parameter name
+  ┌─ <source: #dd6e76285d7e8acd>:3:29
+  │
+3 │ struct t2 { m( /*unclosed*/ }
+  │                             ^
+
+error: Expected function body
+  ┌─ <source: #dd6e76285d7e8acd>:4:15
+  │
+4 │ struct t3 { m() /* no body */ }
+  │               ^
+
+error: Rest arguments are not allowed here
+  ┌─ <source: #dd6e76285d7e8acd>:5:11
+  │
+5 │ struct t4(...a) /* rest params invalid in struct field */
+  │           ^^^
+
+error: 'self' may not have a default value
+  ┌─ <source: #dd6e76285d7e8acd>:6:20
+  │
+6 │ struct t5 { m(self = "bad") {} }
+  │                    ^

@@ -50,7 +50,7 @@ expression = struct_decl
     | assignment
     ;
 
-struct_decl = "struct" IDENTIFIER ( "(" names? default_params? ")" )? "{" struct_body "}" ;
+struct_decl = "struct" IDENTIFIER? ( "(" names? default_params? ")" )? ( "{" struct_body "}" )? ;
 names = IDENTIFIER ("," IDENTIFIER )* ","? ;
 struct_doby = init_block | binding | instance_method | static_method ;
 init_block  = "init" block ;

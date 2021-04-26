@@ -4,6 +4,7 @@ use ves_parser::{ast::VarKind, Span};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoopKind {
     None,
+    Loop,
     While,
     For,
     ForEach,

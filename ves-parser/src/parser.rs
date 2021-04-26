@@ -7,6 +7,12 @@ use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
 type ParseResult<T> = std::result::Result<T, VesError>;
 
+// TODO: unify style and conventions in this file
+// span_start, span_end
+// do bounded constructs close themselves?
+// -> e.g. blocks/param packs, do they consume the closing '}', ')'?
+//    or is it up to the caller?
+
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
     previous: Token<'a>,
@@ -63,6 +69,21 @@ impl<'a> Parser<'a> {
     }
 
     fn stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
+        let label = if self.match_(&TokenKind::AtIdentifier) {
+            self.consume(&TokenKind::Colon, "Expected ':'")?;
+            Some(self.previous.clone())
+        } else {
+            None
+        };
+        if label.is_some() && !self.check_any(&[TokenKind::Loop, TokenKind::For, TokenKind::While])
+        {
+            return Err(VesError::parse(
+                "Only loops may have labels",
+                self.previous.span.clone(),
+                self.fid,
+            ));
+        }
+
         if self.match_any(&[
             TokenKind::LeftBrace,
             TokenKind::Let,
@@ -76,11 +97,12 @@ impl<'a> Parser<'a> {
             TokenKind::Defer,
             TokenKind::Return,
         ]) {
+            // TODO: this
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
                 TokenKind::Print => self.print_stmt(),
-                TokenKind::Loop => unimplemented!(),
+                TokenKind::Loop => self.loop_stmt(label),
                 TokenKind::For => unimplemented!(),
                 TokenKind::While => unimplemented!(),
                 TokenKind::Break => unimplemented!(),
@@ -96,69 +118,6 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt(consume_semi)
         }
-    }
-
-    fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        let start = self.previous.span.start;
-        let args = self.comma()?;
-        Ok(ast::Stmt {
-            kind: ast::StmtKind::Print(box args),
-            span: start..self.previous.span.end,
-        })
-    }
-
-    fn var_decl(&mut self) -> ParseResult<ast::Stmt<'a>> {
-        let span_start = self.previous.span.start;
-        let kind = if self.previous.kind == TokenKind::Let {
-            VarKind::Let
-        } else {
-            VarKind::Mut
-        };
-        let mut bindings = vec![self.binding_expression(kind)?];
-
-        while self.match_(&TokenKind::Comma) {
-            bindings.push(self.binding_expression(kind)?);
-        }
-
-        Ok(ast::Stmt {
-            kind: ast::StmtKind::Var(bindings),
-            span: span_start..self.previous.span.end,
-        })
-    }
-
-    fn binding_expression(&mut self, kind: VarKind) -> ParseResult<ast::Var<'a>> {
-        let ident = self.consume(
-            &TokenKind::Identifier,
-            "Expected a variable name after the keyword or comma",
-        );
-
-        let init = if self.match_(&TokenKind::Equal) {
-            let ident = ident.clone();
-            Some(self.expr().map_err(|e| {
-                let _ = ident.map_err(|e| self.record(e));
-                e
-            })?)
-        } else {
-            None
-        };
-
-        let ident = ident?;
-        if kind == VarKind::Let && init.is_none() {
-            self.record(VesError::let_without_value(
-                format!(
-                    "Immutable variable `{}` must be initialized at declaration",
-                    ident.lexeme
-                ),
-                ident.span.clone(),
-                self.fid,
-            ));
-        }
-
-        Ok(ast::Var {
-            kind,
-            name: ident,
-            initializer: init,
-        })
     }
 
     fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -190,6 +149,82 @@ impl<'a> Parser<'a> {
         self.scope_depth -= 1;
         self.consume(&TokenKind::RightBrace, "Expected a '}' after a block")?;
         Ok(body)
+    }
+
+    fn var_decl(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let kind = if self.previous.kind == TokenKind::Let {
+            VarKind::Let
+        } else {
+            VarKind::Mut
+        };
+        let mut bindings = vec![self.binding_expression(kind)?];
+
+        while self.match_(&TokenKind::Comma) {
+            bindings.push(self.binding_expression(kind)?);
+        }
+
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Var(bindings),
+            span: span_start..self.previous.span.end,
+        })
+    }
+
+    fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let start = self.previous.span.start;
+        let args = self.comma()?;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Print(box args),
+            span: start..self.previous.span.end,
+        })
+    }
+
+    fn loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+
+        self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+        let body = self.block_stmt()?;
+
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Loop(box ast::Loop { body, label }),
+            span: span_start..span_end,
+        })
+    }
+
+    fn binding_expression(&mut self, kind: VarKind) -> ParseResult<ast::Var<'a>> {
+        let ident = self.consume(
+            &TokenKind::Identifier,
+            "Expected a variable name after the keyword or comma",
+        );
+
+        let init = if self.match_(&TokenKind::Equal) {
+            let ident = ident.clone();
+            Some(self.expr().map_err(|e| {
+                let _ = ident.map_err(|e| self.ex.record(e));
+                e
+            })?)
+        } else {
+            None
+        };
+
+        let ident = ident?;
+        if kind == VarKind::Let && init.is_none() {
+            self.ex.record(VesError::let_without_value(
+                format!(
+                    "Immutable variable `{}` must be initialized at declaration",
+                    ident.lexeme
+                ),
+                ident.span.clone(),
+                self.fid,
+            ));
+        }
+
+        Ok(ast::Var {
+            kind,
+            name: ident,
+            initializer: init,
+        })
     }
 
     fn expr_stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
@@ -238,7 +273,6 @@ impl<'a> Parser<'a> {
     }
 
     fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
-        // TODO: this
         if self.match_any(&[
             TokenKind::Struct,
             TokenKind::Fn,
@@ -272,11 +306,8 @@ impl<'a> Parser<'a> {
         };
         // parse fields
         let fields = if self.match_(&TokenKind::LeftParen) {
-            let fields = self.param_pack(false)?;
-            self.consume(
-                &TokenKind::RightParen,
-                "Expected a closing `)` in this position",
-            )?;
+            let fields = self.param_pack(false, false)?;
+            self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
             Some(fields)
         } else {
             None
@@ -316,11 +347,8 @@ impl<'a> Parser<'a> {
                     }));
                 } else if self.match_(&TokenKind::LeftParen) {
                     // this is a method
-                    let params = self.param_pack(true)?;
-                    self.consume(
-                        &TokenKind::RightParen,
-                        "Expected a closing `)` in this position",
-                    )?;
+                    let params = self.param_pack(true, true)?;
+                    self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
                     let body = self.fn_decl_body()?;
                     if params.is_instance_method_params() {
                         methods.push(ast::FnInfo {
@@ -388,11 +416,8 @@ impl<'a> Parser<'a> {
             &TokenKind::LeftParen,
             "Expected an opening `(` after the function name or keyword",
         )?;
-        let params = self.param_pack(true)?;
-        self.consume(
-            &TokenKind::RightParen,
-            "Expected a closing `)` in this position",
-        )?;
+        let params = self.param_pack(true, false)?;
+        self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
         let body = self.fn_decl_body()?;
         Ok(ast::FnInfo {
             name,
@@ -421,7 +446,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn param_pack(&mut self, rest_args: bool) -> ParseResult<ast::Params<'a>> {
+    fn param_pack(&mut self, rest_args: bool, in_method: bool) -> ParseResult<ast::Params<'a>> {
         let mut parsing_default = false;
         let mut positional = vec![];
         let mut default = vec![];
@@ -441,12 +466,18 @@ impl<'a> Parser<'a> {
                 break;
             } else {
                 // positional or default argument
-                // TODO: check if 'self' has a default value, which is an error (?)
                 let name = self.consume_any(
                     &[TokenKind::Identifier, TokenKind::Self_],
                     "Expected parameter name",
                 )?;
                 let value = if self.match_(&TokenKind::Equal) {
+                    if in_method && name.lexeme == "self" {
+                        return Err(VesError::parse(
+                            "'self' may not have a default value",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
                     Some(self.expr()?)
                 } else {
                     None
@@ -663,6 +694,8 @@ impl<'a> Parser<'a> {
                 }
                 _ => {
                     // TODO: do not run this twice
+                    // NOTE(moscow): I don't think checking it multiple times is a problem,
+                    // because a really deep property/item access is only like 3-4 nodes
                     let kind = check_assignment_target(&expr, false);
                     return Err(self.invalid_assignment_error(kind, expr.span));
                 }
@@ -812,8 +845,8 @@ impl<'a> Parser<'a> {
                 TokenKind::Increment | TokenKind::Decrement => {
                     let kind = self.previous.kind.clone();
                     let expr = self.call()?;
-                    let ass_kind = check_assignment_target(&expr, true);
-                    if ass_kind == AssignmentKind::Valid {
+                    let assign_kind = check_assignment_target(&expr, true);
+                    if assign_kind == AssignmentKind::Valid {
                         ast::Expr {
                             span: op.span.start..expr.span.end,
                             kind: ast::ExprKind::PrefixIncDec(box ast::IncDec {
@@ -822,9 +855,8 @@ impl<'a> Parser<'a> {
                             }),
                         }
                     } else {
-                        return Err(
-                            self.invalid_assignment_error(ass_kind, op.span.start..expr.span.end)
-                        );
+                        return Err(self
+                            .invalid_assignment_error(assign_kind, op.span.start..expr.span.end));
                     }
                 }
                 _ => unreachable!(),
@@ -1174,11 +1206,6 @@ impl<'a> Parser<'a> {
     }
 
     #[inline]
-    fn record(&mut self, e: VesError) {
-        self.ex.record(e);
-    }
-
-    #[inline]
     fn consume_any<S: Into<String>>(
         &mut self,
         kinds: &[TokenKind<'a>],
@@ -1222,6 +1249,16 @@ impl<'a> Parser<'a> {
         std::mem::discriminant(kind) == std::mem::discriminant(&self.current.kind)
     }
 
+    #[inline(always)]
+    fn check_any(&mut self, kinds: &[TokenKind<'a>]) -> bool {
+        for kind in kinds {
+            if std::mem::discriminant(kind) == std::mem::discriminant(&self.current.kind) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// In case of an error, consume tokens until we reach one
     /// which has a high chance of beginning a new valid segment
     /// of the source code
@@ -1254,7 +1291,7 @@ impl<'a> Parser<'a> {
         std::mem::swap(&mut self.previous, &mut self.current);
         self.current = self.lexer.next_token().unwrap_or_else(|| self.eof.clone());
         if self.previous.kind == TokenKind::Error {
-            self.record(VesError::lex(
+            self.ex.record(VesError::lex(
                 format!("Unexpected character sequence `{}`", self.previous.lexeme),
                 self.previous.span.clone(),
                 self.fid,
@@ -1383,7 +1420,16 @@ mod tests {
     test_ok!(t11_parse_call);
     test_ok!(t12_parse_compound_assignment);
     test_ok!(t13_if_expr);
-
+    test_ok!(t14_parse_do_block);
+    test_ok!(t15_parse_fn_decl);
+    test_err!(t16_parse_bad_fn_decl);
+    test_ok!(t17_parse_struct_decl);
+    test_ok!(t18_parse_var_decl);
+    test_err!(t19_let_variables_must_be_initialized);
+    test_ok!(t20_parse_print_statement);
+    test_err!(t21_parse_bad_struct_decl);
+    test_ok!(t22_parse_loop);
+    test_err!(t23_parse_bad_loop);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"
@@ -1403,14 +1449,4 @@ mod tests {
         }
         "#
     ); */
-    test_ok!(t14_parse_do_block);
-    test_ok!(t15_parse_fn_decl);
-    test_err!(t16_parse_bad_fn_decl);
-
-    // TODO: init {} blocks
-    // TODO: test parsing bad struct decls
-    test_ok!(t17_parse_struct_decl);
-    test_ok!(t18_parse_var_decl);
-    test_err!(t19_let_variables_must_be_initialized);
-    test_ok!(t20_parse_print_statement);
 }
