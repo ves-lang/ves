@@ -79,12 +79,14 @@ pub enum VesErrorKind {
     Resolution,
     /// Represents a resolution error that suggests to use a wildcard as a variable name.
     ResolutionSuggestWildcard,
+    /// An attempt to use the `fn` keyword before a method declaration.
+    FnBeforeMethod,
     /// An attempt to reassign to a `let` variable.
     LetReassignment,
     /// An attempt to assign to an optional access.
     OptionalAccessAssignment,
     /// A warning issued when the user attempts to shadow an unused local variable.
-    AttemptedToShadowUnusedLocal(Span),
+    AttemptedToShadowUnusedVariable(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
     /// A `let` variable without an initializer

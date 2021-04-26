@@ -73,7 +73,7 @@ impl VarUsage {
 
     /// Returns true if variable is `let`.
     pub fn is_let(&self) -> bool {
-        matches!(self.kind, NameKind::Let)
+        matches!(self.kind, NameKind::Let | NameKind::Fn | NameKind::Struct)
     }
 
     /// Returns true if the variable is `mut`.

@@ -1,0 +1,21 @@
+break    // error
+continue // error
+
+loop { 
+    break    // ok
+    continue // ok
+}
+
+%output
+
+error: Cannot break outside of a loop
+  ┌─ <source: #a0af81a7011c321c>:1:1
+  │
+1 │ break    // error
+  │ ^^^^^
+
+error: Cannot continue outside of a loop
+  ┌─ <source: #a0af81a7011c321c>:2:1
+  │
+2 │ continue // error
+  │ ^^^^^^^^

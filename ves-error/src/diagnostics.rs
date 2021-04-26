@@ -19,8 +19,9 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | ResolutionSuggestWildcard
         | OptionalAccessAssignment
         | LetWithoutValue
-        | LetReassignment => Diagnostic::error(),
-        AttemptedToShadowUnusedLocal(_span) => unimplemented!(),
+        | LetReassignment
+        | FnBeforeMethod => Diagnostic::error(),
+        AttemptedToShadowUnusedVariable(_) => Diagnostic::warning(),
         UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
@@ -39,6 +40,10 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         d = let_no_value_diag(db, d, &e);
     } else if e.kind == LetReassignment {
         d = let_reassignment_diag(db, d, &e);
+    } else if e.kind == FnBeforeMethod {
+        d = fn_before_method_diag(db, d, &e);
+    } else if let AttemptedToShadowUnusedVariable(_) = e.kind {
+        d = attempted_to_shadow_unused_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -97,4 +102,34 @@ fn let_reassignment_diag<'a>(
             "help: Consider replacing `let` with `mut` to make the variable mutable",
         ));
     diag
+}
+
+fn fn_before_method_diag<'a>(
+    _db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    _e: &VesError,
+) -> Diagnostic<FileId> {
+    let lbl = diag.labels.pop().unwrap();
+    diag.labels.push(Label {
+        message: "help: omit the `fn` keyword".into(),
+        ..lbl
+    });
+    diag
+}
+
+fn attempted_to_shadow_unused_diag<'a>(
+    db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    let first = diag.labels.pop().unwrap();
+    let span = match &e.kind {
+        crate::VesErrorKind::AttemptedToShadowUnusedVariable(span) => span.clone(),
+        _ => unreachable!(),
+    };
+    let line = db.line_index(e.file_id, span.start).unwrap() + 1;
+    diag.with_labels(vec![
+        first.with_message("Later shadowed here"),
+        Label::secondary(e.file_id, span).with_message(format!("First declared on line {}", line)),
+    ])
 }

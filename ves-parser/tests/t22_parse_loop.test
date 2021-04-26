@@ -18,7 +18,7 @@ Loop
 Loop
   body: StmtKind::Block
     statements=
-  label: ":"
+  label: "@label"
 ForEach
   variable: "i"
   iterator: Range

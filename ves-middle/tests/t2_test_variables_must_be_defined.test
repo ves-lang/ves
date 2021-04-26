@@ -4,23 +4,23 @@ let global = "ok"
     mut local = "ok"
     local = "ok"
     
-    print global, local, "ok"
+    print(global, local, "ok")
 }
 
-print global, "ok"
-print local, "error"
-print undefined, "error"
+print(global, "ok")
+print(local, "error")
+print(undefined, "error")
 
 %output
 
 error: Undefined variable `local`
-   ┌─ <source: #daba9549f1ae8cf4>:11:7
+   ┌─ <source: #970f04b023f7451c>:11:7
    │
-11 │ print local, "error"
+11 │ print(local, "error")
    │       ^^^^^
 
 error: Undefined variable `undefined`
-   ┌─ <source: #daba9549f1ae8cf4>:12:7
+   ┌─ <source: #970f04b023f7451c>:12:7
    │
-12 │ print undefined, "error"
+12 │ print(undefined, "error")
    │       ^^^^^^^^^

@@ -1,0 +1,24 @@
+loop { 
+    break @label    // error
+    continue @label // error
+}
+@label: loop { 
+    break @label // ok
+}
+@another: loop {
+    continue @another  // ok
+}
+
+%output
+
+error: Undefined loop label `@label`
+  ┌─ <source: #1532ade0402f5fa5>:2:11
+  │
+2 │     break @label    // error
+  │           ^^^^^^
+
+error: Undefined loop label `@label`
+  ┌─ <source: #1532ade0402f5fa5>:3:14
+  │
+3 │     continue @label // error
+  │              ^^^^^^
