@@ -1,0 +1,26 @@
+let global = "ok"
+
+{
+    mut local = "ok"
+    local = "ok"
+    
+    print global, local, "ok"
+}
+
+print global, "ok"
+print local, "error"
+print undefined, "error"
+
+%output
+
+error: Undefined variable `local`
+   ┌─ <source: #daba9549f1ae8cf4>:11:7
+   │
+11 │ print local, "error"
+   │       ^^^^^
+
+error: Undefined variable `undefined`
+   ┌─ <source: #daba9549f1ae8cf4>:12:7
+   │
+12 │ print undefined, "error"
+   │       ^^^^^^^^^

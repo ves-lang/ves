@@ -81,6 +81,7 @@ impl<'a> Resolver<'a> {
                     if let Some(ref mut init) = var.initializer {
                         self.resolve_expr(init, ex);
                     } else if var.kind == VarKind::Let {
+                        debug_assert!(false, "This should never happen as assignment checks are performed in the parser");
                         Self::error(
                             format!(
                                 "Immutable variable `{}` must be explicitly initialized",
@@ -571,35 +572,8 @@ pub mod tests {
     make_test_macros!(CRATE_ROOT, TESTS_DIR, parse_and_resolve, parse_and_resolve);
 
     test_err!(t1_test_cannot_assign_to_let);
-
-    #[ignore]
-    #[test]
-    fn test_let_requires_an_initializer() {
-        let _source = r#"
-        mut x; // ok
-        let y; // error
-        let z = true; // ok
-    "#;
-    }
-
-    #[ignore]
-    #[test]
-    fn test_undefined_variables_are_rejected() {
-        let _source = r#"
-        let global = 7
-        
-        {
-            mut local = 5
-            local = 3
-            
-            print global, local
-        }
-        
-        print global
-        print local
-        print undefined
-"#;
-    }
+    test_err!(t2_test_variables_must_be_defined);
+    test_err!(t3_test_globals_are_forward_declared);
 
     #[ignore]
     #[test]

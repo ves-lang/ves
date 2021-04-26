@@ -1,0 +1,65 @@
+print 1
+print 1, 2
+print do { print 3; 4 }
+print fn(){}
+print (struct S)
+print a, b; print c, d
+
+%output
+
+StmtKind::Print
+  value: Lit
+    token: "1"
+    value: LitValue::Number(1.0)
+StmtKind::Print
+  value: ExprKind::Comma
+    operands=
+      Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+      Lit
+        token: "2"
+        value: LitValue::Number(2.0)
+StmtKind::Print
+  value: DoBlock
+    statements=
+      StmtKind::Print
+        value: Lit
+          token: "3"
+          value: LitValue::Number(3.0)
+    value: Lit
+      token: "4"
+      value: LitValue::Number(4.0)
+StmtKind::Print
+  value: FnInfo
+    name: "[fn@4:7]"
+    params: Params
+      positional=
+      default=
+      rest: None
+    body=
+    kind: Function
+StmtKind::Print
+  value: ExprKind::Grouping
+    inner: StructInfo
+      name: "S"
+      fields: None
+      methods=
+      initializer: None
+      r#static: StructStaticProps
+        fields=
+        methods=
+StmtKind::Print
+  value: ExprKind::Comma
+    operands=
+      ExprKind::Variable
+        name: "a"
+      ExprKind::Variable
+        name: "b"
+StmtKind::Print
+  value: ExprKind::Comma
+    operands=
+      ExprKind::Variable
+        name: "c"
+      ExprKind::Variable
+        name: "d"

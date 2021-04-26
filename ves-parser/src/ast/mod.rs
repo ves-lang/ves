@@ -487,7 +487,7 @@ pub enum ExprKind<'a> {
     /// A literal, e.g. a number, a string or an array
     Lit(#[forward] Ptr<Lit<'a>>),
     /// A C++-like comma operator
-    Comma(Vec<Expr<'a>>),
+    Comma(#[rename = "operands"] Vec<Expr<'a>>),
     /// A function call or struct constructor.
     Call(#[forward] Ptr<Call<'a>>),
     /// A spread expression, e.g. `...arr`.
@@ -517,7 +517,7 @@ pub enum ExprKind<'a> {
     /// An assignment expression
     Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.
-    Grouping(ExprPtr<'a>),
+    Grouping(#[rename = "inner"] ExprPtr<'a>),
     /// An "at identifier", e.g. `@outer`
     AtIdent(#[rename = "name"] Token<'a>),
 }
@@ -609,7 +609,7 @@ pub enum StmtKind<'a> {
     /// An expression statement.
     ExprStmt(#[rename = "expr"] ExprPtr<'a>),
     /// A print statement.
-    Print(ExprPtr<'a>),
+    Print(#[rename = "value"] ExprPtr<'a>),
     /// A return statement.
     Return(#[rename = "return_value"] Option<ExprPtr<'a>>),
     /// A break statement.

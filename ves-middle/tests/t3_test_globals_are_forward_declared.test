@@ -1,0 +1,21 @@
+/*
+// TODO: uncomment these after fns are implemented
+fn mutually_recursive1(a) {
+    mutually_recursive2("ok")
+}
+fn mutually_recursive2(a) { 
+    mutually_recursive1("ok")
+}
+*/
+
+print global, "error"
+mut global
+print global, "ok"
+
+%output
+
+error: Undefined variable `global`
+   ┌─ <source: #68b287f1a7089847>:11:7
+   │
+11 │ print global, "error"
+   │       ^^^^^^

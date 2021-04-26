@@ -284,25 +284,21 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> SkipOnSu
     // how many multi-line comment opening tokens we found
     // this starts at one, because the initial /* is already consumed
     let mut opening_count = 1;
-    let mut previous_was_star = false;
+    let mut previous_two = [b'/', b'*'];
     for ch in lex.remainder().bytes() {
         n += 1;
-        match ch {
-            b'*' => previous_was_star = true,
-            b'/' if previous_was_star => {
+        previous_two[0] = previous_two[1];
+        previous_two[1] = ch;
+        match previous_two {
+            [b'/', b'*'] => opening_count += 1,
+            [b'*', b'/'] => {
                 // closing
-                previous_was_star = false;
                 opening_count -= 1;
                 if opening_count == 0 {
                     break;
                 }
             }
-            b'/' => {
-                // opening
-                opening_count += 1;
-                previous_was_star = false;
-            }
-            _ => previous_was_star = false,
+            _ => (),
         }
     }
 

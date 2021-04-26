@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
-                TokenKind::Print => unimplemented!(),
+                TokenKind::Print => self.print_stmt(),
                 TokenKind::Loop => unimplemented!(),
                 TokenKind::For => unimplemented!(),
                 TokenKind::While => unimplemented!(),
@@ -89,9 +89,22 @@ impl<'a> Parser<'a> {
                 TokenKind::Return => unimplemented!(),
                 _ => unreachable!(),
             }
+            .map(|res| {
+                self.skip_semi();
+                res
+            })
         } else {
             self.expr_stmt(consume_semi)
         }
+    }
+
+    fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let start = self.previous.span.start;
+        let args = self.comma()?;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Print(box args),
+            span: start..self.previous.span.end,
+        })
     }
 
     fn var_decl(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -821,7 +834,6 @@ impl<'a> Parser<'a> {
         let mut expr = self.call()?;
 
         if self.match_any(&[TokenKind::Increment, TokenKind::Decrement]) {
-            println!("??????");
             let kind = self.previous.kind.clone();
             expr = ast::Expr {
                 span: expr.span.start..self.previous.span.end,
@@ -1068,8 +1080,16 @@ impl<'a> Parser<'a> {
                 self.fid,
             ));
         }
+
         Err(VesError::parse(
-            format!("Unexpected token {}", self.previous.lexeme),
+            if self.previous.kind == TokenKind::EOF {
+                "File ended unexpected".to_string()
+            } else {
+                format!(
+                    "Unexpected token `{}` ({:?})",
+                    self.previous.lexeme, self.previous.kind
+                )
+            },
             self.current.span.clone(),
             self.fid,
         ))
@@ -1233,6 +1253,14 @@ impl<'a> Parser<'a> {
     fn advance(&mut self) -> Token<'a> {
         std::mem::swap(&mut self.previous, &mut self.current);
         self.current = self.lexer.next_token().unwrap_or_else(|| self.eof.clone());
+        if self.previous.kind == TokenKind::Error {
+            self.record(VesError::lex(
+                format!("Unexpected character sequence `{}`", self.previous.lexeme),
+                self.previous.span.clone(),
+                self.fid,
+            ));
+            self.advance();
+        }
         self.previous.clone()
     }
 
@@ -1384,4 +1412,5 @@ mod tests {
     test_ok!(t17_parse_struct_decl);
     test_ok!(t18_parse_var_decl);
     test_err!(t19_let_variables_must_be_initialized);
+    test_ok!(t20_parse_print_statement);
 }
