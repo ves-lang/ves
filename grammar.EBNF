@@ -2,12 +2,13 @@ program = line* EOF ;
 
 line = statement EOL ;
 
-statement = var_decl
-    | block
+statement = block
+    | var_decl
     | print_stmt
     | loop_stmt
     | control_stmt
     | defer_stmt
+    | return_stmt
     | expr_stmt
     ;
 
@@ -40,6 +41,8 @@ condition = ( ( "ok" | "err" ) "(" IDENTIFIER ")" "=" )? expression ;
 
 defer_stmt = "defer" ( block | call );
 expr_stmt = comma ( ";" comma )* ;
+
+return_stmt = "return" ( expression )? ;
 
 comma = expression ( "," expression )* ;
 

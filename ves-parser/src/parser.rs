@@ -108,8 +108,8 @@ impl<'a> Parser<'a> {
                 TokenKind::While => self.while_loop_stmt(label),
                 TokenKind::Break => self.break_or_continue_stmt(ast::StmtKind::Break),
                 TokenKind::Continue => self.break_or_continue_stmt(ast::StmtKind::Continue),
-                TokenKind::Defer => unimplemented!(),
-                TokenKind::Return => unimplemented!(),
+                TokenKind::Defer => self.defer_stmt(),
+                TokenKind::Return => self.return_stmt(),
                 _ => unreachable!(),
             }
             .map(|res| {
@@ -119,23 +119,6 @@ impl<'a> Parser<'a> {
         } else {
             self.expr_stmt(consume_semi)
         }
-    }
-
-    fn break_or_continue_stmt<F>(&mut self, constructor: F) -> ParseResult<ast::Stmt<'a>>
-    where
-        F: Fn(Option<Token<'a>>) -> ast::StmtKind,
-    {
-        let start = self.previous.span.start;
-        let label = if self.match_(&TokenKind::AtIdentifier) {
-            Some(self.previous.clone())
-        } else {
-            None
-        };
-
-        Ok(ast::Stmt {
-            kind: constructor(label),
-            span: start..self.previous.span.end,
-        })
     }
 
     fn block_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
@@ -324,6 +307,77 @@ impl<'a> Parser<'a> {
                 body,
                 label,
             }),
+            span: span_start..span_end,
+        })
+    }
+
+    fn break_or_continue_stmt<F>(&mut self, constructor: F) -> ParseResult<ast::Stmt<'a>>
+    where
+        F: Fn(Option<Token<'a>>) -> ast::StmtKind,
+    {
+        let start = self.previous.span.start;
+        let label = if self.match_(&TokenKind::AtIdentifier) {
+            Some(self.previous.clone())
+        } else {
+            None
+        };
+
+        Ok(ast::Stmt {
+            kind: constructor(label),
+            span: start..self.previous.span.end,
+        })
+    }
+
+    fn defer_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let expr = if self.match_(&TokenKind::LeftBrace) {
+            let body_start = self.previous.span.start;
+            let body = self.block()?;
+            let body_end = self.previous.span.end;
+            let body_span = body_start..body_end;
+            let (line, column) = self.db.location(self.fid, &body_span);
+            let name = Token::new(
+                format!("[defer@{}:{}]", line, column),
+                self.previous.span.clone(),
+                TokenKind::Identifier,
+            );
+            ast::Expr {
+                kind: ast::ExprKind::Call(box ast::Call {
+                    callee: box ast::Expr {
+                        kind: ast::ExprKind::Fn(box ast::FnInfo {
+                            name,
+                            params: ast::Params::default(),
+                            body,
+                            kind: ast::FnKind::Function,
+                        }),
+                        span: body_span.clone(),
+                    },
+                    args: vec![],
+                    tco: false,
+                    rest: false,
+                }),
+                span: body_span,
+            }
+        } else {
+            self.call()?
+        };
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Defer(box expr),
+            span: span_start..span_end,
+        })
+    }
+
+    fn return_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
+        let span_start = self.previous.span.start;
+        let expr = if !self.match_(&TokenKind::Semi) && !self.check(&TokenKind::RightBrace) {
+            Some(box self.expr()?)
+        } else {
+            None
+        };
+        let span_end = self.previous.span.end;
+        Ok(ast::Stmt {
+            kind: ast::StmtKind::Return(expr),
             span: span_start..span_end,
         })
     }
@@ -738,10 +792,7 @@ impl<'a> Parser<'a> {
         // but only if it is not terminated by a semicolon.
         // in any other case the value is `none`
 
-        self.consume(
-            &TokenKind::LeftBrace,
-            "Expected an opening `{` after the `do` keyword",
-        )?;
+        self.consume(&TokenKind::LeftBrace, "Expected an opening `{`")?;
         self.scope_depth += 1;
 
         let mut body = vec![];
@@ -1577,6 +1628,7 @@ mod tests {
     test_ok!(t22_parse_loop);
     test_err!(t23_parse_bad_loop);
     test_ok!(t24_parse_break_and_continue);
+    test_ok!(t25_parse_defer_and_return);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"

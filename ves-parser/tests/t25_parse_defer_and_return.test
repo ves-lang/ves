@@ -1,0 +1,54 @@
+return;
+if cond() { return }
+return value();
+
+defer call();
+defer { /* block */ };
+
+%output
+
+StmtKind::Return
+  return_value: None
+StmtKind::ExprStmt
+  expr: If
+    condition: Condition
+      value: Call
+        callee: ExprKind::Variable
+          name: "cond"
+        args=
+        tco: false
+        rest: false
+      pattern: ConditionPattern::Value
+    then: DoBlock
+      statements=
+        StmtKind::Return
+          return_value: None
+      value: None
+    otherwise: None
+StmtKind::Return
+  return_value: Call
+    callee: ExprKind::Variable
+      name: "value"
+    args=
+    tco: false
+    rest: false
+StmtKind::Defer
+  call: Call
+    callee: ExprKind::Variable
+      name: "call"
+    args=
+    tco: false
+    rest: false
+StmtKind::Defer
+  call: Call
+    callee: FnInfo
+      name: "[defer@6:7]"
+      params: Params
+        positional=
+        default=
+        rest: None
+      body=
+      kind: Function
+    args=
+    tco: false
+    rest: false
