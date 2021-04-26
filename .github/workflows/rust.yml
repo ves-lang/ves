@@ -15,22 +15,15 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v1.0.1
-        with:
-          path: target
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: nightly
           override: true
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v1
 
       - name: Run cargo test
         uses: actions-rs/cargo@v1
@@ -44,17 +37,6 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v2
 
-      - name: Cache Rust dependencies
-        uses: actions/cache@v1.0.1
-        with:
-          path: target
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
-            ${{ runner.os }}-
-            
-
       - name: Install nightly toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -62,6 +44,9 @@ jobs:
           toolchain: nightly
           override: true
           components: rustfmt, clippy, miri
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v1
 
       # NOTE: miri is *extremely* slow, it takes up too many CI minutes
       # - name: Run cargo miri test
