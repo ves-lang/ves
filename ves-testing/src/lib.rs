@@ -22,6 +22,7 @@ pub fn load_test_file(tests_dir: &Path, name: &str) -> (String, String) {
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read `{}`: {}", path.display(), e))
         .unwrap();
+    let source = source.replace("\r\n", "\n");
     let (code, expected) = source.split_once("%output\n").expect(
         "Invalid test file format. Make sure that your test contains the %output directive.",
     );
