@@ -375,7 +375,10 @@ impl Default for InterpolatedStringState {
 pub struct InterpolatedString<'a> {
     /// The fragments that make up this interpolated string.
     pub fragments: Vec<Frag<'a>>,
-    /// Whether or not this interpolated string had a closing quote.
+    /// The state at which the lexer left the string
+    ///
+    /// This is used to report a more specific error in case a fragment's
+    /// closing brace or the entire string's closing quote is missing
     pub state: InterpolatedStringState,
 }
 
@@ -395,6 +398,7 @@ impl<'a> InterpolatedString<'a> {
 }
 
 fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> InterpolatedString<'a> {
+    let quote_kind = lex.slice().chars().nth(1).unwrap() as u8;
     let mut fragments = vec![];
 
     let remainder = lex.remainder();
@@ -410,7 +414,7 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Interpo
 
         bump_count = i;
         match byte {
-            b'"' => {
+            c if c == &quote_kind => {
                 if previous_fragment_end < i {
                     // + 1 to skip the backslash (\)
                     let span = (previous_fragment_end + 1)..i;

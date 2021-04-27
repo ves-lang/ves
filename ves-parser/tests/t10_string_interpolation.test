@@ -1,6 +1,10 @@
 f"test{2+2}";
 f"test { do { "yo" } }";
 f"test {f"\{1+1}"}";
+// same thing but with single quotes
+f'test{2+2}';
+f'test { do { 'yo' } }';
+f'test {f'\{1+1}'}';
 
 %output
 
@@ -32,6 +36,49 @@ StmtKind::ExprStmt
           statements=
           value: Lit
             token: "\"yo\""
+            value: LitValue::Str("yo")
+StmtKind::ExprStmt
+  expr: FString
+    fragments=
+      FStringFrag::Str
+        field0: Lit
+          token: "test "
+          value: LitValue::Str("test ")
+      FStringFrag::Expr
+        field0: FString
+          fragments=
+            FStringFrag::Str
+              field0: Lit
+                token: "{1+1}"
+                value: LitValue::Str("{1+1}")
+StmtKind::ExprStmt
+  expr: FString
+    fragments=
+      FStringFrag::Str
+        field0: Lit
+          token: "test"
+          value: LitValue::Str("test")
+      FStringFrag::Expr
+        field0: ExprKind::Binary
+          op: Add
+          left: Lit
+            token: "2"
+            value: LitValue::Number(2.0)
+          right: Lit
+            token: "2"
+            value: LitValue::Number(2.0)
+StmtKind::ExprStmt
+  expr: FString
+    fragments=
+      FStringFrag::Str
+        field0: Lit
+          token: "test "
+          value: LitValue::Str("test ")
+      FStringFrag::Expr
+        field0: DoBlock
+          statements=
+          value: Lit
+            token: "'yo'"
             value: LitValue::Str("yo")
 StmtKind::ExprStmt
   expr: FString
