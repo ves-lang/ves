@@ -1,0 +1,10 @@
+// unterminated fragment
+f'test {1+1';
+
+%output
+
+error: One of this interpolated string's fragments is missing a closing brace
+  ┌─ <source: #5880e4f3d58258eb>:2:1
+  │
+2 │ f'test {1+1';
+  │ ^^^^^^^^^^^^^

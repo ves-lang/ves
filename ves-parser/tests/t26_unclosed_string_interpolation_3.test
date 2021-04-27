@@ -1,0 +1,10 @@
+// unclosed quote
+f'test {1+1};
+
+%output
+
+error: This interpolated string is missing a closing quote
+  ┌─ <source: #97bf8ab3437ecc8b>:2:1
+  │
+2 │ f'test {1+1};
+  │ ^^^^^^^^^^^^^

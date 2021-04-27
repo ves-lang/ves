@@ -1627,6 +1627,8 @@ mod tests {
     test_ok!(t25_parse_defer_and_return);
     test_err!(t26_unclosed_string_interpolation_0);
     test_err!(t26_unclosed_string_interpolation_1);
+    test_err!(t26_unclosed_string_interpolation_2);
+    test_err!(t26_unclosed_string_interpolation_3);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"
