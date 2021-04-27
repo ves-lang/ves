@@ -199,6 +199,9 @@ pub enum TokenKind<'a> {
     Is,
     #[token("if")]
     If,
+    /// Alias
+    #[token("as")]
+    As,
     #[token("else")]
     Else,
     /// Infinite 'loop'
@@ -240,6 +243,12 @@ pub enum TokenKind<'a> {
     /// The reserved self identifier.
     #[token("self")]
     Self_,
+    /// Import
+    #[token("import")]
+    Import,
+    /// Export
+    #[token("export")]
+    Export,
     // Whitespace or ignored tokens
     #[regex("//[^\n]*", logos::skip)]
     Comment,
@@ -858,5 +867,25 @@ mod tests {
                 token!(RightBracket, "]"),
             ]
         );
+    }
+
+    #[test]
+    fn import_and_export() {
+        const SOURCE: &str = r#"
+        import thing
+        export let v = 0
+        "#;
+        assert_eq!(
+            test_tokenize(SOURCE),
+            vec![
+                token!(Import, "import"),
+                token!(Identifier, "thing"),
+                token!(Export, "export"),
+                token!(Let, "let"),
+                token!(Identifier, "v"),
+                token!(Equal, "="),
+                token!(Number, "0"),
+            ]
+        )
     }
 }
