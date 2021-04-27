@@ -1,0 +1,39 @@
+a++;
+++a;
+++a[0];
+a[0]++;
+
+%output
+
+StmtKind::ExprStmt
+  expr: ExprKind::PostfixIncDec
+    inner: IncDec
+      expr: ExprKind::Variable
+        name: "a"
+      kind: Increment
+StmtKind::ExprStmt
+  expr: ExprKind::PrefixIncDec
+    inner: IncDec
+      expr: ExprKind::Variable
+        name: "a"
+      kind: Increment
+StmtKind::ExprStmt
+  expr: ExprKind::PrefixIncDec
+    inner: IncDec
+      expr: GetItem
+        node: ExprKind::Variable
+          name: "a"
+        key: Lit
+          token: "0"
+          value: LitValue::Number(0.0)
+      kind: Increment
+StmtKind::ExprStmt
+  expr: ExprKind::PostfixIncDec
+    inner: IncDec
+      expr: GetItem
+        node: ExprKind::Variable
+          name: "a"
+        key: Lit
+          token: "0"
+          value: LitValue::Number(0.0)
+      kind: Increment

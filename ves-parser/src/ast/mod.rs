@@ -511,9 +511,9 @@ pub enum ExprKind<'a> {
     /// A range specified, e.g. `0..10` or `start..end, -2`.
     Range(#[forward] Ptr<Range<'a>>),
     /// A prefix increment or decrement
-    PrefixIncDec(#[forward] Ptr<IncDec<'a>>),
+    PrefixIncDec(#[rename = "inner"] Ptr<IncDec<'a>>),
     /// A postfix increment or decrement
-    PostfixIncDec(#[forward] Ptr<IncDec<'a>>),
+    PostfixIncDec(#[rename = "inner"] Ptr<IncDec<'a>>),
     /// An assignment expression
     Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.

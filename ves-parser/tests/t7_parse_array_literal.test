@@ -1,5 +1,6 @@
 [0, "a", none, a];
-[...v]
+[...v];
+[...do { [1,2,3] }];
 
 %output
 
@@ -23,3 +24,20 @@ StmtKind::ExprStmt
       ExprKind::Spread
         value: ExprKind::Variable
           name: "v"
+StmtKind::ExprStmt
+  expr: ExprKind::Array
+    values=
+      ExprKind::Spread
+        value: DoBlock
+          statements=
+          value: ExprKind::Array
+            values=
+              Lit
+                token: "1"
+                value: LitValue::Number(1.0)
+              Lit
+                token: "2"
+                value: LitValue::Number(2.0)
+              Lit
+                token: "3"
+                value: LitValue::Number(3.0)

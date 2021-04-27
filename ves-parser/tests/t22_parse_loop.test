@@ -168,10 +168,11 @@ For
   condition: Lit
     token: "true"
     value: LitValue::Bool(true)
-  increment: IncDec
-    expr: ExprKind::Variable
-      name: "i"
-    kind: Increment
+  increment: ExprKind::PrefixIncDec
+    inner: IncDec
+      expr: ExprKind::Variable
+        name: "i"
+      kind: Increment
   body: StmtKind::Block
     statements=
   label: None
@@ -189,20 +190,22 @@ For
   condition: Lit
     token: "true"
     value: LitValue::Bool(true)
-  increment: IncDec
-    expr: ExprKind::Variable
-      name: "i"
-    kind: Increment
+  increment: ExprKind::PrefixIncDec
+    inner: IncDec
+      expr: ExprKind::Variable
+        name: "i"
+      kind: Increment
   body: StmtKind::Block
     statements=
   label: None
 For
   initializers=
   condition: None
-  increment: IncDec
-    expr: ExprKind::Variable
-      name: "i"
-    kind: Increment
+  increment: ExprKind::PrefixIncDec
+    inner: IncDec
+      expr: ExprKind::Variable
+        name: "i"
+      kind: Increment
   body: StmtKind::Block
     statements=
   label: None

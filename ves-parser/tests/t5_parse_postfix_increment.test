@@ -1,9 +1,0 @@
-a++
-
-%output
-
-StmtKind::ExprStmt
-  expr: IncDec
-    expr: ExprKind::Variable
-      name: "a"
-    kind: Increment

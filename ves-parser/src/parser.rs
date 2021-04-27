@@ -1227,12 +1227,15 @@ impl<'a> Parser<'a> {
             self.try_unescape(&mut literal, span);
             return Ok(literal!(self, ast::LitValue::Str(literal.into())));
         }
-        if self.match_(&TokenKind::InterpolatedString(vec![])) {
+        if self.match_(&TokenKind::InterpolatedString(Default::default())) {
             let span_start = self.previous.span.start;
             let mut fragments = vec![];
             let previous = std::mem::replace(&mut self.previous, self.eof.clone());
-            if let TokenKind::InterpolatedString(unprocessed) = previous.kind {
-                for frag in unprocessed.into_iter() {
+            if let TokenKind::InterpolatedString(fstr) = previous.kind {
+                if let Some(error) = fstr.error() {
+                    return Err(VesError::parse(error, previous.span.clone(), self.fid));
+                }
+                for frag in fstr.fragments.into_iter() {
                     match frag {
                         lexer::Frag::Str(v) => fragments.push(ast::FStringFrag::Str(ast::Lit {
                             token: v.clone(),
@@ -1246,13 +1249,6 @@ impl<'a> Parser<'a> {
                             let mut subparser = Parser::new(sublexer, self.fid, self.db);
                             subparser.advance();
                             fragments.push(ast::FStringFrag::Expr(subparser.expr()?));
-                        }
-                        lexer::Frag::UnterminatedFragment(frag) => {
-                            return Err(VesError::parse(
-                                "Unterminated fragment",
-                                frag.span,
-                                self.fid,
-                            ));
                         }
                     }
                 }
@@ -1608,7 +1604,7 @@ mod tests {
     test_ok!(t2_parse_comma);
     test_ok!(t3_parse_or);
     test_ok!(t4_parse_access);
-    test_ok!(t5_parse_postfix_increment);
+    test_ok!(t5_parse_increment);
     test_err!(t6_parse_invalid_assignments);
     test_ok!(t7_parse_array_literal);
     test_ok!(t8_parse_map_literals);
@@ -1629,6 +1625,8 @@ mod tests {
     test_err!(t23_parse_bad_loop);
     test_ok!(t24_parse_break_and_continue);
     test_ok!(t25_parse_defer_and_return);
+    test_err!(t26_unclosed_string_interpolation_0);
+    test_err!(t26_unclosed_string_interpolation_1);
     // TODO: test these once all statements are implemented
     /* assert_ast!(
         r#"

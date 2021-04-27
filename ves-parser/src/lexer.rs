@@ -150,9 +150,9 @@ pub enum TokenKind<'a> {
     /// Interpolated string
     ///
     /// e.g. `f"fragment {expr}"` `f"\{escaped}"`
-    #[regex("f\"([^\"\\\\]|\\\\.)*\"", interpolated_string)]
-    #[regex("f'([^'\\\\]|\\\\.)*'", interpolated_string)]
-    InterpolatedString(Vec<Frag<'a>>),
+    #[regex(r#"f""#, interpolated_string)]
+    #[regex(r#"f'"#, interpolated_string)]
+    InterpolatedString(InterpolatedString<'a>),
     /// String literal
     #[regex("\"([^\"\\\\]|\\\\.)*\"")]
     #[regex("'([^'\\\\]|\\\\.)*'")]
@@ -315,8 +315,6 @@ fn multi_line_comment<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> SkipOnSu
 pub enum Frag<'a> {
     /// A string fragment.
     Str(Token<'a>),
-    /// An unterminated interpolation fragment.
-    UnterminatedFragment(Token<'a>),
     /// An executable interpolated fragment.
     Sublexer(logos::Lexer<'a, TokenKind<'a>>),
 }
@@ -325,7 +323,6 @@ impl<'a> std::hash::Hash for Frag<'a> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             Frag::Str(t) => t.hash(state),
-            Frag::UnterminatedFragment(t) => t.hash(state),
             Frag::Sublexer(l) => {
                 l.source().hash(state);
                 l.span().hash(state);
@@ -340,7 +337,7 @@ impl<'a> std::fmt::Debug for Frag<'a> {
             f,
             "{}",
             match self {
-                Self::Str(tok) | Self::UnterminatedFragment(tok) =>
+                Self::Str(tok) =>
                     if f.alternate() {
                         format!("{:#?}", tok)
                     } else {
@@ -356,95 +353,132 @@ impl<'a> PartialEq for Frag<'a> {
     fn eq(&self, other: &Frag<'a>) -> bool {
         match (self, other) {
             (Self::Str(l), Self::Str(r)) => l.lexeme == r.lexeme,
-            (Self::UnterminatedFragment(l), Self::UnterminatedFragment(r)) => l.lexeme == r.lexeme,
             (_, _) => true,
         }
     }
 }
 impl<'a> Eq for Frag<'a> {}
 
-fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Vec<Frag<'a>> {
-    let global_start = lex.span().start;
-    let source = lex.source();
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InterpolatedStringState {
+    Closed,
+    MissingQuote,
+    MissingBrace,
+}
+impl Default for InterpolatedStringState {
+    fn default() -> Self {
+        InterpolatedStringState::Closed
+    }
+}
 
-    let mut frags = vec![];
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InterpolatedString<'a> {
+    /// The fragments that make up this interpolated string.
+    pub fragments: Vec<Frag<'a>>,
+    /// Whether or not this interpolated string had a closing quote.
+    pub state: InterpolatedStringState,
+}
 
-    let bytes = lex.slice().bytes().collect::<Vec<_>>();
+impl<'a> InterpolatedString<'a> {
+    #[inline]
+    pub fn error(&self) -> Option<&'static str> {
+        match self.state {
+            InterpolatedStringState::Closed => None,
+            InterpolatedStringState::MissingQuote => {
+                Some("This interpolated string is missing a closing quote")
+            }
+            InterpolatedStringState::MissingBrace => {
+                Some("One of this interpolated string's fragments is missing a closing brace")
+            }
+        }
+    }
+}
 
-    // Skip the `f` and the opening quote.
-    let mut i = 2;
-    let mut prev_fragment_end = 2;
+fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> InterpolatedString<'a> {
+    let mut fragments = vec![];
 
-    while i < bytes.len() - 1 {
-        if bytes[i] == b'{' {
-            // An unescaped fragment
-            if bytes.get(i - 1) != Some(&b'\\') {
-                let span = Span {
-                    start: global_start + prev_fragment_end,
-                    end: global_start + i,
+    let remainder = lex.remainder();
+    let bytes = remainder.as_bytes();
+    let mut previous_fragment_end = 0;
+    let mut state = InterpolatedStringState::MissingQuote;
+    let mut bump_count = 0;
+    for (i, byte) in bytes.iter().enumerate() {
+        // we just parsed a fragment and need to catch up to where it stopped parsing
+        if i < previous_fragment_end {
+            continue;
+        }
+
+        bump_count = i;
+        match byte {
+            b'"' => {
+                if previous_fragment_end < i {
+                    // + 1 to skip the backslash (\)
+                    let span = (previous_fragment_end + 1)..i;
+                    let remainder = &remainder[span.clone()];
+                    if !remainder.is_empty() {
+                        fragments.push(Frag::Str(Token::new(remainder, span, TokenKind::String)));
+                    }
+                }
+                state = InterpolatedStringState::Closed;
+                break;
+            }
+            b'{' if bytes.get(i - 1) != Some(&b'\\') => {
+                let span = if previous_fragment_end != 0 {
+                    (previous_fragment_end + 1)..i
+                } else {
+                    0..i
                 };
-                frags.push(Frag::Str(Token::new(
-                    &source[span.clone()],
+                fragments.push(Frag::Str(Token::new(
+                    &remainder[span.clone()],
                     span,
                     TokenKind::String,
                 )));
 
-                let frag_start = i + 1;
-                while i < bytes.len() && bytes[i] != b'}' {
-                    i += 1;
+                let mut unclosed_braces = 1;
+                // + 1 to skip opening brace
+                let fragment_start = i + 1;
+                let fragment_bytes = (&remainder[fragment_start..]).as_bytes();
+                let mut fragment_end = 0;
+                for (fi, byte) in fragment_bytes.iter().enumerate() {
+                    fragment_end = fragment_start + fi;
+                    match byte {
+                        b'{' => unclosed_braces += 1,
+                        b'}' => {
+                            unclosed_braces -= 1;
+                            if unclosed_braces == 0 {
+                                break;
+                            }
+                        }
+                        _ => (),
+                    }
                 }
-
-                let span = Span {
-                    start: global_start + frag_start,
-                    end: global_start + i,
-                };
-
-                if i == bytes.len() && bytes[i - 1] != b'}' {
-                    frags.push(Frag::UnterminatedFragment(Token::new(
-                        &source[Span {
-                            start: span.start - 1, // include the opening bracket
-                            end: span.end - 1,     // exclude the closing quote
-                        }],
-                        span,
-                        TokenKind::Error,
-                    )))
+                if unclosed_braces != 0 {
+                    lex.bump(fragment_end + 1);
+                    return InterpolatedString {
+                        fragments: vec![],
+                        state: InterpolatedStringState::MissingBrace,
+                    };
                 } else {
-                    frags.push(Frag::Sublexer(TokenKind::lexer(&source[span])));
-                }
-
-                prev_fragment_end = i + 1;
-            } else {
-                let span = Span {
-                    start: global_start + prev_fragment_end,
-                    end: global_start + i - 1, // exclude the escape
-                };
-
-                if !source[span.clone()].is_empty() {
-                    frags.push(Frag::Str(Token::new(
-                        &source[span.clone()],
-                        span,
-                        TokenKind::String,
+                    fragments.push(Frag::Sublexer(TokenKind::lexer(
+                        &remainder[fragment_start..fragment_end],
                     )));
                 }
-                prev_fragment_end = i;
+                previous_fragment_end = fragment_end;
             }
+            _ => (),
         }
-        i += 1;
     }
 
-    if prev_fragment_end < bytes.len() - 1 {
-        let span = Span {
-            start: global_start + prev_fragment_end,
-            end: global_start + bytes.len() - 1,
-        };
-        frags.push(Frag::Str(Token::new(
-            &source[span.clone()],
-            span,
-            TokenKind::String,
-        )));
-    }
+    lex.bump(bump_count + 1);
 
-    frags
+    InterpolatedString {
+        fragments: if state == InterpolatedStringState::Closed {
+            fragments
+        } else {
+            vec![]
+        },
+        state,
+    }
 }
 
 // Adapted from https://docs.rs/snailquote/0.3.0/x86_64-pc-windows-msvc/src/snailquote/lib.rs.html.
@@ -688,17 +722,21 @@ mod tests {
 
     #[test]
     fn string_interpolation() {
-        const SOURCE: &str = r#"f"1 + 1 = {1 + 1}""#;
+        const SOURCE: &str = r#" f"1 + 1 = {1 + 1}""#;
         let mut actual = test_tokenize(SOURCE);
+        //println!("{:#?}", actual);
         assert_eq!(actual.len(), 1);
-        if let TokenKind::InterpolatedString(fragments) = &mut actual[0].kind {
-            assert_eq!(fragments.len(), 2);
-            if let Frag::Str(token) = &fragments[0] {
+        if let TokenKind::InterpolatedString(fstr) = &mut actual[0].kind {
+            assert!(fstr.error().is_none());
+            assert_eq!(fstr.fragments.len(), 2);
+            if let Frag::Str(token) = &fstr.fragments[0] {
                 assert_eq!(TestToken(token.clone()), token!(String, "1 + 1 = "));
             }
-            if let Frag::Sublexer(lex) = &mut fragments[1] {
+            if let Frag::Sublexer(lex) = &mut fstr.fragments[1] {
+                let actual_inner = test_tokenize_inner(lex);
+                //println!("{:#?}", actual_inner);
                 assert_eq!(
-                    test_tokenize_inner(lex),
+                    actual_inner,
                     vec![
                         token!(Number, "1"), token!(Plus, "+"), token!(Number, "1"),
                     ]
@@ -710,32 +748,80 @@ mod tests {
     }
 
     #[test]
+    fn string_interpolation_nested_block() {
+        const SOURCE: &str = r#"f"a { do { "nested block" } }""#;
+        let mut actual = test_tokenize(SOURCE);
+        //println!("{:#?}", actual);
+        assert_eq!(actual.len(), 1);
+        if let TokenKind::InterpolatedString(fstr) = &mut actual[0].kind {
+            assert!(fstr.error().is_none());
+            assert_eq!(fstr.fragments.len(), 2);
+            assert!(matches!(&fstr.fragments[0], Frag::Str(..)));
+            if let Frag::Str(token) = &fstr.fragments[0] {
+                assert_eq!(TestToken(token.clone()), token!(String, "a "));
+            }
+            assert!(matches!(&fstr.fragments[1], Frag::Sublexer(..)));
+            if let Frag::Sublexer(lex) = &mut fstr.fragments[1] {
+                let actual_inner = test_tokenize_inner(lex);
+                //println!("{:#?}", actual_inner);
+                assert_eq!(
+                    actual_inner,
+                    vec![
+                        token!(Do, "do"), token!(LeftBrace, "{"), token!(String, "\"nested block\""), token!(RightBrace, "}")
+                    ]
+                );
+            }
+        } else {
+            panic!("TokenKind was not InterpolatedString");
+        }
+    }
+
+    #[test]
     fn string_interpolation_escape() {
         const SOURCE: &str = r#"f"\{escaped}""#;
+        let actual = test_tokenize(SOURCE);
+        //println!("{:#?}", actual);
         assert_eq!(
-            test_tokenize(SOURCE),
+            actual,
             vec![
-                TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(
-                    vec![
+                TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(InterpolatedString {
+                    fragments: vec![
                         Frag::Str(Token::new(r#"{escaped}"#, 0..1, TokenKind::String))
-                    ]
-                )))
+                    ],
+                    state: InterpolatedStringState::Closed
+                })))
             ]
         );
     }
 
     #[test]
-    fn bad_string_interpolation() {
+    fn string_interpolation_unterminated_fragment() {
         const SOURCE: &str = r#"f"an {unterminated fragment""#;
+        let actual = test_tokenize(SOURCE);
+        //println!("{:#?}", actual);
         assert_eq!(
-            test_tokenize(SOURCE),
+            actual,
             vec![
-                TestToken(Token::new(r#"f"an {unterminated fragment""#, 0..28, TokenKind::InterpolatedString(
-                    vec![
-                        Frag::Str(Token::new(r#"an "#, 2..5, TokenKind::String)),
-                        Frag::UnterminatedFragment(Token::new(r#"{unterminated fragment"#, 6..28, TokenKind::Error))
-                    ]
-                )))
+                TestToken(Token::new(r#"f"an {unterminated fragment""#, 0..28, TokenKind::InterpolatedString(InterpolatedString {
+                    fragments: vec![],
+                    state: InterpolatedStringState::MissingBrace
+                })))
+            ]
+        );
+    }
+
+    #[test]
+    fn string_interpolation_unclosed_quote() {
+        const SOURCE: &str = r#"f"test"#;
+        let actual = test_tokenize(SOURCE);
+        //println!("{:#?}", actual);
+        assert_eq!(
+            actual,
+            vec![
+                TestToken(Token::new(r#"f"test"#, 0..6, TokenKind::InterpolatedString(InterpolatedString {
+                    fragments: vec![],
+                    state: InterpolatedStringState::MissingQuote
+                })))
             ]
         );
     }

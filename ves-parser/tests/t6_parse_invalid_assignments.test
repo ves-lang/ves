@@ -2,28 +2,43 @@ a?.b = v;
 a()?.b = v;
 [a,b,c].f()?.x = v;
 a()?.b().c = v;
+++a?.b;
+a?.b++;
 
 %output
+
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #cde58996444e18d3>:1:1
+  ┌─ <source: #6730db97cf02dd5c>:1:1
   │
 1 │ a?.b = v;
   │ ^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #cde58996444e18d3>:2:1
+  ┌─ <source: #6730db97cf02dd5c>:2:1
   │
 2 │ a()?.b = v;
   │ ^^^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #cde58996444e18d3>:3:1
+  ┌─ <source: #6730db97cf02dd5c>:3:1
   │
 3 │ [a,b,c].f()?.x = v;
   │ ^^^^^^^^^^^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #cde58996444e18d3>:4:1
+  ┌─ <source: #6730db97cf02dd5c>:4:1
   │
 4 │ a()?.b().c = v;
   │ ^^^^^^^^^^
+
+error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
+  ┌─ <source: #6730db97cf02dd5c>:5:1
+  │
+5 │ ++a?.b;
+  │ ^^^^^^
+
+error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
+  ┌─ <source: #6730db97cf02dd5c>:6:1
+  │
+6 │ a?.b++;
+  │ ^^^^^^
