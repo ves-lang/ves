@@ -3,6 +3,10 @@ a++;
 ++a[0];
 a[0]++;
 
+ok val;
+err err val;
+try err ++val;
+
 %output
 
 StmtKind::ExprStmt
@@ -37,3 +41,25 @@ StmtKind::ExprStmt
           token: "0"
           value: LitValue::Number(0.0)
       kind: Increment
+StmtKind::ExprStmt
+  expr: ExprKind::Unary
+    op: Ok
+    operand: ExprKind::Variable
+      name: "val"
+StmtKind::ExprStmt
+  expr: ExprKind::Unary
+    op: Err
+    operand: ExprKind::Unary
+      op: Err
+      operand: ExprKind::Variable
+        name: "val"
+StmtKind::ExprStmt
+  expr: ExprKind::Unary
+    op: Try
+    operand: ExprKind::Unary
+      op: Err
+      operand: ExprKind::PrefixIncDec
+        inner: IncDec
+          expr: ExprKind::Variable
+            name: "val"
+          kind: Increment

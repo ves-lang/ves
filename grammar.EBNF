@@ -1,6 +1,18 @@
-program = line* EOF ;
+program = ( line | export | import )* EOF ;
+
 
 line = statement EOL ;
+
+import = "import" ( direct_import | destructured_import ) EOL ;
+direct_import = import_name alias? ;
+destructured_import = "{" alias_list "}" "from" import_name ;
+import_name = IDENTIFIER | PATH ;
+alias = "as" IDENTIFIER ;
+alias_lis = IDENTIFIER alias? ( "," IDENTIFIER alias? )* ;
+
+export = "export" ( export_statement | export_block ) EOL ;
+export_statement = var_decl | fn_decl | struct_decl ;
+export_block = "{" alias_list "}" ;
 
 statement = block
     | var_decl

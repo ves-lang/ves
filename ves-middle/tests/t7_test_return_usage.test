@@ -1,0 +1,33 @@
+struct S(x) { 
+    init { 
+        if (false) { return 5; } // error
+        return; // ok
+    }
+
+    method1(self) { loop { return; } } // ok
+    method2(self) => none  // ok
+    method3() { return; } // ok
+    method4() => none  // ok
+}
+
+fn func1() { return; }
+fn func2() => none;
+
+print(fn() { return }); // ok
+print(fn() => none); // ok
+
+return; // ok 
+
+do {
+    return; // ok 
+}
+
+loop { return; } // ok 
+
+%output
+
+error: Cannot return a value from an init block
+  ┌─ <source: #398ca02a25e735c8>:3:22
+  │
+3 │         if (false) { return 5; } // error
+  │                      ^^^^^^^^

@@ -190,9 +190,6 @@ impl<'a> Resolver<'a> {
                 }
 
                 match self.scope_kind {
-                    ScopeKind::Global | ScopeKind::Local => {
-                        Self::error("Cannot return outside of a function", stmt.span.clone(), ex);
-                    }
                     // init {} blocks cannot return values
                     ScopeKind::Initializer if value.is_some() => {
                         Self::error(
@@ -212,7 +209,11 @@ impl<'a> Resolver<'a> {
                             span: stmt.span.clone(),
                         });
                     }
-                    ScopeKind::Function | ScopeKind::AssocMethod | ScopeKind::Method => {}
+                    ScopeKind::Global
+                    | ScopeKind::Local
+                    | ScopeKind::Function
+                    | ScopeKind::AssocMethod
+                    | ScopeKind::Method => {}
                 }
             }
             StmtKind::Break(label) => {
@@ -314,16 +315,23 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_function(&mut self, f: &mut FnInfo<'a>, ex: &mut ErrCtx) {
-        self.declare(&f.name, NameKind::Fn, ex);
-        self.assign(&f.name, ex);
+        if f.kind != FnKind::Initializer {
+            self.declare(&f.name, NameKind::Fn, ex);
+            self.assign(&f.name, ex);
+        }
 
         let prev_kind = self.scope_kind;
         self.scope_kind = match f.kind {
             FnKind::Method => ScopeKind::Method,
             FnKind::Static => ScopeKind::AssocMethod,
             FnKind::Function => ScopeKind::Function,
+            FnKind::Initializer => ScopeKind::Initializer,
         };
         self.env.push();
+
+        for (_, p) in &mut f.params.default {
+            self.resolve_expr(p, ex);
+        }
 
         for param in f
             .params
@@ -344,7 +352,38 @@ impl<'a> Resolver<'a> {
 
     fn resolve_expr(&mut self, expr: &mut Expr<'a>, ex: &mut ErrCtx) {
         match &mut expr.kind {
-            ExprKind::Struct(_) => unimplemented!(),
+            ExprKind::Struct(box StructInfo {
+                ref name,
+                ref mut fields,
+                ref mut methods,
+                ref mut initializer,
+                ref mut r#static,
+            }) => {
+                self.declare(name, NameKind::Let, ex);
+                self.assign(name, ex);
+
+                if let Some(init) = initializer {
+                    self.env.push();
+                    let this = Token::new("self", name.span.clone(), TokenKind::Self_);
+                    self.declare(&this, NameKind::Let, ex);
+                    self.assign(&this, ex);
+                    self.r#use(&this, ex);
+                    self.resolve_function(&mut init.body, ex);
+                    self.env.pop();
+                }
+
+                for (_, field) in fields.iter_mut().flat_map(|f| &mut f.default) {
+                    self.resolve_expr(field, ex);
+                }
+
+                for field in r#static.fields.iter_mut().filter_map(|(_, f)| f.as_mut()) {
+                    self.resolve_expr(field, ex);
+                }
+
+                for method in methods.iter_mut().chain(r#static.methods.iter_mut()) {
+                    self.resolve_function(method, ex);
+                }
+            }
             ExprKind::Fn(box ref mut r#fn) => {
                 self.resolve_function(r#fn, ex);
             }
@@ -396,7 +435,13 @@ impl<'a> Resolver<'a> {
                 FStringFrag::Expr(ref mut expr) => self.resolve_expr(expr, ex),
             }),
             ExprKind::Array(arr) => arr.iter_mut().for_each(|expr| self.resolve_expr(expr, ex)),
-            ExprKind::Map(_) => unimplemented!(),
+            ExprKind::Map(entries) => entries.iter_mut().for_each(|entry| match entry {
+                MapEntry::Pair(key, value) => {
+                    self.resolve_expr(key, ex);
+                    self.resolve_expr(value, ex);
+                }
+                MapEntry::Spread(expr) => self.resolve_expr(expr, ex),
+            }),
             ExprKind::Variable(v) => {
                 if matches!(v.kind, TokenKind::Self_)
                     && !matches!(self.scope_kind, ScopeKind::Method | ScopeKind::Initializer)
@@ -449,7 +494,6 @@ impl<'a> Resolver<'a> {
     }
 
     fn declare_loop_label(&mut self, label: &Option<Token<'a>>, ex: &mut ErrCtx) {
-        println!("??? {:?}", label);
         if let Some(ref lbl) = label {
             self.declare(lbl, NameKind::Let, ex);
             self.assign(lbl, ex);
@@ -625,67 +669,6 @@ pub mod tests {
     test_ok!(t4_test_shadowing_unused_variable_warning);
     test_err!(t5_cannot_break_outside_of_a_loop);
     test_err!(t6_test_undefined_loop_labels_are_detected);
-
-    #[ignore]
-    #[test]
-    fn test_undefined_loop_labels_are_detected() {
-        let _source = r#"
-            loop { 
-                break @label;
-            }
-            @label: loop { 
-                break @label;
-            }
-        "#;
-    }
-
-    #[ignore]
-    #[test]
-    fn test_return_is_allowed_only_in_functions() {
-        let _source = r#"
-        struct S(x) { 
-            init { 
-                if (false) { return 5; } // error
-                return; // ek
-            }
-
-            method1(self) { loop { return;  } } // ok
-            method2(self) => none;  // ok
-            method3() { return; } // ok
-            method4() => none;  // ok
-        }
-
-        fn func1() { return; }
-        fn func2() => none;
-
-        print(fn() { return }); // ok
-        print(fn() => none); // ok
-
-
-        return; // error
-
-        do {
-            return; // error
-        }
-
-        loop { return; } // error
-        "#;
-    }
-
-    #[ignore]
-    #[test]
-    fn test_globals_are_forward_declared() {
-        let _source = r#"
-        
-        fn test() { 
-            print(X); // ok
-            print(Z); // error since Z is never declared
-        }
-
-        let X = 5;
-
-        print(Y);     // error since Y hasn't been visited yet
-        let Y = 7;
-        "#;
-    }
+    test_err!(t7_test_return_usage);
+    test_err!(t8_self_may_be_used_only_inside_methods);
 }

@@ -17,7 +17,7 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     if token.kind == TokenKind::Identifier {
         matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "arr")
     } else {
-        false
+        token.kind == TokenKind::Self_
     }
 }
 
@@ -317,6 +317,9 @@ pub enum FnKind {
     /// A static method.
     /// Example: `pi() { return 3.141592; }`
     Static,
+    /// An initializer block.
+    /// Example: `init { print self.a; }`
+    Initializer,
 }
 
 /// A function or  method declaration.
@@ -339,7 +342,7 @@ impl<'a> FnInfo<'a> {
     pub fn is_method(&self) -> bool {
         match self.kind {
             FnKind::Function => false,
-            FnKind::Method | FnKind::Static => true,
+            FnKind::Initializer | FnKind::Method | FnKind::Static => true,
         }
     }
 }
@@ -365,9 +368,12 @@ impl<'a> Initializer<'a> {
     }
 }
 
+/// The static properties of a struct.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct StructStaticProps<'a> {
+    /// The static fields of the struct.
     pub fields: Vec<(Token<'a>, Option<Expr<'a>>)>,
+    /// The static methods of the struct.
     pub methods: Vec<FnInfo<'a>>,
 }
 
@@ -376,8 +382,9 @@ pub struct StructStaticProps<'a> {
 pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
-    /// The fields and methods defined on this struct.
+    /// The fields defined on this struct.
     pub fields: Option<Params<'a>>,
+    /// The methods defined on this struct.
     pub methods: Vec<FnInfo<'a>>,
     /// THe initializer block of this struct.
     pub initializer: Option<Initializer<'a>>,
@@ -452,9 +459,12 @@ pub struct Range<'a> {
     pub inclusive: bool,
 }
 
+/// The entry inside of a map literal.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub enum MapEntry<'a> {
+    /// A key-value pair.
     Pair(#[rename = "key"] Expr<'a>, #[rename = "value"] Expr<'a>),
+    /// A spread expression.
     Spread(#[rename = "target"] Expr<'a>),
 }
 

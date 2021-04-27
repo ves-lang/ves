@@ -1,0 +1,70 @@
+struct Test {
+    init { self } // ok
+    method1(self) => self // ok
+    method2() { return self } // error 
+    static1() => self // error
+    static2() => self // error
+}
+
+self // error
+do { self } // error
+fn func() => self // error
+
+[
+    {
+        ...{
+            [do {
+                if (true) {
+                    fn with_self_arg(self) { } // "error"
+                    fn with_default_self(self=3) { } // "error"
+                } else {
+                    fn with_self_as_default(arg = self) {} // "error"
+                }
+            }]: Test()
+        }
+    }
+]
+
+%output
+
+error: Cannot use `self` outside of an instance method or `init` block
+  ┌─ <source: #22656d792810848a>:4:24
+  │
+4 │     method2() { return self } // error 
+  │                        ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+  ┌─ <source: #22656d792810848a>:5:18
+  │
+5 │     static1() => self // error
+  │                  ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+  ┌─ <source: #22656d792810848a>:6:18
+  │
+6 │     static2() => self // error
+  │                  ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+  ┌─ <source: #22656d792810848a>:9:1
+  │
+9 │ self // error
+  │ ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+   ┌─ <source: #22656d792810848a>:10:6
+   │
+10 │ do { self } // error
+   │      ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+   ┌─ <source: #22656d792810848a>:11:14
+   │
+11 │ fn func() => self // error
+   │              ^^^^
+
+error: Cannot use `self` outside of an instance method or `init` block
+   ┌─ <source: #22656d792810848a>:21:51
+   │
+21 │                     fn with_self_as_default(arg = self) {} // "error"
+   │                                                   ^^^^

@@ -375,7 +375,7 @@ impl Default for InterpolatedStringState {
 pub struct InterpolatedString<'a> {
     /// The fragments that make up this interpolated string.
     pub fragments: Vec<Frag<'a>>,
-    /// The state at which the lexer left the string
+    /// The state at which the lexer left the string.
     ///
     /// This is used to report a more specific error in case a fragment's
     /// closing brace or the entire string's closing quote is missing
@@ -486,7 +486,7 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Interpo
 }
 
 // Adapted from https://docs.rs/snailquote/0.3.0/x86_64-pc-windows-msvc/src/snailquote/lib.rs.html.
-/// Unescaped the given string in-place. Returns `None` if the string contains an invalid escape sequence.
+/// Unescapes the given string in-place. Returns `None` if the string contains an invalid escape sequence.
 pub(crate) fn unescape_in_place(s: &mut String) -> Option<()> {
     let mut out = String::with_capacity(s.len());
     let mut chars = s.chars();

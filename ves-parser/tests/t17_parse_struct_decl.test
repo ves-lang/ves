@@ -14,7 +14,12 @@ struct Test(a, b=0) {
     // static field
     sf = 0
 }
-struct Test { init {} }
+struct Test(a, b, c) { 
+    init {
+        self.a = self.b + self.c
+        return
+    } 
+}
 
 %output
 
@@ -131,7 +136,13 @@ StmtKind::ExprStmt
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
-    fields: None
+    fields: Params
+      positional=
+        "a"
+        "b"
+        "c"
+      default=
+      rest: None
     methods=
     initializer: Initializer
       body: FnInfo
@@ -141,7 +152,26 @@ StmtKind::ExprStmt
           default=
           rest: None
         body=
-        kind: Method
+          StmtKind::ExprStmt
+            expr: SetProp
+              node: ExprKind::Variable
+                name: "self"
+              field: "a"
+              value: ExprKind::Binary
+                op: Add
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "b"
+                  is_optional: false
+                right: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "c"
+                  is_optional: false
+          StmtKind::Return
+            return_value: None
+        kind: Initializer
       may_escape: true
     r#static: StructStaticProps
       fields=

@@ -543,7 +543,7 @@ impl<'a> Parser<'a> {
                         name: prop_name,
                         params: ast::Params::default(),
                         body,
-                        kind: ast::FnKind::Method,
+                        kind: ast::FnKind::Initializer,
                     }));
                 } else if self.match_(&TokenKind::LeftParen) {
                     // this is a method
