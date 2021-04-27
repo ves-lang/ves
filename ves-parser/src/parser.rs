@@ -262,18 +262,21 @@ impl<'a> Parser<'a> {
                 }
                 while self.match_(&TokenKind::Comma) {
                     let name = self.consume(&TokenKind::Identifier, "Expected an identifier")?;
-                    self.consume(&TokenKind::Equal, "Expected '=' in binding")?;
+                    self.consume(
+                        &TokenKind::Equal,
+                        "Expected a '=' in an initializer binding",
+                    )?;
                     let value = self.expr()?;
                     initializers.push(ast::Assignment { name, value });
                 }
             }
-            self.consume(&TokenKind::Semi, "Expected ';'")?;
+            self.consume(&TokenKind::Semi, "Expected a ';' after the initializers")?;
             let condition = if !self.check(&TokenKind::Semi) {
                 Some(self.expr()?)
             } else {
                 None
             };
-            self.consume(&TokenKind::Semi, "Expected ';'")?;
+            self.consume(&TokenKind::Semi, "Expected a ';' after the condition ")?;
             let increment = if !self.check(&TokenKind::LeftBrace) {
                 Some(self.expr()?)
             } else {

@@ -142,7 +142,7 @@ impl<'a> Resolver<'a> {
 
                 self.resolve_expr(&mut r#for.iterator, ex);
 
-                self.declare(&r#for.variable, NameKind::Let, ex);
+                self.declare(&r#for.variable, NameKind::ForEachVar, ex);
                 self.assign(&r#for.variable, ex);
 
                 self.declare_loop_label(&r#for.label, ex);
@@ -559,15 +559,23 @@ impl<'a> Resolver<'a> {
         match self.env.get_mut(&name.lexeme) {
             Some(v) => {
                 if v.is_let() && v.assigned {
-                    Self::error_of_kind(
-                        VesErrorKind::LetReassignment,
-                        format!(
-                            "Cannot assign twice to the immutable variable {}",
-                            name.lexeme
-                        ),
-                        name.span.clone(),
-                        ex,
-                    );
+                    if v.kind == NameKind::ForEachVar {
+                        Self::error(
+                            "For-each loop variables may not be reassigned",
+                            name.span.clone(),
+                            ex,
+                        );
+                    } else {
+                        Self::error_of_kind(
+                            VesErrorKind::LetReassignment,
+                            format!(
+                                "Cannot assign twice to the immutable variable `{}`",
+                                name.lexeme
+                            ),
+                            name.span.clone(),
+                            ex,
+                        );
+                    }
                 }
                 v.assigned = true;
             }
@@ -671,4 +679,5 @@ pub mod tests {
     test_err!(t6_test_undefined_loop_labels_are_detected);
     test_err!(t7_test_return_usage);
     test_err!(t8_self_may_be_used_only_inside_methods);
+    test_err!(t9_test_for_loops);
 }

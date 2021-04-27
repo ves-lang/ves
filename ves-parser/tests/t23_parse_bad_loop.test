@@ -37,7 +37,7 @@ error: Expected loop body
 5 │ for i in 0..10 /* no body */ ;
   │                              ^
 
-error: Expected ';'
+error: Expected a ';' after the initializers
   ┌─ <source: #9f58d84e530cf088>:7:21
   │
 7 │ for /* no header */ {}

@@ -18,7 +18,7 @@ z = "error"
 
 %output
 
-error: Cannot assign twice to the immutable variable x
+error: Cannot assign twice to the immutable variable `x`
   ┌─ <source: #a03d8e32d2dad17b>:2:1
   │
 2 │ x = "error"
@@ -26,7 +26,7 @@ error: Cannot assign twice to the immutable variable x
   │ │
   │ help: Consider replacing `let` with `mut` to make the variable mutable
 
-error: Cannot assign twice to the immutable variable z
+error: Cannot assign twice to the immutable variable `z`
    ┌─ <source: #a03d8e32d2dad17b>:15:5
    │
 15 │     z = "error"
@@ -34,7 +34,7 @@ error: Cannot assign twice to the immutable variable z
    │     │
    │     help: Consider replacing `let` with `mut` to make the variable mutable
 
-error: Cannot assign twice to the immutable variable z
+error: Cannot assign twice to the immutable variable `z`
    ┌─ <source: #a03d8e32d2dad17b>:17:1
    │
 17 │ z = "error"

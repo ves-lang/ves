@@ -34,6 +34,8 @@ pub enum NameKind {
     Mut,
     /// An immutable variable.
     Let,
+    /// An immutable for-each loop variable
+    ForEachVar,
     /// A function declaration.
     Fn,
     /// A struct declaration
@@ -73,7 +75,10 @@ impl VarUsage {
 
     /// Returns true if variable is `let`.
     pub fn is_let(&self) -> bool {
-        matches!(self.kind, NameKind::Let | NameKind::Fn | NameKind::Struct)
+        matches!(
+            self.kind,
+            NameKind::Let | NameKind::Fn | NameKind::Struct | NameKind::ForEachVar
+        )
     }
 
     /// Returns true if the variable is `mut`.
