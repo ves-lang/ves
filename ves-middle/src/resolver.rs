@@ -766,14 +766,14 @@ pub mod tests {
 
     make_test_macros!(CRATE_ROOT, TESTS_DIR, parse_and_resolve, parse_and_resolve);
 
-    /* test_err!(t1_test_cannot_assign_to_let);
+    test_err!(t1_test_cannot_assign_to_let);
     test_err!(t2_test_variables_must_be_defined);
     test_err!(t3_test_globals_are_forward_declared);
     test_ok!(t4_test_shadowing_unused_variable_warning);
     test_err!(t5_cannot_break_outside_of_a_loop);
     test_err!(t6_test_undefined_loop_labels_are_detected);
     test_err!(t7_test_return_usage);
-    test_err!(t8_self_may_be_used_only_inside_methods); */
+    test_err!(t8_self_may_be_used_only_inside_methods);
     test_err!(t9_test_for_loops);
-    /* test_ok!(t10_unused_locals); */
+    test_ok!(t10_unused_locals);
 }
