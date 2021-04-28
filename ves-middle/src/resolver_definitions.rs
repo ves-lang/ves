@@ -48,6 +48,8 @@ impl From<VarKind> for NameKind {
         match var {
             VarKind::Let => NameKind::Let,
             VarKind::Mut => NameKind::Mut,
+            VarKind::Fn => NameKind::Fn,
+            VarKind::Struct => NameKind::Struct,
         }
     }
 }

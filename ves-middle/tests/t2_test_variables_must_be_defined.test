@@ -11,16 +11,40 @@ print(global, "ok")
 print(local, "error")
 print(undefined, "error")
 
+print(f())
+print(S())
+
+fn f() {}
+struct S
+
 %output
 
 error: Undefined variable `local`
-   ┌─ <source: #970f04b023f7451c>:11:7
+   ┌─ <source: #5670686dff123f31>:11:7
    │
 11 │ print(local, "error")
    │       ^^^^^
 
 error: Undefined variable `undefined`
-   ┌─ <source: #970f04b023f7451c>:12:7
+   ┌─ <source: #5670686dff123f31>:12:7
    │
 12 │ print(undefined, "error")
    │       ^^^^^^^^^
+
+error: Attempted to use the function `f` before its declaration
+   ┌─ <source: #5670686dff123f31>:14:7
+   │
+14 │ print(f())
+   │       ^
+   ·
+17 │ fn f() {}
+   │    - First declared on line 17
+
+error: Attempted to use the struct `S` before its declaration
+   ┌─ <source: #5670686dff123f31>:15:7
+   │
+15 │ print(S())
+   │       ^
+   ·
+18 │ struct S
+   │        - First declared on line 18

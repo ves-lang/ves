@@ -12,8 +12,10 @@ print(global, "ok")
 
 %output
 
-error: Undefined variable `global`
-  ┌─ <source: #879628b2a9f5644f>:9:7
-  │
-9 │ print(global, "error")
-  │       ^^^^^^
+error: Attempted to use the variable `global` before its declaration
+   ┌─ <source: #879628b2a9f5644f>:9:7
+   │
+ 9 │ print(global, "error")
+   │       ^^^^^^
+10 │ mut global
+   │     ------ First declared on line 10

@@ -1,0 +1,30 @@
+let x = ((1 + 2 * 3 - 0.3) / -4) ** 4
+let y = 10 % 7
+let z = "abc" + "def"
+
+%output
+
+StmtKind::Var
+  declarations=
+    Var
+      name: "x"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Number(7.871531640625001)
+StmtKind::Var
+  declarations=
+    Var
+      name: "y"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Number(3.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "z"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Str("abcdef")

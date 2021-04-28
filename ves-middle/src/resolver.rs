@@ -56,7 +56,9 @@ impl<'a> Resolver<'a> {
             ..Default::default()
         };
 
-        for global in &ast.globals {
+        let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
+        sorted_globals.sort_by_key(|e| e.name.span.start);
+        for global in &sorted_globals {
             self.declare_global(&global.name, NameKind::from(global.kind));
         }
 
@@ -526,6 +528,7 @@ impl<'a> Resolver<'a> {
         } else {
             true
         };
+
         if should_shadow {
             self.env.add(
                 name.lexeme.clone(),
@@ -542,6 +545,11 @@ impl<'a> Resolver<'a> {
 
     fn declare_global(&mut self, name: &Token<'a>, kind: NameKind) {
         debug_assert!(self.scope_kind == ScopeKind::Global);
+
+        // Avoid re-declaring forward-declared globals
+        if self.env.get(&name.lexeme).is_some() {
+            return;
+        }
 
         self.env.add(
             name.lexeme.clone(),
@@ -565,7 +573,7 @@ impl<'a> Resolver<'a> {
                             name.span.clone(),
                             ex,
                         );
-                    } else {
+                    } else if v.kind == NameKind::Let {
                         Self::error_of_kind(
                             VesErrorKind::LetReassignment,
                             format!(
@@ -575,9 +583,26 @@ impl<'a> Resolver<'a> {
                             name.span.clone(),
                             ex,
                         );
+                    } else if matches!(v.kind, NameKind::Fn | NameKind::Struct) {
+                        Self::error(
+                            format!(
+                                "Cannot assign to the {} `{}`",
+                                if v.kind == NameKind::Fn {
+                                    "function"
+                                } else {
+                                    "struct"
+                                },
+                                name.lexeme
+                            ),
+                            name.span.clone(),
+                            ex,
+                        );
                     }
                 }
-                v.assigned = true;
+                // Avoid assigning undeclared variables
+                if v.declared {
+                    v.assigned = true;
+                }
             }
             None => self.undefined_variable_error(name, ex),
         }
@@ -591,7 +616,15 @@ impl<'a> Resolver<'a> {
                 if !v.declared && self.scope_kind == ScopeKind::Global {
                     Self::error_of_kind(
                         VesErrorKind::UsedGlobalBeforeDeclaration(v.span.clone()),
-                        "Attempted to use the variable `{}` before its declaration",
+                        format!(
+                            "Attempted to use the {} `{}` before its declaration",
+                            match v.kind {
+                                NameKind::Fn => "function",
+                                NameKind::Struct => "struct",
+                                _ => "variable",
+                            },
+                            name.lexeme
+                        ),
                         name.span.clone(),
                         ex,
                     );

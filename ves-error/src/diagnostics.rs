@@ -20,9 +20,9 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | OptionalAccessAssignment
         | LetWithoutValue
         | LetReassignment
-        | FnBeforeMethod => Diagnostic::error(),
+        | FnBeforeMethod
+        | UsedGlobalBeforeDeclaration(_) => Diagnostic::error(),
         AttemptedToShadowUnusedVariable(_) => Diagnostic::warning(),
-        UsedGlobalBeforeDeclaration(_span) => unimplemented!(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
         Runtime => unimplemented!(),
@@ -44,6 +44,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         d = fn_before_method_diag(db, d, &e);
     } else if let AttemptedToShadowUnusedVariable(_) = e.kind {
         d = attempted_to_shadow_unused_diag(db, d, &e);
+    } else if let UsedGlobalBeforeDeclaration(_) = e.kind {
+        d = used_global_before_declaration_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -130,6 +132,23 @@ fn attempted_to_shadow_unused_diag<'a>(
     let line = db.line_index(e.file_id, span.start).unwrap() + 1;
     diag.with_labels(vec![
         first.with_message("Later shadowed here"),
+        Label::secondary(e.file_id, span).with_message(format!("First declared on line {}", line)),
+    ])
+}
+
+fn used_global_before_declaration_diag<'a>(
+    db: &VesFileDatabase<'a>,
+    mut diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    let first = diag.labels.pop().unwrap();
+    let span = match &e.kind {
+        crate::VesErrorKind::UsedGlobalBeforeDeclaration(span) => span.clone(),
+        _ => unreachable!(),
+    };
+    let line = db.line_index(e.file_id, span.start).unwrap() + 1;
+    diag.with_labels(vec![
+        first,
         Label::secondary(e.file_id, span).with_message(format!("First declared on line {}", line)),
     ])
 }

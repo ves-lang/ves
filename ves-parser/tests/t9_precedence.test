@@ -1,4 +1,5 @@
 1 / 1 + 1 * 1 ** 2
+10 % 7 + -3
 
 %output
 
@@ -26,3 +27,17 @@ StmtKind::ExprStmt
         right: Lit
           token: "2"
           value: LitValue::Number(2.0)
+StmtKind::ExprStmt
+  expr: ExprKind::Binary
+    op: Add
+    left: ExprKind::Binary
+      op: Rem
+      left: Lit
+        token: "10"
+        value: LitValue::Number(10.0)
+      right: Lit
+        token: "7"
+        value: LitValue::Number(7.0)
+    right: Lit
+      token: "-3"
+      value: LitValue::Number(-3.0)

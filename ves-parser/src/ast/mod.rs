@@ -437,7 +437,7 @@ pub struct DoBlock<'a> {
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct Call<'a> {
     /// The function or struct being called.
-    pub callee: ExprPtr<'a>,
+    pub callee: Expr<'a>,
     /// The arg passed to the call.
     pub args: Args<'a>,
     /// Whether the call can be compiled as tail call.
@@ -549,6 +549,10 @@ pub enum VarKind {
     Let,
     /// A mutable `mut` variable.
     Mut,
+    /// A function declaration.
+    Fn,
+    /// A struct declaration.
+    Struct,
 }
 
 /// A variable declaration statement.
@@ -665,10 +669,18 @@ impl<'a> Stmt<'a> {
             },
         }
     }
+
+    /// Creates an empty statement node with a synthetic span.
+    pub fn empty() -> Self {
+        Self {
+            kind: StmtKind::_Empty,
+            span: usize::MAX..usize::MAX,
+        }
+    }
 }
 
 impl<'a> ExprKind<'a> {
-    pub fn call(callee: ExprPtr<'a>, args: Args<'a>, rest: bool) -> Self {
+    pub fn call(callee: Expr<'a>, args: Args<'a>, rest: bool) -> Self {
         Self::Call(box Call {
             callee,
             args,
@@ -746,7 +758,7 @@ mod tests {
                                 UnOpKind::Try,
                                 box Expr {
                                     kind: ExprKind::Call(box Call {
-                                        callee: box Expr {
+                                        callee: Expr {
                                             kind: ExprKind::Variable(Token::new(
                                                 "api_method",
                                                 span.clone(),

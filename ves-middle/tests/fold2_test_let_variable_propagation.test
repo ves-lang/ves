@@ -1,0 +1,269 @@
+mut a = 0
+mut b = 1
+mut c = 3
+let unfolded = (a * 3 + 1 * b) / c
+
+let d = 0
+let e = 1
+let f = c
+let folded = (d * 3 + 1 * e) / f
+
+let a = 55;
+print(a + 1);
+
+let fold1 = 8231 * 231 + 32;
+let second = fold1 * 327;
+let third = (fold1 + second) / 3;
+print(third);
+
+{
+    mut a;
+    print(a);
+}
+
+fn h(a) {
+    print(a);
+}
+h("f");
+
+fn g(...a) {
+    print(a);
+}
+g("g");
+
+{
+    struct a {}
+    print(a, "a");
+}
+
+let s = "10";
+print(s);
+
+let too_long = "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+print(too_long);
+
+
+%output
+
+StmtKind::Var
+  declarations=
+    Var
+      name: "a"
+      kind: Mut
+      initializer: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "b"
+      kind: Mut
+      initializer: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "c"
+      kind: Mut
+      initializer: Lit
+        token: "3"
+        value: LitValue::Number(3.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "unfolded"
+      kind: Let
+      initializer: ExprKind::Binary
+        op: Div
+        left: ExprKind::Binary
+          op: Add
+          left: ExprKind::Binary
+            op: Mul
+            left: ExprKind::Variable
+              name: "a"
+            right: Lit
+              token: "3"
+              value: LitValue::Number(3.0)
+          right: ExprKind::Binary
+            op: Mul
+            left: Lit
+              token: "1"
+              value: LitValue::Number(1.0)
+            right: ExprKind::Variable
+              name: "b"
+        right: ExprKind::Variable
+          name: "c"
+StmtKind::Var
+  declarations=
+    Var
+      name: "d"
+      kind: Let
+      initializer: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "e"
+      kind: Let
+      initializer: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "f"
+      kind: Let
+      initializer: ExprKind::Variable
+        name: "c"
+StmtKind::Var
+  declarations=
+    Var
+      name: "folded"
+      kind: Let
+      initializer: ExprKind::Binary
+        op: Div
+        left: Lit
+          token: "<folded>"
+          value: LitValue::Number(1.0)
+        right: ExprKind::Variable
+          name: "f"
+StmtKind::Var
+  declarations=
+    Var
+      name: "a"
+      kind: Let
+      initializer: Lit
+        token: "55"
+        value: LitValue::Number(55.0)
+StmtKind::Print
+  value: Lit
+    token: "<folded>"
+    value: LitValue::Number(56.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "fold1"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Number(1901393.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "second"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Number(621755511.0)
+StmtKind::Var
+  declarations=
+    Var
+      name: "third"
+      kind: Let
+      initializer: Lit
+        token: "<folded>"
+        value: LitValue::Number(207885634.66666666)
+StmtKind::Print
+  value: Lit
+    token: "<folded>"
+    value: LitValue::Number(207885634.66666666)
+StmtKind::Block
+  statements=
+    StmtKind::Var
+      declarations=
+        Var
+          name: "a"
+          kind: Mut
+          initializer: None
+    StmtKind::Print
+      value: ExprKind::Variable
+        name: "a"
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "h"
+    params: Params
+      positional=
+        "a"
+      default=
+      rest: None
+    body=
+      StmtKind::Print
+        value: ExprKind::Variable
+          name: "a"
+    kind: Function
+StmtKind::ExprStmt
+  expr: Call
+    callee: ExprKind::Variable
+      name: "h"
+    args=
+      Lit
+        token: "\"f\""
+        value: LitValue::Str("f")
+    tco: false
+    rest: false
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "g"
+    params: Params
+      positional=
+      default=
+      rest: "a"
+    body=
+      StmtKind::Print
+        value: ExprKind::Variable
+          name: "a"
+    kind: Function
+StmtKind::ExprStmt
+  expr: Call
+    callee: ExprKind::Variable
+      name: "g"
+    args=
+      Lit
+        token: "\"g\""
+        value: LitValue::Str("g")
+    tco: false
+    rest: false
+StmtKind::Block
+  statements=
+    StmtKind::ExprStmt
+      expr: StructInfo
+        name: "a"
+        fields: None
+        methods=
+        initializer: None
+        r#static: StructStaticProps
+          fields=
+          methods=
+    StmtKind::Print
+      value: ExprKind::Comma
+        operands=
+          ExprKind::Variable
+            name: "a"
+          Lit
+            token: "\"a\""
+            value: LitValue::Str("a")
+StmtKind::Var
+  declarations=
+    Var
+      name: "s"
+      kind: Let
+      initializer: Lit
+        token: "\"10\""
+        value: LitValue::Str("10")
+StmtKind::Print
+  value: Lit
+    token: "\"10\""
+    value: LitValue::Str("10")
+StmtKind::Var
+  declarations=
+    Var
+      name: "too_long"
+      kind: Let
+      initializer: Lit
+        token: "\"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\""
+        value: LitValue::Str("00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
+StmtKind::Print
+  value: ExprKind::Variable
+    name: "too_long"

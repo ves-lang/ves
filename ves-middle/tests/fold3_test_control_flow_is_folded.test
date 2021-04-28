@@ -1,0 +1,107 @@
+while 1 + 1 == 2 {}
+
+if 3 < 10 {
+    print("folded")
+} else { 
+    print("unfolded")
+}
+
+print(if 3 > 10 { "unfolded" } else { "folded" })
+
+
+let i = "unfolded"
+for i = 0; i < 10; i = i + 1 {
+
+}
+
+let e = "arr prop"
+for e in [1, e, 3] {
+    print(e)
+}
+
+%output
+
+While
+  condition: Condition
+    value: Lit
+      token: "<folded>"
+      value: LitValue::Bool(true)
+    pattern: ConditionPattern::Value
+  body: StmtKind::Block
+    statements=
+  label: None
+StmtKind::ExprStmt
+  expr: DoBlock
+    statements=
+      StmtKind::Print
+        value: Lit
+          token: "\"folded\""
+          value: LitValue::Str("folded")
+    value: None
+StmtKind::Print
+  value: DoBlock
+    statements=
+    value: Lit
+      token: "\"folded\""
+      value: LitValue::Str("folded")
+StmtKind::Var
+  declarations=
+    Var
+      name: "i"
+      kind: Let
+      initializer: Lit
+        token: "\"unfolded\""
+        value: LitValue::Str("unfolded")
+For
+  initializers=
+    Assignment
+      name: "i"
+      value: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+  condition: ExprKind::Binary
+    op: Lt
+    left: ExprKind::Variable
+      name: "i"
+    right: Lit
+      token: "10"
+      value: LitValue::Number(10.0)
+  increment: Assignment
+    name: "i"
+    value: ExprKind::Binary
+      op: Add
+      left: ExprKind::Variable
+        name: "i"
+      right: Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+  body: StmtKind::Block
+    statements=
+  label: None
+StmtKind::Var
+  declarations=
+    Var
+      name: "e"
+      kind: Let
+      initializer: Lit
+        token: "\"arr prop\""
+        value: LitValue::Str("arr prop")
+ForEach
+  variable: "e"
+  iterator: ExprKind::Array
+    values=
+      Lit
+        token: "1"
+        value: LitValue::Number(1.0)
+      Lit
+        token: "\"arr prop\""
+        value: LitValue::Str("arr prop")
+      Lit
+        token: "3"
+        value: LitValue::Number(3.0)
+  body: StmtKind::Block
+    statements=
+      StmtKind::Print
+        value: ExprKind::Variable
+          name: "e"
+  label: None

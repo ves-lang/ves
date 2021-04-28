@@ -173,9 +173,15 @@ impl<'a> Parser<'a> {
 
     fn print_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let start = self.previous.span.start;
-        self.consume(&TokenKind::LeftParen, "Expected '('")?;
+        self.consume(
+            &TokenKind::LeftParen,
+            "Expected a '(' after the print keyword",
+        )?;
         let args = self.comma()?;
-        self.consume(&TokenKind::RightParen, "Expected '('")?;
+        self.consume(
+            &TokenKind::RightParen,
+            "Expected a ')' after the arguments to print",
+        )?;
         Ok(ast::Stmt {
             kind: ast::StmtKind::Print(box args),
             span: start..self.previous.span.end,
@@ -346,7 +352,7 @@ impl<'a> Parser<'a> {
             );
             ast::Expr {
                 kind: ast::ExprKind::Call(box ast::Call {
-                    callee: box ast::Expr {
+                    callee: ast::Expr {
                         kind: ast::ExprKind::Fn(box ast::FnInfo {
                             name,
                             params: ast::Params::default(),
@@ -412,6 +418,8 @@ impl<'a> Parser<'a> {
                 self.fid,
             ));
         }
+
+        remember_if_global!(self, ident, kind);
 
         Ok(ast::Var {
             kind,
@@ -488,6 +496,7 @@ impl<'a> Parser<'a> {
         let span_start = self.previous.span.start;
         // parse struct name, or generate it
         let struct_name = if self.match_(&TokenKind::Identifier) {
+            remember_if_global!(self, self.previous, ast::VarKind::Struct);
             self.previous.clone()
         } else {
             let (line, column) = self.db.location(self.fid, &self.previous.span);
@@ -604,7 +613,7 @@ impl<'a> Parser<'a> {
 
     fn fn_decl(&mut self) -> ParseResult<ast::FnInfo<'a>> {
         let name = if self.match_(&TokenKind::Identifier) {
-            remember_if_global!(self, self.previous, ast::VarKind::Let);
+            remember_if_global!(self, self.previous, ast::VarKind::Fn);
             self.previous.clone()
         } else {
             let (line, column) = self.db.location(self.fid, &self.previous.span);
@@ -983,10 +992,12 @@ impl<'a> Parser<'a> {
         let mut expr = self.power()?;
         // expr * expr
         // expr / expr
-        while self.match_any(&[TokenKind::Star, TokenKind::Slash]) {
+        // expr % expr
+        while self.match_any(&[TokenKind::Star, TokenKind::Slash, TokenKind::Percent]) {
             expr = match self.previous.kind {
                 TokenKind::Star => binary!(expr, Mul, self.power()?),
                 TokenKind::Slash => binary!(expr, Div, self.power()?),
+                TokenKind::Percent => binary!(expr, Rem, self.power()?),
                 _ => unreachable!(),
             }
         }
@@ -1097,7 +1108,7 @@ impl<'a> Parser<'a> {
                     ast::Expr {
                         span: expr.span.start..self.previous.span.end,
                         kind: ast::ExprKind::Call(box ast::Call {
-                            callee: box expr,
+                            callee: expr,
                             args,
                             tco: false,
                             rest: false,
@@ -1211,7 +1222,7 @@ impl<'a> Parser<'a> {
                 self,
                 ast::LitValue::Number(self.previous.lexeme.parse::<f64>().map_err(|_| {
                     VesError::parse(
-                        "Failed to parse number",
+                        "Failed to parse the number",
                         self.previous.span.clone(),
                         self.fid,
                     )
@@ -1315,7 +1326,7 @@ impl<'a> Parser<'a> {
             } else {
                 format!(
                     "Unexpected token `{}` ({:?})",
-                    self.previous.lexeme, self.previous.kind
+                    self.current.lexeme, self.current.kind
                 )
             },
             self.current.span.clone(),

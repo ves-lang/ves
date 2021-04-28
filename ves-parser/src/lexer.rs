@@ -26,7 +26,6 @@ impl<'a> std::hash::Hash for Token<'a> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.lexeme.hash(state);
         self.span.hash(state);
-        //self.ind
     }
 }
 
