@@ -4,12 +4,16 @@ This crate contains the implementations of the front-end passes that operate on 
 
 ## TODOs
 1. [ ] Resolver
-    1. [ ] unused / used variable checking
-    2. [ ] mut / let semantics checking
+    1. [x] unused / used variable checking
+    2. [x] mut / let semantics checking
     3. [ ] shadowing support
-    4. [ ] break / continue checking
-    5. [ ] loop label checking
-    6. [ ] `self` usage checking
-    7. [ ] TCO detection
-2. [ ] Simple Escape Analysis ???
-3. [ ] Constant Folder
+    4. [x] break / continue checking
+    5. [x] loop label checking
+    6. [x] `self` usage checking
+    7. [x] TCO detection
+2. [x] Constant Folder
+    1. [x] Fold expressions
+    2. [x] Propagate constant `let` variables
+    3. [x] Fold if expressions
+    4. [x] Eliminate dead `let` stores where possible
+3. [ ] Simple escape analysis???
