@@ -69,7 +69,7 @@ error: Cannot use `self` outside of an instance method or `init` block
 21 │                     fn _with_self_as_default(arg = self) {} // "error"
    │                                                    ^^^^
 
-error: Variable `arg` is never used
+warning: Variable `arg` is never used
    ┌─ <source: #126580578c8b9a12>:21:46
    │
 21 │                     fn _with_self_as_default(arg = self) {} // "error"

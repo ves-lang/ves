@@ -1,0 +1,32 @@
+fn test() {
+    let v = 0;
+}
+
+%output
+
+warning: Variable `v` is never used
+  ┌  <source: #bd06c7a8a46336d2>:2:9
+
+2       let v = 0;
+            ^
+
+            help: if this is intentional, replace or prefix it with an underscore: `_v`
+
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "test"
+    params: Params
+      positional=
+      default=
+      rest: None
+    body=
+      StmtKind::Var
+        declarations=
+          Var
+            name: "v"
+            kind: Let
+            initializer: Lit
+              token: "0"
+              value: LitValue::Number(0.0)
+            n_uses: 0
+    kind: Function

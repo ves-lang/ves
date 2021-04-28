@@ -81,7 +81,10 @@ impl VarUsage {
 
     /// Returns true if the variable is a `let` or `mut` variable.
     pub fn is_var(&self) -> bool {
-        matches!(self.kind, NameKind::Let | NameKind::Mut | NameKind::Param)
+        matches!(
+            self.kind,
+            NameKind::Let | NameKind::Mut | NameKind::Param | NameKind::ForEachVar
+        )
     }
 
     /// Returns true if variable is `let`.

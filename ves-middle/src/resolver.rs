@@ -687,60 +687,25 @@ impl<'a> Resolver<'a> {
     fn check_variable_usage(&self, ex: &mut ErrCtx) {
         let is_global = self.env.is_global();
         for (name, vu) in self.env.get_scope().unwrap() {
+            println!("{:?}: {:?}", name, vu);
             // Do not apply any lints to `self`.
             if name == "self" {
                 continue;
             }
 
-            let mut should_report = false;
-            let mut should_suggest_wildcard = false;
-            let report_as_warning = false;
             let noun = match vu.kind {
                 NameKind::Fn => "Function",
                 NameKind::Struct => "Struct",
-                NameKind::Let if name.starts_with('@') => "Loop label",
+                NameKind::Let if name.starts_with('@') => "Label",
                 _ => "Variable",
             };
 
             let is_prefixed = name.starts_with('_');
-
-            // Report an error for unused local structs/functions.
-            // While having an unused local variable makes sense in some cases,
-            // having an unused local class or function doesn't
-            if !vu.used() && !is_global && !vu.is_var() && !is_prefixed {
-                should_report = true;
-            // Issue an error for unused local variables.
-            } else if !vu.used()
-                && !is_global
-                && !is_prefixed
-                && (vu.is_var()/* || vu.is_import() */)
-            {
-                should_report = true;
-                should_suggest_wildcard = true;
-            }
-
-            if !should_report {
-                continue;
-            }
-
-            // Do not suggest the user to prefix labels with an underscore
-            if name.starts_with('@') {
-                should_suggest_wildcard = false;
-            }
-
-            let msg = format!("{} `{}` is never used", noun, name);
-            if report_as_warning {
-                Self::error(msg, vu.span.clone(), ex).mark_last_error_as_warning();
-            } else {
-                match should_suggest_wildcard {
-                    true => Self::error_of_kind(
-                        VesErrorKind::ResolutionSuggestWildcard,
-                        msg,
-                        vu.span.clone(),
-                        ex,
-                    ),
-                    false => Self::error(msg, vu.span.clone(), ex),
-                };
+            // Issue an error for unused local variables, functions and structs.
+            if !vu.used() && !is_global && !is_prefixed && vu.is_var() {
+                let msg = format!("{} `{}` is never used", noun, name);
+                Self::error_of_kind(VesErrorKind::UnusedLocal, msg, vu.span.clone(), ex)
+                    .mark_last_error_as_warning();
             }
         }
     }
@@ -801,13 +766,14 @@ pub mod tests {
 
     make_test_macros!(CRATE_ROOT, TESTS_DIR, parse_and_resolve, parse_and_resolve);
 
-    test_err!(t1_test_cannot_assign_to_let);
+    /* test_err!(t1_test_cannot_assign_to_let);
     test_err!(t2_test_variables_must_be_defined);
     test_err!(t3_test_globals_are_forward_declared);
     test_ok!(t4_test_shadowing_unused_variable_warning);
     test_err!(t5_cannot_break_outside_of_a_loop);
     test_err!(t6_test_undefined_loop_labels_are_detected);
     test_err!(t7_test_return_usage);
-    test_err!(t8_self_may_be_used_only_inside_methods);
+    test_err!(t8_self_may_be_used_only_inside_methods); */
     test_err!(t9_test_for_loops);
+    /* test_ok!(t10_unused_locals); */
 }

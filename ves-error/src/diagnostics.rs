@@ -22,6 +22,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | LetReassignment
         | FnBeforeMethod
         | UsedGlobalBeforeDeclaration(_) => Diagnostic::error(),
+        UnusedLocal => Diagnostic::warning(),
         AttemptedToShadowUnusedVariable(_) => Diagnostic::warning(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
@@ -34,7 +35,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         .with_message(e.msg.clone())
         .with_labels(vec![Label::primary(e.file_id, e.span.clone())]);
 
-    if e.kind == ResolutionSuggestWildcard {
+    if matches!(e.kind, ResolutionSuggestWildcard | UnusedLocal) {
         d = add_wildcard_label(db, d, &e);
     } else if e.kind == LetWithoutValue {
         d = let_no_value_diag(db, d, &e);
