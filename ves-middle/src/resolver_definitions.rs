@@ -46,6 +46,16 @@ pub enum NameKind {
     Struct,
 }
 
+impl NameKind {
+    pub fn for_param(is_mutable: bool) -> NameKind {
+        if is_mutable {
+            NameKind::Mut
+        } else {
+            NameKind::Let
+        }
+    }
+}
+
 impl From<VarKind> for NameKind {
     #[inline]
     fn from(var: VarKind) -> Self {

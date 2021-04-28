@@ -29,7 +29,7 @@ error: Cannot assign twice to the immutable variable `x`
 2 │ x = "error"
   │ ^
   │ │
-  │ help: Consider replacing `let` with `mut` to make the variable mutable
+  │ Consider marking `x` as `mut` to make it mutable: `mut x`
 
 error: Attempted to shadow a local variable `y`
   ┌─ <source: #edae658e4fc9e594>:5:5
@@ -45,7 +45,7 @@ error: Cannot assign twice to the immutable variable `y`
 6 │ y = "ok"
   │ ^
   │ │
-  │ help: Consider replacing `let` with `mut` to make the variable mutable
+  │ Consider marking `y` as `mut` to make it mutable: `mut y`
 
 error: Cannot assign twice to the immutable variable `_z`
    ┌─ <source: #edae658e4fc9e594>:15:5
@@ -53,7 +53,7 @@ error: Cannot assign twice to the immutable variable `_z`
 15 │     _z = "error"
    │     ^^
    │     │
-   │     help: Consider replacing `let` with `mut` to make the variable mutable
+   │     Consider marking `_z` as `mut` to make it mutable: `mut _z`
 
 error: Cannot assign twice to the immutable variable `_z`
    ┌─ <source: #edae658e4fc9e594>:17:1
@@ -61,10 +61,12 @@ error: Cannot assign twice to the immutable variable `_z`
 17 │ _z = "error"
    │ ^^
    │ │
-   │ help: Consider replacing `let` with `mut` to make the variable mutable
+   │ Consider marking `_z` as `mut` to make it mutable: `mut _z`
 
-error: Function parameters may not be reassigned
+error: Cannot assign twice to the immutable variable `a`
    ┌─ <source: #edae658e4fc9e594>:20:5
    │
 20 │     a = 5
    │     ^
+   │     │
+   │     Consider marking `a` as `mut` to make it mutable: `mut a`

@@ -726,7 +726,7 @@ impl<'a> Parser<'a> {
         };
         // parse fields
         let fields = if self.match_(&TokenKind::LeftParen) {
-            let fields = self.param_pack(false, false)?;
+            let fields = self.param_pack(ParamListKind::StructFields)?;
             self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
             Some(fields)
         } else {
@@ -777,7 +777,7 @@ impl<'a> Parser<'a> {
                     }));
                 } else if self.match_(&TokenKind::LeftParen) {
                     // this is a method
-                    let params = self.param_pack(true, true)?;
+                    let params = self.param_pack(ParamListKind::Method)?;
                     self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
                     let body = self.fn_decl_body()?;
                     if params.is_instance_method_params() {
@@ -849,7 +849,7 @@ impl<'a> Parser<'a> {
             &TokenKind::LeftParen,
             "Expected an opening `(` after the function name or keyword",
         )?;
-        let params = self.param_pack(true, false)?;
+        let params = self.param_pack(ParamListKind::Function)?;
         self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
         let body = self.fn_decl_body()?;
         Ok(ast::FnInfo {
@@ -879,14 +879,15 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn param_pack(&mut self, rest_args: bool, in_method: bool) -> ParseResult<ast::Params<'a>> {
+    // TODO: test new cases
+    fn param_pack(&mut self, kind: ParamListKind) -> ParseResult<ast::Params<'a>> {
         let mut parsing_default = false;
         let mut positional = vec![];
         let mut default = vec![];
         let mut rest = None;
         while !self.check(&TokenKind::RightParen) {
             if self.match_(&TokenKind::Ellipsis) {
-                if !rest_args {
+                if kind == ParamListKind::StructFields {
                     return Err(VesError::parse(
                         "Rest arguments are not allowed here",
                         self.previous.span.clone(),
@@ -899,12 +900,31 @@ impl<'a> Parser<'a> {
                 break;
             } else {
                 // positional or default argument
+                let is_mutable = if self.match_(&TokenKind::Mut) {
+                    if kind == ParamListKind::StructFields {
+                        return Err(VesError::parse(
+                            "Struct fields do not have mutability modifiers",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    true
+                } else {
+                    false
+                };
                 let name = self.consume_any(
                     &[TokenKind::Identifier, TokenKind::Self_],
                     "Expected a parameter name",
                 )?;
+                if is_mutable && kind == ParamListKind::Method && name.lexeme == "self" {
+                    return Err(VesError::parse(
+                        "'self' may not be mutable",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
+                }
                 let value = if self.match_(&TokenKind::Equal) {
-                    if in_method && name.lexeme == "self" {
+                    if kind == ParamListKind::Method && name.lexeme == "self" {
                         return Err(VesError::parse(
                             "'self' may not have a default value",
                             self.previous.span.clone(),
@@ -918,7 +938,7 @@ impl<'a> Parser<'a> {
                 match value {
                     Some(value) => {
                         parsing_default = true;
-                        default.push((name, value));
+                        default.push((name, value, is_mutable));
                     }
                     None => {
                         if parsing_default {
@@ -928,7 +948,7 @@ impl<'a> Parser<'a> {
                                     self.fid,
                                 ));
                         }
-                        positional.push(name);
+                        positional.push((name, is_mutable));
                     }
                 }
             }
@@ -1765,6 +1785,13 @@ fn desugar_assignment<'a>(
         TokenKind::PercentEqual => desugar!(receiver, Rem, value),
         _ => unreachable!(),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ParamListKind {
+    Function,
+    Method,
+    StructFields,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

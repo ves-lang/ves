@@ -156,9 +156,9 @@ impl<'a> ConstantFolder<'a> {
     fn fold_function(&mut self, info: &mut FnInfo<'a>) {
         self.push();
         info.params.positional.iter_mut().for_each(|p| {
-            self.propagated_variables.add(p.lexeme.clone(), None);
+            self.propagated_variables.add(p.0.lexeme.clone(), None);
         });
-        info.params.default.iter_mut().for_each(|(name, v)| {
+        info.params.default.iter_mut().for_each(|(name, v, _)| {
             self.propagated_variables.add(name.lexeme.clone(), None);
             self.fold_expr(v)
         });
@@ -266,7 +266,7 @@ impl<'a> ConstantFolder<'a> {
                     fields
                         .default
                         .iter_mut()
-                        .for_each(|(_, v)| self.fold_expr(v))
+                        .for_each(|(_, v, _)| self.fold_expr(v))
                 }
                 if let Some(init) = initializer {
                     self.fold_function(&mut init.body);

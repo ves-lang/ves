@@ -96,14 +96,17 @@ fn let_no_value_diag<'a>(
 }
 
 fn let_reassignment_diag<'a>(
-    _db: &VesFileDatabase<'a>,
+    db: &VesFileDatabase<'a>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {
-    diag.labels
-        .push(Label::secondary(e.file_id, e.span.clone()).with_message(
-            "help: Consider replacing `let` with `mut` to make the variable mutable",
-        ));
+    let name = &db.source(e.file_id).unwrap()[e.span.clone()];
+    diag.labels.push(
+        Label::secondary(e.file_id, e.span.clone()).with_message(format!(
+            "Consider marking `{0}` as `mut` to make it mutable: `mut {0}`",
+            name
+        )),
+    );
     diag
 }
 
