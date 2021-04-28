@@ -1,0 +1,24 @@
+export fn /* no name */ () {}
+export struct /* no name */ {}
+
+export { a as /* missing alias name */ }
+
+%output
+
+error: Expected function name
+  ┌─ <source: #d472ee88cdf261c9>:1:8
+  │
+1 │ export fn /* no name */ () {}
+  │        ^^
+
+error: Expected struct name
+  ┌─ <source: #d472ee88cdf261c9>:2:8
+  │
+2 │ export struct /* no name */ {}
+  │        ^^^^^^
+
+error: Expected alias name
+  ┌─ <source: #d472ee88cdf261c9>:4:40
+  │
+4 │ export { a as /* missing alias name */ }
+  │                                        ^

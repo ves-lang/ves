@@ -248,6 +248,9 @@ pub enum TokenKind<'a> {
     /// Export
     #[token("export")]
     Export,
+    /// Destructured import paths
+    #[token("from")]
+    From,
     // Whitespace or ignored tokens
     #[regex("//[^\n]*", logos::skip)]
     Comment,

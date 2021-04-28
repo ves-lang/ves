@@ -1,0 +1,65 @@
+import /* no name */ ;
+import "path" /* no alias */ ;
+import thing as /* missing name */ ;
+import { a } /* missing from + name */ ;
+import { a } from /* missing name */ ;
+import { a } from thing as b /* alias invalid here */ ;
+import { a } from "./thing" as thing /* alias invalid here */ ;
+import { /* at least one import required */ } from thing;
+import { a as /* missing name */ } from thing;
+
+%output
+
+error: Expected import name or path
+  ┌─ <source: #83d518e6159e92c3>:1:1
+  │
+1 │ import /* no name */ ;
+  │ ^^^^^^
+
+error: Direct path imports must be aliased
+  ┌─ <source: #83d518e6159e92c3>:2:8
+  │
+2 │ import "path" /* no alias */ ;
+  │        ^^^^^^
+
+error: Expected alias name
+  ┌─ <source: #83d518e6159e92c3>:3:36
+  │
+3 │ import thing as /* missing name */ ;
+  │                                    ^
+
+error: Expected 'from'
+  ┌─ <source: #83d518e6159e92c3>:4:40
+  │
+4 │ import { a } /* missing from + name */ ;
+  │                                        ^
+
+error: Expected import name or path
+  ┌─ <source: #83d518e6159e92c3>:5:14
+  │
+5 │ import { a } from /* missing name */ ;
+  │              ^^^^
+
+error: Alias is invalid in this position
+  ┌─ <source: #83d518e6159e92c3>:6:25
+  │
+6 │ import { a } from thing as b /* alias invalid here */ ;
+  │                         ^^
+
+error: Alias is invalid in this position
+  ┌─ <source: #83d518e6159e92c3>:7:29
+  │
+7 │ import { a } from "./thing" as thing /* alias invalid here */ ;
+  │                             ^^
+
+error: Expected import name
+  ┌─ <source: #83d518e6159e92c3>:8:45
+  │
+8 │ import { /* at least one import required */ } from thing;
+  │                                             ^
+
+error: Expected alias
+  ┌─ <source: #83d518e6159e92c3>:9:34
+  │
+9 │ import { a as /* missing name */ } from thing;
+  │                                  ^

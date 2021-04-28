@@ -31,6 +31,43 @@ pub struct Global<'a> {
     pub kind: VarKind,
 }
 
+#[derive(Clone, Debug, PartialEq, AstToStr)]
+pub enum Symbol<'a> {
+    /// An imported/exported name without an alias
+    Bare(#[rename = "symbol"] Token<'a>),
+    /// An imported/exported name with an alias
+    Aliased(
+        /// The symbol that is being aliased
+        #[rename = "name"]
+        Token<'a>,
+        /// The alias
+        #[rename = "as"]
+        Token<'a>,
+    ),
+}
+
+#[derive(Clone, Debug, PartialEq, AstToStr)]
+pub enum ImportPath<'a> {
+    /// A simple path (e.g. `import thing`)
+    ///
+    /// This has to be resolved into a full path
+    /// according to resolution config before usage
+    Simple(#[rename = "symbol"] Symbol<'a>),
+    /// A full path (e.g. `import "../src/thing.ves"`)
+    Full(#[rename = "symbol"] Symbol<'a>),
+}
+
+#[derive(Clone, Debug, PartialEq, AstToStr)]
+pub enum Import<'a> {
+    /// A direct import (e.g. `import thing`)
+    Direct(#[rename = "path"] ImportPath<'a>),
+    /// A destructured import (e.g. `import { a, b as c } from thing`)
+    Destructured(
+        #[rename = "path"] ImportPath<'a>,
+        #[rename = "symbols"] Vec<Symbol<'a>>,
+    ),
+}
+
 /// An Abstract Syntax Tree for a Ves source file.
 #[derive(Debug, PartialEq, AstToStr)]
 pub struct AST<'a> {
@@ -41,6 +78,10 @@ pub struct AST<'a> {
     pub file_id: FileId,
     /// The set of all global variables declared in the source file.
     pub globals: HashSet<Global<'a>>,
+    /// The file's imported symbols
+    pub imports: Vec<Import<'a>>,
+    /// The file's exported symbols
+    pub exports: Vec<Symbol<'a>>,
 }
 
 impl<'a> AST<'a> {
@@ -50,19 +91,25 @@ impl<'a> AST<'a> {
             body,
             file_id,
             globals: HashSet::new(),
+            imports: Vec::new(),
+            exports: Vec::new(),
         }
     }
 
-    /// Creates a new [`AST`] form the given statements, globals, and [`FileId`].
-    pub fn with_globals(
+    /// Creates a new [`AST`] form the given statements, globals, imports, exports, and [`FileId`].
+    pub fn with(
         body: Vec<Stmt<'a>>,
         globals: HashSet<Global<'a>>,
+        imports: Vec<Import<'a>>,
+        exports: Vec<Symbol<'a>>,
         file_id: FileId,
     ) -> Self {
         Self {
             body,
             file_id,
             globals,
+            imports,
+            exports,
         }
     }
 

@@ -1,0 +1,84 @@
+export struct T() {}
+export fn test() {}
+export let v0 = 0
+export mut v1 = 0
+
+fn a() {}
+struct B() {}
+export { a, B as C }
+
+%output
+
+Symbol::Bare
+  symbol: "T"
+Symbol::Bare
+  symbol: "test"
+Symbol::Bare
+  symbol: "v0"
+Symbol::Bare
+  symbol: "v1"
+Symbol::Bare
+  symbol: "a"
+Symbol::Aliased
+  name: "B"
+  as: "C"
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "T"
+    fields: Params
+      positional=
+      default=
+      rest: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods=
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "test"
+    params: Params
+      positional=
+      default=
+      rest: None
+    body=
+    kind: Function
+StmtKind::Var
+  declarations=
+    Var
+      name: "v0"
+      kind: Let
+      initializer: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+      n_uses: 0
+StmtKind::Var
+  declarations=
+    Var
+      name: "v1"
+      kind: Mut
+      initializer: Lit
+        token: "0"
+        value: LitValue::Number(0.0)
+      n_uses: 0
+StmtKind::ExprStmt
+  expr: FnInfo
+    name: "a"
+    params: Params
+      positional=
+      default=
+      rest: None
+    body=
+    kind: Function
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "B"
+    fields: Params
+      positional=
+      default=
+      rest: None
+    methods=
+    initializer: None
+    r#static: StructStaticProps
+      fields=
+      methods=

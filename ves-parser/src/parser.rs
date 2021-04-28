@@ -23,6 +23,8 @@ pub struct Parser<'a> {
     scope_depth: usize,
     globals: HashSet<Global<'a>>,
     db: &'a VesFileDatabase<'a>,
+    imports: Vec<ast::Import<'a>>,
+    exports: Vec<ast::Symbol<'a>>,
 }
 
 impl<'a> Parser<'a> {
@@ -45,18 +47,43 @@ impl<'a> Parser<'a> {
             ex: ErrCtx::new(),
             fid,
             db,
+            imports: vec![],
+            exports: vec![],
         }
     }
 
     pub fn parse(mut self) -> Result<AST<'a>, ErrCtx> {
+        let mut parsing_imports = true;
         self.advance();
         let mut body = vec![];
         while !self.at_end() {
-            match self.stmt(true) {
-                Ok(stmt) => body.push(stmt),
-                Err(e) => {
-                    self.ex.record(e);
+            println!("{:?}", self.current);
+            if self.match_(&TokenKind::Import) {
+                if parsing_imports {
+                    match self.import() {
+                        Ok(import) => self.imports.push(import),
+                        Err(err) => {
+                            self.ex.record(err);
+                            self.synchronize();
+                        }
+                    }
+                } else {
+                    self.ex.record(VesError::parse(
+                        "Imports must appear first in a file",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
                     self.synchronize();
+                }
+            } else {
+                parsing_imports = false;
+                match self.export_stmt() {
+                    Ok(Some(stmt)) => body.push(stmt),
+                    Ok(None) => (),
+                    Err(e) => {
+                        self.ex.record(e);
+                        self.synchronize();
+                    }
                 }
             }
         }
@@ -64,7 +91,167 @@ impl<'a> Parser<'a> {
         if self.ex.had_error() {
             Err(self.ex)
         } else {
-            Ok(AST::with_globals(body, self.globals, self.fid))
+            Ok(AST::with(
+                body,
+                self.globals,
+                self.imports,
+                self.exports,
+                self.fid,
+            ))
+        }
+    }
+
+    fn import(&mut self) -> ParseResult<ast::Import<'a>> {
+        if self.match_(&TokenKind::LeftBrace) {
+            // destructured
+            let mut symbols = vec![];
+            loop {
+                let symbol = self.consume(&TokenKind::Identifier, "Expected import name")?;
+                if self.match_(&TokenKind::As) {
+                    let r#as = self.consume(&TokenKind::Identifier, "Expected alias")?;
+                    symbols.push(ast::Symbol::Aliased(symbol, r#as));
+                } else {
+                    symbols.push(ast::Symbol::Bare(symbol));
+                };
+
+                if !self.match_(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume(&TokenKind::RightBrace, "Expected '}'")?;
+            self.consume(&TokenKind::From, "Expected 'from'")?;
+            let path = self.import_path(false)?;
+            Ok(ast::Import::Destructured(path, symbols))
+        } else {
+            // direct
+            let path = self.import_path(true)?;
+            Ok(ast::Import::Direct(path))
+        }
+    }
+
+    fn import_path(&mut self, can_alias: bool) -> ParseResult<ast::ImportPath<'a>> {
+        let (symbol, is_full_path) = if self.match_(&TokenKind::Identifier) {
+            (self.previous.clone(), false)
+        } else if self.match_(&TokenKind::String) {
+            (self.previous.clone(), true)
+        } else {
+            return Err(VesError::parse(
+                "Expected import name or path",
+                self.previous.span.clone(),
+                self.fid,
+            ));
+        };
+        let symbol = if self.match_(&TokenKind::As) {
+            if !can_alias {
+                return Err(VesError::parse(
+                    "Alias is invalid in this position",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
+            }
+            let r#as = self.consume(&TokenKind::Identifier, "Expected alias name")?;
+            ast::Symbol::Aliased(symbol, r#as)
+        } else {
+            if can_alias && is_full_path {
+                return Err(VesError::parse(
+                    "Direct path imports must be aliased",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
+            }
+            ast::Symbol::Bare(symbol)
+        };
+
+        if is_full_path {
+            Ok(ast::ImportPath::Full(symbol))
+        } else {
+            Ok(ast::ImportPath::Simple(symbol))
+        }
+    }
+
+    fn export_stmt(&mut self) -> ParseResult<Option<ast::Stmt<'a>>> {
+        if self.match_(&TokenKind::Export) {
+            self.export()
+        } else {
+            Ok(Some(self.stmt(true)?))
+        }
+    }
+
+    fn export(&mut self) -> ParseResult<Option<ast::Stmt<'a>>> {
+        if self.match_(&TokenKind::LeftBrace) {
+            // table export
+            loop {
+                let symbol = self.consume(&TokenKind::Identifier, "Expected export name")?;
+                if self.match_(&TokenKind::As) {
+                    let r#as = self.consume(&TokenKind::Identifier, "Expected alias name")?;
+                    self.exports.push(ast::Symbol::Aliased(symbol, r#as));
+                } else {
+                    self.exports.push(ast::Symbol::Bare(symbol));
+                };
+                if !self.match_(&TokenKind::Comma) {
+                    break;
+                }
+            }
+            self.consume(&TokenKind::RightBrace, "Expected '}'")?;
+            Ok(None)
+        } else if self.match_any(&[
+            TokenKind::Let,
+            TokenKind::Mut,
+            TokenKind::Fn,
+            TokenKind::Struct,
+        ]) {
+            let stmt_start = self.previous.span.start;
+            match self.previous.kind {
+                TokenKind::Let => {
+                    let binding = self.binding_expression(ast::VarKind::Let)?;
+                    self.exports.push(ast::Symbol::Bare(binding.name.clone()));
+                    let stmt_end = self.previous.span.end;
+                    Ok(Some(ast::Stmt {
+                        kind: ast::StmtKind::Var(vec![binding]),
+                        span: stmt_start..stmt_end,
+                    }))
+                }
+                TokenKind::Mut => {
+                    let binding = self.binding_expression(ast::VarKind::Mut)?;
+                    self.exports.push(ast::Symbol::Bare(binding.name.clone()));
+                    let stmt_end = self.previous.span.end;
+                    Ok(Some(ast::Stmt {
+                        kind: ast::StmtKind::Var(vec![binding]),
+                        span: stmt_start..stmt_end,
+                    }))
+                }
+                TokenKind::Fn => {
+                    let decl = self.fn_decl(true)?;
+                    self.exports.push(ast::Symbol::Bare(decl.name.clone()));
+                    let stmt_end = self.previous.span.end;
+                    Ok(Some(ast::Stmt {
+                        kind: ast::StmtKind::ExprStmt(box ast::Expr {
+                            kind: ast::ExprKind::Fn(box decl),
+                            span: stmt_start..stmt_end,
+                        }),
+                        span: stmt_start..stmt_end,
+                    }))
+                }
+                TokenKind::Struct => {
+                    let decl = self.struct_decl(true)?;
+                    self.exports.push(ast::Symbol::Bare(decl.name.clone()));
+                    let stmt_end = self.previous.span.end;
+                    Ok(Some(ast::Stmt {
+                        kind: ast::StmtKind::ExprStmt(box ast::Expr {
+                            kind: ast::ExprKind::Struct(box decl),
+                            span: stmt_start..stmt_end,
+                        }),
+                        span: stmt_start..stmt_end,
+                    }))
+                }
+                _ => unreachable!(),
+            }
+        } else {
+            Err(VesError::parse(
+                "Only variables, functions, and structs may be exported",
+                self.current.span.clone(),
+                self.fid,
+            ))
         }
     }
 
@@ -97,8 +284,9 @@ impl<'a> Parser<'a> {
             TokenKind::Continue,
             TokenKind::Defer,
             TokenKind::Return,
+            TokenKind::Import,
+            TokenKind::Export,
         ]) {
-            // TODO: this
             match self.previous.kind {
                 TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
@@ -110,6 +298,20 @@ impl<'a> Parser<'a> {
                 TokenKind::Continue => self.break_or_continue_stmt(ast::StmtKind::Continue),
                 TokenKind::Defer => self.defer_stmt(),
                 TokenKind::Return => self.return_stmt(),
+                TokenKind::Import => {
+                    return Err(VesError::parse(
+                        "Imports may only appear at the top level",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ))
+                }
+                TokenKind::Export => {
+                    return Err(VesError::parse(
+                        "Exports may only appear at the top level",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ))
+                }
                 _ => unreachable!(),
             }
             .map(|res| {
@@ -482,7 +684,7 @@ impl<'a> Parser<'a> {
             TokenKind::Do,
         ]) {
             match self.previous.kind {
-                TokenKind::Struct => self.struct_decl(),
+                TokenKind::Struct => self.struct_decl_expr(),
                 TokenKind::Fn => self.fn_decl_expr(),
                 TokenKind::If => self.if_expr(),
                 TokenKind::Do => self.do_block_expr(),
@@ -493,13 +695,29 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn struct_decl(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn struct_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
+        let decl = self.struct_decl(false)?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            kind: ast::ExprKind::Struct(box decl),
+            span: span_start..span_end,
+        })
+    }
+
+    fn struct_decl(&mut self, require_name: bool) -> ParseResult<ast::StructInfo<'a>> {
         // parse struct name, or generate it
         let struct_name = if self.match_(&TokenKind::Identifier) {
             remember_if_global!(self, self.previous, ast::VarKind::Struct);
             self.previous.clone()
         } else {
+            if require_name {
+                return Err(VesError::parse(
+                    "Expected struct name",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
+            }
             let (line, column) = self.db.location(self.fid, &self.previous.span);
             Token::new(
                 format!("[struct@{}:{}]", line, column),
@@ -589,22 +807,18 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        let span_end = self.previous.span.end;
-        Ok(ast::Expr {
-            kind: ast::ExprKind::Struct(box ast::StructInfo {
-                name: struct_name,
-                fields,
-                methods,
-                initializer,
-                r#static,
-            }),
-            span: span_start..span_end,
+        Ok(ast::StructInfo {
+            name: struct_name,
+            fields,
+            methods,
+            initializer,
+            r#static,
         })
     }
 
     fn fn_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let decl = self.fn_decl()?;
+        let decl = self.fn_decl(false)?;
         let span_end = self.previous.span.end;
         Ok(ast::Expr {
             kind: ast::ExprKind::Fn(box decl),
@@ -612,11 +826,18 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn fn_decl(&mut self) -> ParseResult<ast::FnInfo<'a>> {
+    fn fn_decl(&mut self, require_name: bool) -> ParseResult<ast::FnInfo<'a>> {
         let name = if self.match_(&TokenKind::Identifier) {
             remember_if_global!(self, self.previous, ast::VarKind::Fn);
             self.previous.clone()
         } else {
+            if require_name {
+                return Err(VesError::parse(
+                    "Expected function name",
+                    self.previous.span.clone(),
+                    self.fid,
+                ));
+            }
             let (line, column) = self.db.location(self.fid, &self.previous.span);
             Token::new(
                 format!("[fn@{}:{}]", line, column),
@@ -1486,6 +1707,8 @@ impl<'a> Parser<'a> {
                 TokenKind::Struct,
                 TokenKind::LeftBracket,
                 TokenKind::Print,
+                TokenKind::Export,
+                TokenKind::Import,
             ]
             .contains(&self.current.kind))
         {
@@ -1605,11 +1828,32 @@ mod tests {
         db: &mut VesFileDatabase<'a>,
     ) -> Result<String, ErrCtx> {
         Parser::new(Lexer::new(&src), fid, &db).parse().map(|ast| {
-            ast.body
+            let imports = ast
+                .imports
+                .into_iter()
+                .map(|import| import.ast_to_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let exports = ast
+                .exports
+                .into_iter()
+                .map(|import| import.ast_to_str())
+                .collect::<Vec<_>>()
+                .join("\n");
+            let body = ast
+                .body
                 .into_iter()
                 .map(|stmt| stmt.ast_to_str())
                 .collect::<Vec<_>>()
-                .join("\n")
+                .join("\n");
+            format!(
+                "{}{}{}{}{}",
+                imports,
+                if !imports.is_empty() { "\n" } else { "" },
+                exports,
+                if !exports.is_empty() { "\n" } else { "" },
+                body
+            )
         })
     }
 
@@ -1644,23 +1888,8 @@ mod tests {
     test_err!(t26_unclosed_string_interpolation_1);
     test_err!(t26_unclosed_string_interpolation_2);
     test_err!(t26_unclosed_string_interpolation_3);
-    // TODO: test these once all statements are implemented
-    /* assert_ast!(
-        r#"
-        a = do {
-            mut sum = 0
-            for i in 0..10 { sum += i }
-            sum
-        }
-        "#
-    );
-    assert_ast!(
-        r#"
-        a = do {
-            mut sum = 0
-            for i in 0..10 { sum += i }
-            sum; // notice the semicolon
-        }
-        "#
-    ); */
+    test_ok!(t27_export);
+    test_err!(t28_bad_export);
+    test_ok!(t29_import);
+    test_err!(t30_bad_import);
 }
