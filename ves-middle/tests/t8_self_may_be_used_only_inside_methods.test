@@ -15,10 +15,10 @@ fn func() => self // error
         ...{
             [do {
                 if (true) {
-                    fn with_self_arg(self) { } // "error"
-                    fn with_default_self(self=3) { } // "error"
+                    fn _with_self_arg(self) { } // "error"
+                    fn _with_default_self(self=3) { } // "error"
                 } else {
-                    fn with_self_as_default(arg = self) {} // "error"
+                    fn _with_self_as_default(arg = self) {} // "error"
                 }
             }]: Test()
         }
@@ -28,43 +28,51 @@ fn func() => self // error
 %output
 
 error: Cannot use `self` outside of an instance method or `init` block
-  ┌─ <source: #22656d792810848a>:4:24
+  ┌─ <source: #126580578c8b9a12>:4:24
   │
 4 │     method2() { return self } // error 
   │                        ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-  ┌─ <source: #22656d792810848a>:5:18
+  ┌─ <source: #126580578c8b9a12>:5:18
   │
 5 │     static1() => self // error
   │                  ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-  ┌─ <source: #22656d792810848a>:6:18
+  ┌─ <source: #126580578c8b9a12>:6:18
   │
 6 │     static2() => self // error
   │                  ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-  ┌─ <source: #22656d792810848a>:9:1
+  ┌─ <source: #126580578c8b9a12>:9:1
   │
 9 │ self // error
   │ ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-   ┌─ <source: #22656d792810848a>:10:6
+   ┌─ <source: #126580578c8b9a12>:10:6
    │
 10 │ do { self } // error
    │      ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-   ┌─ <source: #22656d792810848a>:11:14
+   ┌─ <source: #126580578c8b9a12>:11:14
    │
 11 │ fn func() => self // error
    │              ^^^^
 
 error: Cannot use `self` outside of an instance method or `init` block
-   ┌─ <source: #22656d792810848a>:21:51
+   ┌─ <source: #126580578c8b9a12>:21:52
    │
-21 │                     fn with_self_as_default(arg = self) {} // "error"
-   │                                                   ^^^^
+21 │                     fn _with_self_as_default(arg = self) {} // "error"
+   │                                                    ^^^^
+
+error: Variable `arg` is never used
+   ┌─ <source: #126580578c8b9a12>:21:46
+   │
+21 │                     fn _with_self_as_default(arg = self) {} // "error"
+   │                                              ^^^
+   │                                              │
+   │                                              help: if this is intentional, replace or prefix it with an underscore: `_arg`

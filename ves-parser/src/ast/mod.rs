@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, cell::Cell, collections::HashSet};
 
 use ast2str::AstToStr;
 use ves_error::{FileId, Files, VesFileDatabase};
@@ -565,6 +565,9 @@ pub struct Var<'a> {
     pub kind: VarKind,
     /// The initial value of the variable.
     pub initializer: Option<Expr<'a>>,
+    /// The number of uses this variable has.
+    #[callback(|c: &std::rc::Rc<Cell<usize>>| c.get())]
+    pub n_uses: std::rc::Rc<Cell<usize>>,
 }
 
 /// A loop statement.

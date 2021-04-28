@@ -1,18 +1,28 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::Cell, rc::Rc};
 
 use crate::env::Env;
 use ves_parser::ast::*;
 
+#[derive(Debug, Clone)]
+struct PropVar<'a> {
+    value: Lit<'a>,
+    uses: Rc<Cell<usize>>,
+}
+
 #[derive(Debug)]
 pub struct ConstantFolder<'a> {
-    propagated_variables: Env<Cow<'a, str>, Option<Lit<'a>>>,
+    propagated_variables: Env<Cow<'a, str>, Option<PropVar<'a>>>,
     interning_threshold: usize,
+    eliminate_dead_stores: bool,
+    second_pass: bool,
 }
 
 impl<'a> ConstantFolder<'a> {
-    pub fn new(interning_threshold: usize) -> Self {
+    pub fn new(interning_threshold: usize, eliminate_dead_stores: bool) -> Self {
         Self {
             interning_threshold,
+            eliminate_dead_stores,
+            second_pass: false,
             propagated_variables: Env::new(),
         }
     }
@@ -21,12 +31,39 @@ impl<'a> ConstantFolder<'a> {
         for stmt in ast.body.iter_mut() {
             self.fold_stmt(stmt);
         }
+        if self.eliminate_dead_stores && !self.second_pass {
+            self.second_pass = true;
+            self.fold(ast);
+        }
     }
 
     fn fold_stmt(&mut self, stmt: &mut Stmt<'a>) {
+        if self.second_pass {
+            if let StmtKind::Var(vars) = &mut stmt.kind {
+                // TODO: rewrite the AST to support declarations with multiple variables
+                if vars.len() == 1 && vars[0].n_uses.get() == 0 {
+                    // The initializer must always have a value if we get here
+                    match vars[0].initializer.as_ref() {
+                        // The binding stores a variable or a constant and isn't used,
+                        // so we can safely remove it
+                        Some(Expr {
+                            kind: ExprKind::Lit(_),
+                            ..
+                        })
+                        | Some(Expr {
+                            kind: ExprKind::Variable(_),
+                            ..
+                        }) => stmt.kind = StmtKind::_Empty,
+                        // The initializer is either missing or a runtime expression
+                        _ => (),
+                    }
+                }
+            }
+        }
         match &mut stmt.kind {
             StmtKind::Var(vars) => vars.iter_mut().for_each(|v| {
                 let kind = v.kind;
+                let uses = v.n_uses.clone();
                 let value = v.initializer.as_mut().and_then(|init| {
                     self.fold_expr(init);
                     if let ExprKind::Lit(lit @ box Lit { value, .. }) = &init.kind {
@@ -36,7 +73,10 @@ impl<'a> ConstantFolder<'a> {
                             {
                                 None
                             }
-                            (VarKind::Let, _) => Some((**lit).clone()),
+                            (VarKind::Let, _) => Some(PropVar {
+                                value: (**lit).clone(),
+                                uses,
+                            }),
                             _ => None,
                         }
                     } else {
@@ -326,8 +366,14 @@ impl<'a> ConstantFolder<'a> {
                     .get(&v.lexeme)
                     .and_then(|v| v.as_ref())
                 {
+                    const_expr
+                        .uses
+                        .set(const_expr.uses.get().checked_sub(1).expect(
+                            "Attempted to propagate a variable more times that it has been used; 
+                        the resolver must have missed a use",
+                        ));
                     *expr = Expr {
-                        kind: ExprKind::Lit(box const_expr.clone()),
+                        kind: ExprKind::Lit(box const_expr.value.clone()),
                         span: expr.span.clone(),
                     };
                 }
@@ -399,7 +445,7 @@ mod tests {
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
         Resolver::new().resolve(&mut ast).unwrap();
-        ConstantFolder::new(20).fold(&mut ast);
+        ConstantFolder::new(20, true).fold(&mut ast);
         Ok(ast
             .body
             .into_iter()

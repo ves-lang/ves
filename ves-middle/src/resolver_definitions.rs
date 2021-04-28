@@ -1,3 +1,5 @@
+use std::{cell::Cell, rc::Rc};
+
 use ves_parser::{ast::VarKind, Span};
 
 /// The kind of the loop currently being resolved.
@@ -36,6 +38,8 @@ pub enum NameKind {
     Let,
     /// An immutable for-each loop variable
     ForEachVar,
+    /// A function parameter
+    Param,
     /// A function declaration.
     Fn,
     /// A struct declaration
@@ -61,8 +65,8 @@ pub struct VarUsage {
     pub declared: bool,
     /// Whether the variable has been assigned to after its declaration.
     pub assigned: bool,
-    /// Whether the variable has been used.
-    pub used: bool,
+    /// The number of times this variable been used.
+    pub uses: Rc<Cell<usize>>,
     /// The kind of the variable. For example, whether it is `mut` or `let`.
     pub kind: NameKind,
     /// The span of the variable; used for error reporting.
@@ -70,16 +74,25 @@ pub struct VarUsage {
 }
 
 impl VarUsage {
+    #[inline]
+    pub fn used(&self) -> bool {
+        self.uses.get() > 0
+    }
+
     /// Returns true if the variable is a `let` or `mut` variable.
     pub fn is_var(&self) -> bool {
-        matches!(self.kind, NameKind::Let | NameKind::Mut)
+        matches!(self.kind, NameKind::Let | NameKind::Mut | NameKind::Param)
     }
 
     /// Returns true if variable is `let`.
     pub fn is_let(&self) -> bool {
         matches!(
             self.kind,
-            NameKind::Let | NameKind::Fn | NameKind::Struct | NameKind::ForEachVar
+            NameKind::Let
+                | NameKind::Fn
+                | NameKind::Struct
+                | NameKind::ForEachVar
+                | NameKind::Param
         )
     }
 

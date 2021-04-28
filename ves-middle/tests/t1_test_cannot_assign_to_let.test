@@ -5,48 +5,58 @@ let y = "ok"
 mut y = "warning"
 y = "ok"
 
-let z = "ok"
+let _z = "ok"
 {
-    let z = "ok"
+    let _z = "ok"
     {
-        mut z = "ok"
-        z = "ok"
+        mut _z = "ok"
+        _z = "ok"
     }
-    z = "error"
+    _z = "error"
 }
-z = "error"
+_z = "error"
+
+fn test(a) {
+    a = 5
+    return a
+}
 
 %output
 
 error: Cannot assign twice to the immutable variable `x`
-  ┌─ <source: #a03d8e32d2dad17b>:2:1
+  ┌─ <source: #edae658e4fc9e594>:2:1
   │
 2 │ x = "error"
   │ ^
   │ │
   │ help: Consider replacing `let` with `mut` to make the variable mutable
 
-error: Cannot assign twice to the immutable variable `z`
-   ┌─ <source: #a03d8e32d2dad17b>:15:5
+error: Cannot assign twice to the immutable variable `_z`
+   ┌─ <source: #edae658e4fc9e594>:15:5
    │
-15 │     z = "error"
-   │     ^
+15 │     _z = "error"
+   │     ^^
    │     │
    │     help: Consider replacing `let` with `mut` to make the variable mutable
 
-error: Cannot assign twice to the immutable variable `z`
-   ┌─ <source: #a03d8e32d2dad17b>:17:1
+error: Cannot assign twice to the immutable variable `_z`
+   ┌─ <source: #edae658e4fc9e594>:17:1
    │
-17 │ z = "error"
-   │ ^
+17 │ _z = "error"
+   │ ^^
    │ │
    │ help: Consider replacing `let` with `mut` to make the variable mutable
 
+error: Function parameters may not be reassigned
+   ┌─ <source: #edae658e4fc9e594>:20:5
+   │
+20 │     a = 5
+   │     ^
+
 warning: Attempted to shadow an unused variable `y`
-  ┌─ <source: #a03d8e32d2dad17b>:5:5
+  ┌─ <source: #edae658e4fc9e594>:5:5
   │
 4 │ let y = "ok"
   │     - First declared on line 4
 5 │ mut y = "warning"
   │     ^ Later shadowed here
-

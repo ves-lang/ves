@@ -13,3 +13,9 @@ error: For-each loop variables may not be reassigned
   │
 6 │     i = 11
   │     ^
+
+error: Variable `i` is never used
+  ┌─ <source: #cbadf250af71c943>:5:5
+  │
+5 │ for i in 0..10, 3 {
+  │     ^

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, cell::Cell, rc::Rc};
 
 use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
 use ves_parser::{
@@ -66,7 +66,7 @@ impl<'a> Resolver<'a> {
             self.resolve_stmt(stmt, &mut ex);
         }
 
-        // self.check_variable_usage(&mut ex);
+        self.check_variable_usage(&mut ex);
 
         if ex.had_error() {
             Err(ex)
@@ -94,7 +94,7 @@ impl<'a> Resolver<'a> {
                         );
                     }
 
-                    self.declare(&var.name, NameKind::from(var.kind), ex);
+                    self.declare(&var.name, var.n_uses.clone(), NameKind::from(var.kind), ex);
 
                     // Only `let` variables are marked as assigned at this point.
                     if var.initializer.is_some() && var.kind == VarKind::Let {
@@ -103,7 +103,7 @@ impl<'a> Resolver<'a> {
                 }
             }
             StmtKind::Loop(r#loop) => {
-                self.env.push();
+                self.push();
 
                 self.declare_loop_label(&r#loop.label, ex);
 
@@ -112,14 +112,14 @@ impl<'a> Resolver<'a> {
                 self.resolve_stmt(&mut r#loop.body, ex);
                 self.loop_kind = prev_loop;
 
-                self.env.pop();
+                self.pop(ex);
             }
             StmtKind::For(r#for) => {
-                self.env.push();
+                self.push();
 
                 r#for.initializers.iter_mut().for_each(|init| {
                     self.resolve_expr(&mut init.value, ex);
-                    self.declare(&init.name, NameKind::Mut, ex);
+                    self.declare(&init.name, Rc::new(Cell::new(0)), NameKind::Mut, ex);
                     self.assign(&init.name, ex);
                 });
 
@@ -137,14 +137,19 @@ impl<'a> Resolver<'a> {
                 self.resolve_stmt(&mut r#for.body, ex);
                 self.loop_kind = prev_loop;
 
-                self.env.pop();
+                self.pop(ex);
             }
             StmtKind::ForEach(r#for) => {
-                self.env.push();
+                self.push();
 
                 self.resolve_expr(&mut r#for.iterator, ex);
 
-                self.declare(&r#for.variable, NameKind::ForEachVar, ex);
+                self.declare(
+                    &r#for.variable,
+                    Rc::new(Cell::new(0)),
+                    NameKind::ForEachVar,
+                    ex,
+                );
                 self.assign(&r#for.variable, ex);
 
                 self.declare_loop_label(&r#for.label, ex);
@@ -154,14 +159,14 @@ impl<'a> Resolver<'a> {
                 self.resolve_stmt(&mut r#for.body, ex);
                 self.loop_kind = prev_loop;
 
-                self.env.pop();
+                self.pop(ex);
             }
             StmtKind::While(box While {
                 ref mut condition,
                 ref mut body,
                 ref label,
             }) => {
-                self.env.push();
+                self.push();
 
                 self.resolve_condition(condition, ex);
 
@@ -172,16 +177,16 @@ impl<'a> Resolver<'a> {
                 self.resolve_stmt(body, ex);
                 self.loop_kind = prev_loop;
 
-                self.env.pop();
+                self.pop(ex);
             }
             StmtKind::Block(statements) => {
                 let prev_kind = self.scope_kind;
                 if self.scope_kind == ScopeKind::Global {
                     self.scope_kind = ScopeKind::Local;
                 }
-                self.env.push();
+                self.push();
                 self.resolve_block(statements, ex);
-                self.env.pop();
+                self.pop(ex);
                 self.scope_kind = prev_kind;
             }
             StmtKind::ExprStmt(expr) => self.resolve_expr(expr, ex),
@@ -225,6 +230,8 @@ impl<'a> Resolver<'a> {
                 if let Some(name) = label.as_ref() {
                     if self.env.get(&name.lexeme).is_none() {
                         self.undefined_variable_error(name, ex);
+                    } else {
+                        self.r#use(name, ex);
                     }
                 }
             }
@@ -235,6 +242,8 @@ impl<'a> Resolver<'a> {
                 if let Some(name) = label.as_ref() {
                     if self.env.get(&name.lexeme).is_none() {
                         self.undefined_variable_error(name, ex);
+                    } else {
+                        self.r#use(name, ex);
                     }
                 }
             }
@@ -305,7 +314,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_do_block(&mut self, block: &mut DoBlock<'a>, ex: &mut ErrCtx) {
-        self.env.push();
+        self.push();
         block
             .statements
             .iter_mut()
@@ -313,12 +322,12 @@ impl<'a> Resolver<'a> {
         if let Some(ref mut value) = block.value {
             self.resolve_expr(value, ex);
         }
-        self.env.pop();
+        self.pop(ex);
     }
 
     fn resolve_function(&mut self, f: &mut FnInfo<'a>, ex: &mut ErrCtx) {
         if f.kind != FnKind::Initializer {
-            self.declare(&f.name, NameKind::Fn, ex);
+            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
             self.assign(&f.name, ex);
         }
 
@@ -329,7 +338,7 @@ impl<'a> Resolver<'a> {
             FnKind::Function => ScopeKind::Function,
             FnKind::Initializer => ScopeKind::Initializer,
         };
-        self.env.push();
+        self.push();
 
         for (_, p) in &mut f.params.default {
             self.resolve_expr(p, ex);
@@ -342,13 +351,13 @@ impl<'a> Resolver<'a> {
             .chain(f.params.default.iter().map(|p| &p.0))
             .chain(f.params.rest.iter())
         {
-            self.declare(&param, NameKind::Let, ex);
+            self.declare(&param, Rc::new(Cell::new(0)), NameKind::Param, ex);
             self.assign(&param, ex);
         }
 
         self.resolve_block(&mut f.body, ex);
 
-        self.env.pop();
+        self.pop(ex);
         self.scope_kind = prev_kind;
     }
 
@@ -361,17 +370,17 @@ impl<'a> Resolver<'a> {
                 ref mut initializer,
                 ref mut r#static,
             }) => {
-                self.declare(name, NameKind::Let, ex);
+                self.declare(name, Rc::new(Cell::new(0)), NameKind::Let, ex);
                 self.assign(name, ex);
 
                 if let Some(init) = initializer {
-                    self.env.push();
+                    self.push();
                     let this = Token::new("self", name.span.clone(), TokenKind::Self_);
-                    self.declare(&this, NameKind::Let, ex);
+                    self.declare(&this, Rc::new(Cell::new(0)), NameKind::Let, ex);
                     self.assign(&this, ex);
                     self.r#use(&this, ex);
                     self.resolve_function(&mut init.body, ex);
-                    self.env.pop();
+                    self.pop(ex);
                 }
 
                 for (_, field) in fields.iter_mut().flat_map(|f| &mut f.default) {
@@ -390,7 +399,7 @@ impl<'a> Resolver<'a> {
                 self.resolve_function(r#fn, ex);
             }
             ExprKind::If(r#if) => {
-                self.env.push();
+                self.push();
 
                 self.resolve_condition(&mut r#if.condition, ex);
                 self.resolve_do_block(&mut r#if.then, ex);
@@ -398,7 +407,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_do_block(r#else, ex)
                 }
 
-                self.env.pop();
+                self.pop(ex);
             }
             ExprKind::DoBlock(block) => self.resolve_do_block(block, ex),
             ExprKind::Binary(_, ref mut left, ref mut right) => {
@@ -488,7 +497,7 @@ impl<'a> Resolver<'a> {
         self.resolve_expr(&mut condition.value, ex);
         match &condition.pattern {
             ConditionPattern::IsErr(v) | ConditionPattern::IsOk(v) => {
-                self.declare(v, NameKind::Let, ex);
+                self.declare(v, Rc::new(Cell::new(0)), NameKind::Let, ex);
                 self.assign(v, ex);
             }
             _ => (),
@@ -497,14 +506,20 @@ impl<'a> Resolver<'a> {
 
     fn declare_loop_label(&mut self, label: &Option<Token<'a>>, ex: &mut ErrCtx) {
         if let Some(ref lbl) = label {
-            self.declare(lbl, NameKind::Let, ex);
+            self.declare(lbl, Rc::new(Cell::new(0)), NameKind::Let, ex);
             self.assign(lbl, ex);
         }
     }
 
-    fn declare(&mut self, name: &Token<'a>, kind: NameKind, ex: &mut ErrCtx) {
+    fn declare(
+        &mut self,
+        name: &Token<'a>,
+        uses: Rc<Cell<usize>>,
+        kind: NameKind,
+        ex: &mut ErrCtx,
+    ) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if !vu.used && vu.declared {
+            if !vu.used() && vu.declared {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowUnusedVariable(vu.span.clone()),
                     format!("Attempted to shadow an unused variable `{}`", name.lexeme),
@@ -519,7 +534,11 @@ impl<'a> Resolver<'a> {
         let should_shadow = if self.scope_kind == ScopeKind::Global {
             // Check if the global is actually being declared for the first time after its forward declaration.
             if let Some(false) = existing.as_ref().map(|e| e.declared) {
-                existing.unwrap().declared = true;
+                let existing = existing.unwrap();
+                existing.declared = true;
+                // Update the use count of the original variable
+                uses.set(uses.get() + existing.uses.get());
+                existing.uses = uses.clone();
                 false
             } else {
                 // if this is not the first declaration, allow shadowing
@@ -536,7 +555,7 @@ impl<'a> Resolver<'a> {
                     kind,
                     declared: true,
                     assigned: false,
-                    used: false,
+                    uses,
                     span: name.span.clone(),
                 },
             );
@@ -557,7 +576,7 @@ impl<'a> Resolver<'a> {
                 kind,
                 declared: false,
                 assigned: false,
-                used: false,
+                uses: Rc::new(Cell::new(0)),
                 span: name.span.clone(),
             },
         );
@@ -570,6 +589,12 @@ impl<'a> Resolver<'a> {
                     if v.kind == NameKind::ForEachVar {
                         Self::error(
                             "For-each loop variables may not be reassigned",
+                            name.span.clone(),
+                            ex,
+                        );
+                    } else if v.kind == NameKind::Param {
+                        Self::error(
+                            "Function parameters may not be reassigned",
                             name.span.clone(),
                             ex,
                         );
@@ -629,7 +654,7 @@ impl<'a> Resolver<'a> {
                         ex,
                     );
                 }
-                v.used = true
+                v.uses.set(v.uses.get() + 1);
             }
             None => self.undefined_variable_error(name, ex),
         }
@@ -645,6 +670,78 @@ impl<'a> Resolver<'a> {
                 token.span.clone(),
                 ex,
             );
+        }
+    }
+
+    fn push(&mut self) {
+        self.env.push();
+    }
+
+    fn pop(&mut self, ex: &mut ErrCtx) {
+        self.check_variable_usage(ex);
+        self.env.pop();
+    }
+
+    /// Checks the variable usage in the current scope.
+    #[allow(clippy::match_bool)]
+    fn check_variable_usage(&self, ex: &mut ErrCtx) {
+        let is_global = self.env.is_global();
+        for (name, vu) in self.env.get_scope().unwrap() {
+            // Do not apply any lints to `self`.
+            if name == "self" {
+                continue;
+            }
+
+            let mut should_report = false;
+            let mut should_suggest_wildcard = false;
+            let report_as_warning = false;
+            let noun = match vu.kind {
+                NameKind::Fn => "Function",
+                NameKind::Struct => "Struct",
+                NameKind::Let if name.starts_with('@') => "Loop label",
+                _ => "Variable",
+            };
+
+            let is_prefixed = name.starts_with('_');
+
+            // Report an error for unused local structs/functions.
+            // While having an unused local variable makes sense in some cases,
+            // having an unused local class or function doesn't
+            if !vu.used() && !is_global && !vu.is_var() && !is_prefixed {
+                should_report = true;
+            // Issue an error for unused local variables.
+            } else if !vu.used()
+                && !is_global
+                && !is_prefixed
+                && (vu.is_var()/* || vu.is_import() */)
+            {
+                should_report = true;
+                should_suggest_wildcard = true;
+            }
+
+            if !should_report {
+                continue;
+            }
+
+            // Do not suggest the user to prefix labels with an underscore
+            if name.starts_with('@') {
+                should_suggest_wildcard = false;
+            }
+
+            let msg = format!("{} `{}` is never used", noun, name);
+            if report_as_warning {
+                Self::error(msg, vu.span.clone(), ex).mark_last_error_as_warning();
+            } else {
+                match should_suggest_wildcard {
+                    true => Self::error_of_kind(
+                        VesErrorKind::ResolutionSuggestWildcard,
+                        msg,
+                        vu.span.clone(),
+                        ex,
+                    ),
+                    false => Self::error(msg, vu.span.clone(), ex),
+                };
+            }
         }
     }
 

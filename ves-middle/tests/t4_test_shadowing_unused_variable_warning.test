@@ -22,6 +22,7 @@ StmtKind::Var
       initializer: Lit
         token: "42"
         value: LitValue::Number(42.0)
+      n_uses: 0
 StmtKind::Var
   declarations=
     Var
@@ -30,6 +31,7 @@ StmtKind::Var
       initializer: Lit
         token: "\"new value\""
         value: LitValue::Str("new value")
+      n_uses: 1
 StmtKind::Var
   declarations=
     Var
@@ -38,6 +40,7 @@ StmtKind::Var
       initializer: Lit
         token: "75"
         value: LitValue::Number(75.0)
+      n_uses: 0
 StmtKind::Var
   declarations=
     Var
@@ -45,3 +48,4 @@ StmtKind::Var
       kind: Let
       initializer: ExprKind::Variable
         name: "unused"
+      n_uses: 0

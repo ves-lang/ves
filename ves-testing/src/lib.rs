@@ -106,7 +106,7 @@ macro_rules! make_test_macros {
                         #[test]
                         fn $test_name() {
                             let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
-                            $crate::test_ok_ast(stringify!(test_name), source, output, $ok_pipeline);
+                            $crate::test_ok_ast(stringify!($test_name), source, output, $ok_pipeline);
                         }
                     };
                 }
@@ -117,7 +117,7 @@ macro_rules! make_test_macros {
                         #[test]
                         fn $test_name() {
                             let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
-                            $crate::test_err(stringify!(test_name), source, output, $err_pipeline);
+                            $crate::test_err(stringify!($test_name), source, output, $err_pipeline);
                         }
                     };
                 }

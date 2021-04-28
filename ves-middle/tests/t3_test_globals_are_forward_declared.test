@@ -1,8 +1,8 @@
 fn mutually_recursive1(a) {
-    mutually_recursive2("ok")
+    mutually_recursive2(a)
 }
 fn mutually_recursive2(a) { 
-    mutually_recursive1("ok")
+    mutually_recursive1(a)
 }
 
 
@@ -13,7 +13,7 @@ print(global, "ok")
 %output
 
 error: Attempted to use the variable `global` before its declaration
-   ┌─ <source: #879628b2a9f5644f>:9:7
+   ┌─ <source: #e1fbb4a350ca6ff5>:9:7
    │
  9 │ print(global, "error")
    │       ^^^^^^

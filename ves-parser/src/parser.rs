@@ -425,6 +425,7 @@ impl<'a> Parser<'a> {
             kind,
             name: ident,
             initializer: init,
+            n_uses: std::rc::Rc::new(std::cell::Cell::new(0)),
         })
     }
 

@@ -44,14 +44,7 @@ StmtKind::Print
     value: Lit
       token: "\"folded\""
       value: LitValue::Str("folded")
-StmtKind::Var
-  declarations=
-    Var
-      name: "i"
-      kind: Let
-      initializer: Lit
-        token: "\"unfolded\""
-        value: LitValue::Str("unfolded")
+StmtKind::_Empty
 For
   initializers=
     Assignment
@@ -78,14 +71,7 @@ For
   body: StmtKind::Block
     statements=
   label: None
-StmtKind::Var
-  declarations=
-    Var
-      name: "e"
-      kind: Let
-      initializer: Lit
-        token: "\"arr prop\""
-        value: LitValue::Str("arr prop")
+StmtKind::_Empty
 ForEach
   variable: "e"
   iterator: ExprKind::Array
