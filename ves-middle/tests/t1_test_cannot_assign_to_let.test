@@ -31,6 +31,22 @@ error: Cannot assign twice to the immutable variable `x`
   │ │
   │ help: Consider replacing `let` with `mut` to make the variable mutable
 
+error: Attempted to shadow a local variable `y`
+  ┌─ <source: #edae658e4fc9e594>:5:5
+  │
+4 │ let y = "ok"
+  │     - First declared on line 4
+5 │ mut y = "warning"
+  │     ^ Later shadowed here
+
+error: Cannot assign twice to the immutable variable `y`
+  ┌─ <source: #edae658e4fc9e594>:6:1
+  │
+6 │ y = "ok"
+  │ ^
+  │ │
+  │ help: Consider replacing `let` with `mut` to make the variable mutable
+
 error: Cannot assign twice to the immutable variable `_z`
    ┌─ <source: #edae658e4fc9e594>:15:5
    │
@@ -52,11 +68,3 @@ error: Function parameters may not be reassigned
    │
 20 │     a = 5
    │     ^
-
-warning: Attempted to shadow an unused variable `y`
-  ┌─ <source: #edae658e4fc9e594>:5:5
-  │
-4 │ let y = "ok"
-  │     - First declared on line 4
-5 │ mut y = "warning"
-  │     ^ Later shadowed here

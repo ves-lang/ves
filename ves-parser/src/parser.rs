@@ -57,7 +57,6 @@ impl<'a> Parser<'a> {
         self.advance();
         let mut body = vec![];
         while !self.at_end() {
-            println!("{:?}", self.current);
             if self.match_(&TokenKind::Import) {
                 if parsing_imports {
                     match self.import() {

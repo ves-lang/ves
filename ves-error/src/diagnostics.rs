@@ -23,7 +23,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | FnBeforeMethod
         | UsedGlobalBeforeDeclaration(_) => Diagnostic::error(),
         UnusedLocal => Diagnostic::warning(),
-        AttemptedToShadowUnusedVariable(_) => Diagnostic::warning(),
+        AttemptedToShadowLocalVariable(_) => Diagnostic::error(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
         Runtime => unimplemented!(),
@@ -43,7 +43,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         d = let_reassignment_diag(db, d, &e);
     } else if e.kind == FnBeforeMethod {
         d = fn_before_method_diag(db, d, &e);
-    } else if let AttemptedToShadowUnusedVariable(_) = e.kind {
+    } else if let AttemptedToShadowLocalVariable(_) = e.kind {
         d = attempted_to_shadow_unused_diag(db, d, &e);
     } else if let UsedGlobalBeforeDeclaration(_) = e.kind {
         d = used_global_before_declaration_diag(db, d, &e);
@@ -127,7 +127,7 @@ fn attempted_to_shadow_unused_diag<'a>(
 ) -> Diagnostic<FileId> {
     let first = diag.labels.pop().unwrap();
     let span = match &e.kind {
-        crate::VesErrorKind::AttemptedToShadowUnusedVariable(span) => span.clone(),
+        crate::VesErrorKind::AttemptedToShadowLocalVariable(span) => span.clone(),
         _ => unreachable!(),
     };
     let line = db.line_index(e.file_id, span.start).unwrap() + 1;

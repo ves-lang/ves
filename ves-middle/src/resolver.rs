@@ -519,18 +519,18 @@ impl<'a> Resolver<'a> {
         ex: &mut ErrCtx,
     ) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if !vu.used() && vu.declared {
+            if vu.declared {
                 Self::error_of_kind(
-                    VesErrorKind::AttemptedToShadowUnusedVariable(vu.span.clone()),
-                    format!("Attempted to shadow an unused variable `{}`", name.lexeme),
+                    VesErrorKind::AttemptedToShadowLocalVariable(vu.span.clone()),
+                    format!("Attempted to shadow a local variable `{}`", name.lexeme),
                     name.span.clone(),
                     ex,
-                )
-                .mark_last_error_as_warning();
+                );
+                return;
             }
         }
 
-        let existing = self.env.get_mut(&name.lexeme);
+        /* let existing = self.env.get_mut(&name.lexeme);
         let should_shadow = if self.scope_kind == ScopeKind::Global {
             // Check if the global is actually being declared for the first time after its forward declaration.
             if let Some(false) = existing.as_ref().map(|e| e.declared) {
@@ -546,20 +546,20 @@ impl<'a> Resolver<'a> {
             }
         } else {
             true
-        };
+        }; */
 
-        if should_shadow {
-            self.env.add(
-                name.lexeme.clone(),
-                VarUsage {
-                    kind,
-                    declared: true,
-                    assigned: false,
-                    uses,
-                    span: name.span.clone(),
-                },
-            );
-        }
+        /* if should_shadow { */
+        self.env.add(
+            name.lexeme.clone(),
+            VarUsage {
+                kind,
+                declared: true,
+                assigned: false,
+                uses,
+                span: name.span.clone(),
+            },
+        );
+        /* } */
     }
 
     fn declare_global(&mut self, name: &Token<'a>, kind: NameKind) {
@@ -687,7 +687,6 @@ impl<'a> Resolver<'a> {
     fn check_variable_usage(&self, ex: &mut ErrCtx) {
         let is_global = self.env.is_global();
         for (name, vu) in self.env.get_scope().unwrap() {
-            println!("{:?}: {:?}", name, vu);
             // Do not apply any lints to `self`.
             if name == "self" {
                 continue;
@@ -769,11 +768,10 @@ pub mod tests {
     test_err!(t1_test_cannot_assign_to_let);
     test_err!(t2_test_variables_must_be_defined);
     test_err!(t3_test_globals_are_forward_declared);
-    test_ok!(t4_test_shadowing_unused_variable_warning);
-    test_err!(t5_cannot_break_outside_of_a_loop);
-    test_err!(t6_test_undefined_loop_labels_are_detected);
-    test_err!(t7_test_return_usage);
-    test_err!(t8_self_may_be_used_only_inside_methods);
-    test_err!(t9_test_for_loops);
-    test_ok!(t10_unused_locals);
+    test_err!(t4_cannot_break_outside_of_a_loop);
+    test_err!(t5_test_undefined_loop_labels_are_detected);
+    test_err!(t6_test_return_usage);
+    test_err!(t7_self_may_be_used_only_inside_methods);
+    test_err!(t8_test_for_loops);
+    test_ok!(t9_unused_locals);
 }

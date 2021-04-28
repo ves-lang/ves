@@ -8,8 +8,8 @@ let e = 1
 let f = c
 let folded = (d * 3 + 1 * e) / f
 
-let a = 55;
-print(a + 1);
+let q = 55;
+print(q + 1);
 
 let fold1 = 8231 * 231 + 32;
 let second = fold1 * 327;
