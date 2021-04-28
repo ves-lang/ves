@@ -774,4 +774,5 @@ pub mod tests {
     test_err!(t7_self_may_be_used_only_inside_methods);
     test_err!(t8_test_for_loops);
     test_ok!(t9_unused_locals);
+    test_err!(t10_shadowing);
 }

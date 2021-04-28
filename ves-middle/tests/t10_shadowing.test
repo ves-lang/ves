@@ -1,0 +1,41 @@
+fn use(v) {
+    print(v);
+}
+
+let a = 0;
+use(a);
+{
+    let a = a; // ok
+    use(a);
+}
+mut a; // not ok
+
+mut b = 0;
+use(b);
+{
+    mut b = b; // ok
+    use(b);
+}
+b = 5; // ok
+use(b);
+mut b; // not ok
+
+%output
+
+error: Attempted to shadow a local variable `a`
+   ┌─ <source: #565aea8b46b03658>:11:5
+   │
+ 5 │ let a = 0;
+   │     - First declared on line 5
+   ·
+11 │ mut a; // not ok
+   │     ^ Later shadowed here
+
+error: Attempted to shadow a local variable `b`
+   ┌─ <source: #565aea8b46b03658>:21:5
+   │
+13 │ mut b = 0;
+   │     - First declared on line 13
+   ·
+21 │ mut b; // not ok
+   │     ^ Later shadowed here
