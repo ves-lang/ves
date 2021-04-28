@@ -65,7 +65,7 @@ pub struct VarUsage {
     pub declared: bool,
     /// Whether the variable has been assigned to after its declaration.
     pub assigned: bool,
-    /// The number of times this variable been used.
+    /// The number of times this variable has been used.
     pub uses: Rc<Cell<usize>>,
     /// The kind of the variable. For example, whether it is `mut` or `let`.
     pub kind: NameKind,
