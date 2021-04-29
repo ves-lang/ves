@@ -1,4 +1,9 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    path::PathBuf,
+};
 
 use codespan_reporting::{
     diagnostic::Diagnostic,
@@ -9,10 +14,10 @@ use codespan_reporting::{
     },
 };
 
-use crate::{diagnostics::build_diagnostic, ErrCtx, VesError};
+use crate::{diagnostics::build_diagnostic, ErrCtx, Span, VesError};
 
 /// The id of a file stored in the database
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileId(usize);
 
 impl FileId {
@@ -22,15 +27,28 @@ impl FileId {
     }
 }
 
+/// An export inside a Ves source file.
+#[derive(Debug, Clone)]
+pub struct Export {
+    /// The name of the object being exported -- a global variable, function, struct.
+    pub name: String,
+    /// THe span of the export statement.
+    pub span: crate::Span,
+}
+
 /// A ves source code file.
 #[derive(Debug, Clone)]
-struct VesFile<'a> {
+pub struct VesFile<'a> {
     /// The source of the file
     source: Cow<'a, str>,
     /// The BLAKE hash of the source file.
     hash: blake2s_simd::Hash,
-    // TODO: name of the module
-    module: (),
+    /// The exports this file has.
+    exports: RefCell<Vec<Export>>,
+    /// The name of the module.
+    module: String,
+    /// Whether the module has already been parsed.
+    parsed: Cell<bool>,
 }
 
 impl<'a> AsRef<str> for VesFile<'a> {
@@ -45,6 +63,7 @@ impl<'a> AsRef<str> for VesFile<'a> {
 #[derive(Debug)]
 pub struct VesFileDatabase<'a> {
     db: SimpleFiles<Cow<'a, str>, VesFile<'a>>,
+    ids: HashMap<Cow<'a, str>, FileId>,
     config: Config,
 }
 
@@ -53,6 +72,7 @@ impl<'a> VesFileDatabase<'a> {
     pub fn new() -> Self {
         Self {
             db: SimpleFiles::new(),
+            ids: HashMap::new(),
             config: Config::default(),
         }
     }
@@ -68,9 +88,11 @@ impl<'a> VesFileDatabase<'a> {
         let file = VesFile {
             source,
             hash,
-            module: (),
+            exports: RefCell::new(vec![]),
+            module: extract_module_name(&PathBuf::from(&name[..])),
+            parsed: Cell::new(false),
         };
-        FileId(self.db.add(name, file))
+        self.add(name, file)
     }
 
     /// Adds a snippet that doesn't come from a file to the database, using
@@ -81,9 +103,36 @@ impl<'a> VesFileDatabase<'a> {
         let file = VesFile {
             source,
             hash,
-            module: (),
+            exports: RefCell::new(vec![]),
+            module: hash.to_hex().to_string(),
+            parsed: Cell::new(false),
         };
-        FileId(self.db.add(name, file))
+        self.add(name, file)
+    }
+
+    /// Returns the source code of the file with the given file id as a string slice.
+    pub fn source_string(&self, id: FileId) -> Result<&str, files::Error> {
+        self.db.get(id.0).map(|f| &f.source().source[..])
+    }
+
+    /// Returns the id of the file with the given name if it exists.
+    #[inline]
+    pub fn get_id_by_name(&self, name: &str) -> Option<FileId> {
+        self.ids.get(name).copied()
+    }
+
+    /// Marks the given file as parsed.
+    #[inline]
+    pub fn mark_parsed(&self, file_id: FileId) -> Option<()> {
+        self.file(file_id).map(|f| {
+            f.parsed.set(true);
+        })
+    }
+
+    /// Returns [`Some(parsed)`] if the file is in the database, [`None`] otherwise.
+    #[inline]
+    pub fn is_parsed(&self, file_id: FileId) -> Option<bool> {
+        self.file(file_id).map(|f| f.parsed.get())
     }
 
     /// Returns a tuple of (line, column) for the given span and file id.
@@ -100,13 +149,28 @@ impl<'a> VesFileDatabase<'a> {
 
     /// Returns the BLAKE hash of the file with the given id.
     #[inline]
-    pub fn hash(&'a self, id: FileId) -> &blake2s_simd::Hash {
+    pub fn hash(&self, id: FileId) -> &blake2s_simd::Hash {
         &self
             .db
             .get(id.0)
             .expect("Attempted to query a nonexistent file")
             .source()
             .hash
+    }
+
+    /// Returns a reference to the inner file object given a file id.
+    #[inline]
+    pub fn file(&self, id: FileId) -> Option<&VesFile> {
+        self.db.get(id.0).map(|f| f.source()).ok()
+    }
+
+    /// Adds the given export to the list of the file's exports.
+    pub fn add_export(&self, file_id: FileId, name: String, span: Span) {
+        let file = self
+            .file(file_id)
+            .expect("Attempted to query a nonexistent file");
+        let mut exports = file.exports.borrow_mut();
+        exports.push(Export { name, span });
     }
 
     /// Reports the errors form the [`ErrCtx`] to STDERR.
@@ -153,6 +217,13 @@ impl<'a> VesFileDatabase<'a> {
             self.report_diagnostic(buf, &d)?;
         }
         Ok(())
+    }
+
+    /// Adds the given file to the database and remember its id.
+    fn add(&mut self, name: Cow<'a, str>, file: VesFile<'a>) -> FileId {
+        let id = FileId(self.db.add(name.clone(), file));
+        self.ids.insert(name, id);
+        id
     }
 
     /// Reports a single diagnostic to the given buffer.
@@ -265,6 +336,15 @@ fn hash(source: &str) -> blake2s_simd::Hash {
         .hash(source.as_bytes())
 }
 
+/// Extracts the name of the module from the given path.
+fn extract_module_name(path: &std::path::Path) -> String {
+    let path = PathBuf::from(path.to_string_lossy().replace('\\', "/"));
+    path.file_stem()
+        .expect("Attempted to read a path without a filename")
+        .to_string_lossy()
+        .into_owned()
+}
+
 #[cfg(test)]
 pub mod test {
     use super::*;
@@ -294,5 +374,37 @@ pub mod test {
             ),
             (4, 15)
         );
+    }
+
+    #[test]
+    fn test_module_name_extraction() {
+        let paths = vec![
+            "test1.ves",
+            "../../some-path.ves",
+            "another_path.ves",
+            "no_extension",
+            "<source>",
+            "./stuff/-in-/the/middle/of/the/path.ves",
+            "/a/linux/path.ves",
+            r"C:\a\windows\path.ves",
+        ];
+
+        let expected = vec![
+            "test1",
+            "some-path",
+            "another_path",
+            "no_extension",
+            "<source>",
+            "path",
+            "path",
+            "path",
+        ];
+
+        let mut db = VesFileDatabase::new();
+
+        for (path, module) in paths.into_iter().zip(expected.into_iter()) {
+            let id = db.add_file(path.into(), "".into());
+            assert_eq!(db.file(id).unwrap().module, module);
+        }
     }
 }

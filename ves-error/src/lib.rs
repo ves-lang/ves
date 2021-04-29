@@ -38,6 +38,12 @@ impl ErrCtx {
         }
     }
 
+    /// Moves all errors from the given context to this context.
+    pub fn extend(&mut self, other: ErrCtx) {
+        self.errors.extend(other.errors);
+        self.warnings.extend(other.warnings);
+    }
+
     /// Marks the last error in the errors list as a warning and moves it to the warnings list.
     pub fn mark_last_error_as_warning(&mut self) -> Option<()> {
         if let Some(e) = self.errors.pop() {
@@ -91,6 +97,8 @@ pub enum VesErrorKind {
     AttemptedToShadowLocalVariable(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
+    /// A module import error.
+    Import,
     /// A `let` variable without an initializer
     LetWithoutValue,
     /// Represents an error that has occurred at runtime.
@@ -153,6 +161,11 @@ impl VesError {
     /// Creates a new [`VesErrorKind::ResolutionSuggestWildcard`] error.
     pub fn resolution_wildcard<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
         VesError::new(msg, span, VesErrorKind::ResolutionSuggestWildcard, file_id)
+    }
+
+    /// Creates a new [`VesErrorKind::Import`] error.
+    pub fn import<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Import, file_id)
     }
 
     /// Adds the name of the function the error originates from to this error.

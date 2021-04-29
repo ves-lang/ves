@@ -5,6 +5,7 @@ use regex::Regex;
 use ves_error::{ErrCtx, FileId, VesFileDatabase};
 
 pub use lazy_static::lazy_static;
+pub use pretty_assertions;
 
 /// Cleans the given AST, removing all special characters.
 pub fn clean_tree(tree: String) -> String {

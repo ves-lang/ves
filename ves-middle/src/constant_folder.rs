@@ -444,7 +444,7 @@ mod tests {
         db: &mut VesFileDatabase<'a>,
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
-        Resolver::new().resolve(&mut ast).unwrap();
+        Resolver::new().resolve(&mut ast, db).unwrap();
         ConstantFolder::new(20, true).fold(&mut ast);
         Ok(ast
             .body

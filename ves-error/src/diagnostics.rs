@@ -21,9 +21,10 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         | LetWithoutValue
         | LetReassignment
         | FnBeforeMethod
-        | UsedGlobalBeforeDeclaration(_) => Diagnostic::error(),
+        | UsedGlobalBeforeDeclaration(_)
+        | AttemptedToShadowLocalVariable(_)
+        | Import => Diagnostic::error(),
         UnusedLocal => Diagnostic::warning(),
-        AttemptedToShadowLocalVariable(_) => Diagnostic::error(),
         Warning => Diagnostic::warning(),
         Compile => unimplemented!(),
         Runtime => unimplemented!(),

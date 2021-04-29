@@ -1,6 +1,6 @@
 use std::{borrow::Cow, cell::Cell, rc::Rc};
 
-use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
+use ves_error::{ErrCtx, FileId, Files, VesError, VesErrorKind, VesFileDatabase};
 use ves_parser::{
     ast::*,
     lexer::{Token, TokenKind},
@@ -49,12 +49,18 @@ impl<'a> Resolver<'a> {
     }
 
     /// Resolves the given AST. Returns the used [`ErrCtx`] containing warnings, errors, and suggestions.
-    pub fn resolve(mut self, ast: &mut AST<'a>) -> Result<ErrCtx, ErrCtx> {
+    pub fn resolve(
+        mut self,
+        ast: &mut AST<'a>,
+        db: &VesFileDatabase<'a>,
+    ) -> Result<ErrCtx, ErrCtx> {
         self.file_id = ast.file_id;
         let mut ex = ErrCtx {
             local_file_id: self.file_id,
             ..Default::default()
         };
+
+        self.resolve_imports(&ast.imports, db, &mut ex);
 
         let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
         sorted_globals.sort_by_key(|e| e.name.span.start);
@@ -66,6 +72,8 @@ impl<'a> Resolver<'a> {
             self.resolve_stmt(stmt, &mut ex);
         }
 
+        self.resolve_exports(&ast.exports, &mut ex);
+
         self.check_variable_usage(&mut ex);
 
         if ex.had_error() {
@@ -73,6 +81,32 @@ impl<'a> Resolver<'a> {
         } else {
             Ok(ex)
         }
+    }
+
+    fn resolve_imports(
+        &mut self,
+        imports: &[Import<'a>],
+        db: &VesFileDatabase<'a>,
+        ex: &mut ErrCtx,
+    ) {
+        // The path to the current file, all imports are resolved relatively to it
+        let base_path = db
+            .name(self.file_id)
+            .expect("Attempted to resolve an anonymous file.");
+
+        for i in imports {
+            match i {
+                Import::Direct(path) => match path {
+                    ImportPath::Simple(symbol) => {}
+                    ImportPath::Full(symbol) => {}
+                },
+                Import::Destructured(path, symbols) => {}
+            }
+        }
+    }
+
+    fn resolve_exports(&mut self, exports: &[Symbol<'a>], ex: &mut ErrCtx) {
+        // unimplemented!()
     }
 
     fn resolve_stmt(&mut self, stmt: &mut Stmt<'a>, ex: &mut ErrCtx) {
@@ -530,25 +564,7 @@ impl<'a> Resolver<'a> {
             }
         }
 
-        /* let existing = self.env.get_mut(&name.lexeme);
-        let should_shadow = if self.scope_kind == ScopeKind::Global {
-            // Check if the global is actually being declared for the first time after its forward declaration.
-            if let Some(false) = existing.as_ref().map(|e| e.declared) {
-                let existing = existing.unwrap();
-                existing.declared = true;
-                // Update the use count of the original variable
-                uses.set(uses.get() + existing.uses.get());
-                existing.uses = uses.clone();
-                false
-            } else {
-                // if this is not the first declaration, allow shadowing
-                true
-            }
-        } else {
-            true
-        }; */
-
-        /* if should_shadow { */
+        // NOTE: this code used to allow shadowing. Review #7bb446467b if needed.
         self.env.add(
             name.lexeme.clone(),
             VarUsage {
@@ -559,7 +575,6 @@ impl<'a> Resolver<'a> {
                 span: name.span.clone(),
             },
         );
-        /* } */
     }
 
     fn declare_global(&mut self, name: &Token<'a>, kind: NameKind) {
@@ -746,7 +761,7 @@ pub mod tests {
         db: &mut VesFileDatabase<'a>,
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
-        match Resolver::new().resolve(&mut ast) {
+        match Resolver::new().resolve(&mut ast, db) {
             Ok(warnings) => {
                 let diagnostics = db.report_to_string(&warnings).unwrap();
                 Ok(format!(

@@ -31,6 +31,7 @@ pub struct Global<'a> {
     pub kind: VarKind,
 }
 
+/// An imported or exported symbol.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum Symbol<'a> {
     /// An imported/exported name without an alias
@@ -46,6 +47,7 @@ pub enum Symbol<'a> {
     ),
 }
 
+/// A relative import of a file.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum ImportPath<'a> {
     /// A simple path (e.g. `import thing`)
@@ -57,6 +59,7 @@ pub enum ImportPath<'a> {
     Full(#[rename = "symbol"] Symbol<'a>),
 }
 
+/// An import statement.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum Import<'a> {
     /// A direct import (e.g. `import thing`)

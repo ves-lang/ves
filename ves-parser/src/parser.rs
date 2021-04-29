@@ -13,7 +13,7 @@ pub type ParseResult<T> = std::result::Result<T, VesError>;
 // -> e.g. blocks/param packs, do they consume the closing '}', ')'?
 //    or is it up to the caller?
 
-pub struct Parser<'a> {
+pub struct Parser<'a, 'b> {
     lexer: Lexer<'a>,
     previous: Token<'a>,
     current: Token<'a>,
@@ -22,13 +22,13 @@ pub struct Parser<'a> {
     fid: FileId,
     scope_depth: usize,
     globals: HashSet<Global<'a>>,
-    db: &'a VesFileDatabase<'a>,
+    db: &'b VesFileDatabase<'a>,
     imports: Vec<ast::Import<'a>>,
     exports: Vec<ast::Symbol<'a>>,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'a VesFileDatabase) -> Parser<'a> {
+impl<'a, 'b> Parser<'a, 'b> {
+    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'b VesFileDatabase<'a>) -> Self {
         let source = lexer.source();
         let end = if source.is_empty() {
             0
@@ -86,6 +86,8 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+        self.db.mark_parsed(self.fid);
 
         if self.ex.had_error() {
             Err(self.ex)
