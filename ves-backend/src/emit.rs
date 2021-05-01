@@ -1,7 +1,7 @@
 use crate::builder::{BytecodeBuilder, Chunk};
 use crate::opcode::Opcode;
 use crate::Result;
-use ves_parser::ast::{self, AST};
+use ves_parser::ast::*;
 
 pub struct Emitter<'a> {
     builder: BytecodeBuilder,
@@ -19,112 +19,125 @@ impl<'a> Emitter<'a> {
     pub fn emit(mut self) -> Result<Chunk> {
         let body = std::mem::take(&mut self.ast.body);
         for stmt in body.into_iter() {
+            use StmtKind::*;
             match stmt.kind {
-                ves_parser::ast::StmtKind::ExprStmt(expr) => self.emit_expr(*expr)?,
-                ves_parser::ast::StmtKind::Var(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Loop(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::For(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::ForEach(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::While(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Block(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Print(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Return(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Break(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Continue(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::Defer(_) => unimplemented!(),
-                ves_parser::ast::StmtKind::_Empty => panic!("Unexpected StmtKind::_Empty"),
+                ExprStmt(box expr) => self.emit_expr(expr)?,
+                Var(_) => unimplemented!(),
+                Loop(_) => unimplemented!(),
+                For(_) => unimplemented!(),
+                ForEach(_) => unimplemented!(),
+                While(_) => unimplemented!(),
+                Block(_) => unimplemented!(),
+                Print(_) => unimplemented!(),
+                Return(_) => unimplemented!(),
+                Break(_) => unimplemented!(),
+                Continue(_) => unimplemented!(),
+                Defer(_) => unimplemented!(),
+                _Empty => panic!("Unexpected StmtKind::_Empty"),
             }
         }
 
         Ok(self.builder.finish())
     }
 
-    fn emit_expr(&mut self, expr: ast::Expr) -> Result<()> {
+    fn emit_expr(&mut self, expr: Expr) -> Result<()> {
         match expr.kind {
-            ast::ExprKind::Lit(literal) => self.emit_lit(*literal)?,
+            ExprKind::Lit(box literal) => self.emit_lit(literal)?,
 
-            ast::ExprKind::Binary(op, left, right) => {
-                self.emit_expr(*left)?;
-                self.emit_expr(*right)?;
-                self.builder.emit(
-                    match op {
-                        ast::BinOpKind::Is => unimplemented!(),
-                        ast::BinOpKind::In => unimplemented!(),
-                        ast::BinOpKind::Add => Opcode::Add,
-                        ast::BinOpKind::Sub => Opcode::Subtract,
-                        ast::BinOpKind::Mul => Opcode::Multiply,
-                        ast::BinOpKind::Div => Opcode::Divide,
-                        ast::BinOpKind::Rem => Opcode::Remainder,
-                        ast::BinOpKind::Pow => Opcode::Power,
-                        ast::BinOpKind::And => unimplemented!(),
-                        ast::BinOpKind::Or => unimplemented!(),
-                        ast::BinOpKind::Eq => unimplemented!(),
-                        ast::BinOpKind::Ne => unimplemented!(),
-                        ast::BinOpKind::Lt => unimplemented!(),
-                        ast::BinOpKind::Le => unimplemented!(),
-                        ast::BinOpKind::Ge => unimplemented!(),
-                        ast::BinOpKind::Gt => unimplemented!(),
+            ExprKind::Binary(op, box left, box right) => {
+                self.emit_expr(left)?;
+                self.emit_expr(right)?;
+                self.builder.op(
+                    {
+                        use BinOpKind::*;
+                        match op {
+                            Is => unimplemented!(),
+                            In => unimplemented!(),
+                            Add => Opcode::Add,
+                            Sub => Opcode::Subtract,
+                            Mul => Opcode::Multiply,
+                            Div => Opcode::Divide,
+                            Rem => Opcode::Remainder,
+                            Pow => Opcode::Power,
+                            And => unimplemented!(),
+                            Or => unimplemented!(),
+                            Eq => unimplemented!(),
+                            Ne => unimplemented!(),
+                            Lt => unimplemented!(),
+                            Le => unimplemented!(),
+                            Ge => unimplemented!(),
+                            Gt => unimplemented!(),
+                        }
                     },
                     expr.span,
                 );
             }
-            ast::ExprKind::Unary(op, operand) => {
+            ExprKind::Unary(op, operand) => {
                 self.emit_expr(*operand)?;
-                self.builder.emit(
+                self.builder.op(
                     match op {
-                        ast::UnOpKind::Not => unimplemented!(),
-                        ast::UnOpKind::Neg => Opcode::Negate,
-                        ast::UnOpKind::Try => unimplemented!(),
-                        ast::UnOpKind::Ok => unimplemented!(),
-                        ast::UnOpKind::Err => unimplemented!(),
+                        UnOpKind::Not => unimplemented!(),
+                        UnOpKind::Neg => Opcode::Negate,
+                        UnOpKind::Try => unimplemented!(),
+                        UnOpKind::Ok => unimplemented!(),
+                        UnOpKind::Err => unimplemented!(),
                     },
                     expr.span,
                 );
             }
 
-            ast::ExprKind::Struct(_) => unimplemented!(),
-            ast::ExprKind::Fn(_) => unimplemented!(),
-            ast::ExprKind::If(_) => unimplemented!(),
-            ast::ExprKind::DoBlock(_) => unimplemented!(),
-            ast::ExprKind::Comma(_) => unimplemented!(),
-            ast::ExprKind::Call(_) => unimplemented!(),
-            ast::ExprKind::Spread(_) => unimplemented!(),
-            ast::ExprKind::GetProp(_) => unimplemented!(),
-            ast::ExprKind::SetProp(_) => unimplemented!(),
-            ast::ExprKind::GetItem(_) => unimplemented!(),
-            ast::ExprKind::SetItem(_) => unimplemented!(),
-            ast::ExprKind::FString(_) => unimplemented!(),
-            ast::ExprKind::Array(_) => unimplemented!(),
-            ast::ExprKind::Map(_) => unimplemented!(),
-            ast::ExprKind::Variable(_) => unimplemented!(),
-            ast::ExprKind::Range(_) => unimplemented!(),
-            ast::ExprKind::PrefixIncDec(_) => unimplemented!(),
-            ast::ExprKind::PostfixIncDec(_) => unimplemented!(),
-            ast::ExprKind::Assignment(_) => unimplemented!(),
-            ast::ExprKind::Grouping(_) => unimplemented!(),
-            ast::ExprKind::AtIdent(_) => unimplemented!(),
+            ExprKind::Struct(_) => unimplemented!(),
+            ExprKind::Fn(_) => unimplemented!(),
+            ExprKind::If(_) => unimplemented!(),
+            ExprKind::DoBlock(_) => unimplemented!(),
+            ExprKind::Comma(_) => unimplemented!(),
+            ExprKind::Call(_) => unimplemented!(),
+            ExprKind::Spread(_) => unimplemented!(),
+            ExprKind::GetProp(_) => unimplemented!(),
+            ExprKind::SetProp(_) => unimplemented!(),
+            ExprKind::GetItem(_) => unimplemented!(),
+            ExprKind::SetItem(_) => unimplemented!(),
+            ExprKind::FString(_) => unimplemented!(),
+            ExprKind::Array(_) => unimplemented!(),
+            ExprKind::Map(_) => unimplemented!(),
+            ExprKind::Variable(_) => unimplemented!(),
+            ExprKind::Range(_) => unimplemented!(),
+            ExprKind::PrefixIncDec(_) => unimplemented!(),
+            ExprKind::PostfixIncDec(_) => unimplemented!(),
+            ExprKind::Assignment(_) => unimplemented!(),
+            ExprKind::Grouping(_) => unimplemented!(),
+            ExprKind::AtIdent(_) => unimplemented!(),
         }
 
         Ok(())
     }
 
-    fn emit_lit(&mut self, lit: ast::Lit) -> Result<()> {
+    fn emit_lit(&mut self, lit: Lit) -> Result<()> {
         match lit.value {
-            ast::LitValue::Number(value) => match maybe_f32(value) {
+            LitValue::Number(value) => match maybe_f32(value) {
                 Some(value) => {
                     self.builder
-                        .emit(Opcode::PushSmallNumber(value), lit.token.span);
+                        .op(Opcode::PushSmallNumber(value), lit.token.span);
                 }
                 None => {
                     let offset = self
                         .builder
                         .constant(value.into(), lit.token.span.clone())?;
-                    self.builder.emit(Opcode::GetConst(offset), lit.token.span);
+                    self.builder.op(Opcode::GetConst(offset), lit.token.span);
                 }
             },
-            ast::LitValue::Bool(_) => unimplemented!(),
-            ast::LitValue::None => unimplemented!(),
-            ast::LitValue::Str(_) => unimplemented!(),
+            LitValue::Bool(value) => {
+                match value {
+                    true => self.builder.op(Opcode::PushTrue, lit.token.span),
+                    false => self.builder.op(Opcode::PushFalse, lit.token.span),
+                };
+            }
+            LitValue::None => {
+                self.builder.op(Opcode::PushNone, lit.token.span);
+            }
+            LitValue::Str(_value) => {
+                unimplemented!()
+            }
         }
 
         Ok(())

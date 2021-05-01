@@ -1,3 +1,4 @@
+#![feature(box_syntax, box_patterns)]
 #![allow(clippy::new_without_default)]
 pub mod builder;
 pub mod emit;

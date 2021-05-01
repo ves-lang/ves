@@ -29,15 +29,15 @@ impl BytecodeBuilder {
         }
     }
 
-    pub fn emit(&mut self, op: Opcode, span: Span) -> &mut Self {
+    pub fn op(&mut self, op: Opcode, span: Span) -> &mut Self {
         self.code.push(op);
         self.spans.push(span);
         self
     }
 
-    pub fn constant(&mut self, value: Value, span: Span) -> Result<u16> {
-        let index = self.constants.len() as u16;
-        if index == u16::MAX {
+    pub fn constant(&mut self, value: Value, span: Span) -> Result<u32> {
+        let index = self.constants.len() as u32;
+        if index == u32::MAX {
             Err(VesError::emit(
                 "Exceeded maximum number of constants in one bytecode chunk",
                 span,

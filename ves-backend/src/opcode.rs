@@ -2,14 +2,20 @@
 #[repr(u32)]
 pub enum Opcode {
     /// Get a value from the constants buffer
-    GetConst(u16),
+    GetConst(u32),
     /// Get a value at specified stack address
-    GetLocal(u8),
+    GetLocal(u32),
     /// Set a value at specified stack address
-    SetLocal(u8),
+    SetLocal(u32),
 
     /// Instruction for pushing numeric values which fit within f32 onto the stack
     PushSmallNumber(f32),
+    /// Push `true` onto the stack
+    PushTrue,
+    /// Push `false` onto the stack
+    PushFalse,
+    /// Push `none` onto the stack
+    PushNone,
 
     /// Add operands
     Add,

@@ -9,6 +9,7 @@ edition = "2018"
 ves_error = { package = "ves-error", path = "../ves-error" }
 ves_parser = { package = "ves-parser", path = "../ves-parser" }
 ves_runtime = { package = "ves-runtime", path = "../ves-runtime" }
+ves_cc = { package = "bacon_rajan_cc", git = "https://github.com/ves-lang/bacon-rajan-cc" }
 static_assertions = "1.1.0"
 
 [dev-dependencies]
