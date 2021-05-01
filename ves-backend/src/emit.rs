@@ -41,18 +41,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_expr(&mut self, expr: ast::Expr) -> Result<()> {
         match expr.kind {
-            ast::ExprKind::Lit(literal) => match literal.value {
-                ast::LitValue::Number(value) => {
-                    let offset = self
-                        .builder
-                        .constant(value.into(), literal.token.span.clone())?;
-                    self.builder
-                        .emit(Opcode::GetConst(offset), literal.token.span.clone());
-                }
-                ast::LitValue::Bool(_) => unimplemented!(),
-                ast::LitValue::None => unimplemented!(),
-                ast::LitValue::Str(_) => unimplemented!(),
-            },
+            ast::ExprKind::Lit(literal) => self.emit_lit(*literal)?,
 
             ast::ExprKind::Binary(op, left, right) => {
                 self.emit_expr(*left)?;
@@ -118,6 +107,39 @@ impl<'a> Emitter<'a> {
 
         Ok(())
     }
+
+    fn emit_lit(&mut self, lit: ast::Lit) -> Result<()> {
+        match lit.value {
+            ast::LitValue::Number(value) => match maybe_f32(value) {
+                Some(value) => {
+                    self.builder
+                        .emit(Opcode::PushSmallNumber(value), lit.token.span);
+                }
+                None => {
+                    let offset = self
+                        .builder
+                        .constant(value.into(), lit.token.span.clone())?;
+                    self.builder.emit(Opcode::GetConst(offset), lit.token.span);
+                }
+            },
+            ast::LitValue::Bool(_) => unimplemented!(),
+            ast::LitValue::None => unimplemented!(),
+            ast::LitValue::Str(_) => unimplemented!(),
+        }
+
+        Ok(())
+    }
+}
+
+/// Checks if `f64` fits within an `f32`, and converts it if so
+fn maybe_f32(value: f64) -> Option<f32> {
+    const MIN: f64 = f32::MIN as f64;
+    const MAX: f64 = f32::MAX as f64;
+    if (MIN..=MAX).contains(&value) {
+        Some(value as f32)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -147,13 +169,13 @@ mod tests {
         assert_eq!(
             chunk.code,
             vec![
-                Opcode::GetConst(0),
-                Opcode::GetConst(1),
-                Opcode::GetConst(2),
-                Opcode::GetConst(3),
+                Opcode::PushSmallNumber(1.0),
+                Opcode::PushSmallNumber(2.0),
+                Opcode::PushSmallNumber(10.0),
+                Opcode::PushSmallNumber(-1.0),
                 Opcode::Power,
                 Opcode::Multiply,
-                Opcode::GetConst(4),
+                Opcode::PushSmallNumber(2.0),
                 Opcode::Divide,
                 Opcode::Add,
             ]

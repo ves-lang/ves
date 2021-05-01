@@ -9,7 +9,7 @@ pub enum Opcode {
     SetLocal(u8),
 
     /// Instruction for pushing numeric values which fit within f32 onto the stack
-    PushFloat32(f32),
+    PushSmallNumber(f32),
 
     /// Add operands
     Add,

@@ -2,12 +2,12 @@ use crate::opcode::Opcode;
 use crate::Result;
 use crate::Span;
 use ves_error::{FileId, VesError};
-use ves_runtime::Value;
+use ves_runtime::{NanBox, Value};
 
 pub struct Chunk {
     pub code: Vec<Opcode>,
     pub spans: Vec<Span>,
-    pub constants: Vec<Value>,
+    pub constants: Vec<NanBox>,
     pub file_id: FileId,
 }
 
@@ -15,7 +15,7 @@ pub struct Chunk {
 pub struct BytecodeBuilder {
     code: Vec<Opcode>,
     spans: Vec<Span>,
-    constants: Vec<Value>,
+    constants: Vec<NanBox>,
     file_id: FileId,
 }
 
@@ -44,7 +44,7 @@ impl BytecodeBuilder {
                 self.file_id,
             ))
         } else {
-            self.constants.push(value);
+            self.constants.push(NanBox::new(value));
             Ok(index)
         }
     }
