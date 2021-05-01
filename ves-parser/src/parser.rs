@@ -60,7 +60,10 @@ impl<'a> Parser<'a> {
             if self.match_(&TokenKind::Import) {
                 if parsing_imports {
                     match self.import() {
-                        Ok(import) => self.imports.push(import),
+                        Ok(import) => {
+                            self.match_(&TokenKind::Semi);
+                            self.imports.push(import);
+                        }
                         Err(err) => {
                             self.ex.record(err);
                             self.synchronize();
@@ -170,7 +173,10 @@ impl<'a> Parser<'a> {
 
     fn export_stmt(&mut self) -> ParseResult<Option<ast::Stmt<'a>>> {
         if self.match_(&TokenKind::Export) {
-            self.export()
+            self.export().map(|v| {
+                self.skip_semi();
+                v
+            })
         } else {
             Ok(Some(self.stmt(true)?))
         }
@@ -1443,15 +1449,8 @@ impl<'a> Parser<'a> {
         if self.match_(&TokenKind::False) {
             return Ok(literal!(self, ast::LitValue::Bool(false)));
         }
-        // 'self'
-        if self.match_(&TokenKind::Self_) {
-            return Ok(ast::Expr {
-                span: self.previous.span.clone(),
-                kind: ast::ExprKind::Variable(self.previous.clone()),
-            });
-        }
-        // identifier
-        if self.match_(&TokenKind::Identifier) {
+        // 'self', some, identifier
+        if self.match_any(&[TokenKind::Self_, TokenKind::Some, TokenKind::Identifier]) {
             return Ok(ast::Expr {
                 span: self.previous.span.clone(),
                 kind: ast::ExprKind::Variable(self.previous.clone()),

@@ -1,7 +1,7 @@
 import name
 import "./path" as name
-import { thing } from name
-import { thing } from "./path"
+import { thing } from name;
+import { thing } from "./path";
 import { thing as alias } from name
 import { thing as alias } from "./path"
 
