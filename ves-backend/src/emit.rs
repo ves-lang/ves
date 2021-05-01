@@ -43,8 +43,11 @@ impl<'a> Emitter<'a> {
         match expr.kind {
             ast::ExprKind::Lit(literal) => match literal.value {
                 ast::LitValue::Number(value) => {
+                    let offset = self
+                        .builder
+                        .constant(value.into(), literal.token.span.clone())?;
                     self.builder
-                        .emit(Opcode::PushNumber(value), literal.token.span.clone());
+                        .emit(Opcode::GetConst(offset), literal.token.span.clone());
                 }
                 ast::LitValue::Bool(_) => unimplemented!(),
                 ast::LitValue::None => unimplemented!(),
@@ -144,13 +147,13 @@ mod tests {
         assert_eq!(
             chunk.code,
             vec![
-                Opcode::PushNumber(1f64),
-                Opcode::PushNumber(2f64),
-                Opcode::PushNumber(10f64),
-                Opcode::PushNumber(-1f64),
+                Opcode::GetConst(0),
+                Opcode::GetConst(1),
+                Opcode::GetConst(2),
+                Opcode::GetConst(3),
                 Opcode::Power,
                 Opcode::Multiply,
-                Opcode::PushNumber(2f64),
+                Opcode::GetConst(4),
                 Opcode::Divide,
                 Opcode::Add,
             ]

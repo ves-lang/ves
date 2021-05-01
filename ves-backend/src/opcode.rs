@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
+#[repr(u32)]
 pub enum Opcode {
     /// Get a value from the constants buffer
     GetConst(u16),
@@ -7,8 +8,8 @@ pub enum Opcode {
     /// Set a value at specified stack address
     SetLocal(u8),
 
-    /// Push a number onto the stack
-    PushNumber(f64),
+    /// Instruction for pushing numeric values which fit within f32 onto the stack
+    PushFloat32(f32),
 
     /// Add operands
     Add,
@@ -33,3 +34,5 @@ pub enum Opcode {
     /// Return from a call
     Return,
 }
+
+static_assertions::assert_eq_size!(Opcode, u64);
