@@ -73,8 +73,8 @@ pub enum VesErrorKind {
     Lex,
     /// Represents a parse error.
     Parse,
-    /// Represents a compile error.
-    Compile,
+    /// Represents an error during bytecode emit.
+    Emit,
     /// Represents a resolution error.
     Resolution,
     /// Represents a resolution error that suggests to use a wildcard as a variable name.
@@ -138,6 +138,11 @@ impl VesError {
     /// Creates a new [`VesErrorKind::Parse`] error.
     pub fn parse<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
         VesError::new(msg, span, VesErrorKind::Parse, file_id)
+    }
+
+    /// Creates a new [`VesErrorKind::Emit`] error.
+    pub fn emit<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Emit, file_id)
     }
 
     /// Creates a new [`VesErrorKind::LetWithoutValue`] error.

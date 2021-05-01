@@ -3,6 +3,7 @@ members = [
     "ves-error",
     "ves-parser",
     "ves-middle",
+    "ves-emit",
     "ves-runtime",
     "ves-testing",
     "experiments"

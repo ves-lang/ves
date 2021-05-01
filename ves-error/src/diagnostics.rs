@@ -25,7 +25,7 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
         UnusedLocal => Diagnostic::warning(),
         AttemptedToShadowLocalVariable(_) => Diagnostic::error(),
         Warning => Diagnostic::warning(),
-        Compile => unimplemented!(),
+        Emit => Diagnostic::error(),
         Runtime => unimplemented!(),
         Panic => unimplemented!(),
         Traceback => unimplemented!(),
