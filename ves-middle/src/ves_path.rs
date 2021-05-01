@@ -28,6 +28,12 @@ impl<'a> VesPath<'a> {
         })
     }
 
+    // TODO: make the return type more sensible.
+    /// Constructs a new [`VesPath`] initialized with the default parameters.
+    pub fn default() -> Result<Result<Self, (&'a str, SubstitutionError<'a>)>, std::io::Error> {
+        std::env::current_dir().map(|dir| Self::new(&["./{}.ves"], dir))
+    }
+
     /// Returns an iterator over the paths' substitutions for the given import.
     pub fn paths<'b, 'c, 'd, S: AsRef<str>>(
         &self,

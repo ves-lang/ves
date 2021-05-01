@@ -1,0 +1,13 @@
+digraph {
+    0 [ label = "<source: #f03b18799d60b979>"]
+    1 [ label = "/test_module/thing.ves"]
+    2 [ label = "/test_module/inner/inner.ves"]
+    3 [ label = "/test_module/inner/cycle1.ves"]
+    4 [ label = "/test_module/inner/cycle2.ves"]
+    0 -> 1 [ ]
+    0 -> 2 [ ]
+    1 -> 3 [ ]
+    3 -> 4 [ ]
+    4 -> 3 [ ]
+}
+

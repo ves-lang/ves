@@ -441,10 +441,10 @@ mod tests {
     fn parse_and_fold<'a>(
         src: Cow<'a, str>,
         fid: FileId,
-        db: &mut VesFileDatabase<'a>,
+        db: &mut VesFileDatabase<String, Cow<'a, str>>,
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
-        Resolver::new().resolve(&mut ast, db).unwrap();
+        Resolver::new().resolve(&mut ast).unwrap();
         ConstantFolder::new(20, true).fold(&mut ast);
         Ok(ast
             .body

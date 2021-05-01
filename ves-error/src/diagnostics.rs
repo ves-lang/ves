@@ -9,7 +9,13 @@ use crate::{
 };
 
 /// Creates a new diagnostic message for the given [`VesError`].
-pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnostic<FileId> {
+pub fn build_diagnostic<
+    N: AsRef<str> + std::fmt::Display + Clone + std::fmt::Display + Clone,
+    S: AsRef<str>,
+>(
+    db: &VesFileDatabase<N, S>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
     use crate::VesErrorKind::*;
 
     let base = match &e.kind {
@@ -58,8 +64,8 @@ pub fn build_diagnostic<'a>(db: &VesFileDatabase<'a>, e: &VesError) -> Diagnosti
 }
 
 /// Adds a label suggesting to replace or prefix the variable with a underscore.
-fn add_wildcard_label<'a>(
-    db: &VesFileDatabase<'a>,
+fn add_wildcard_label<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {
@@ -82,8 +88,8 @@ fn add_wildcard_label<'a>(
 }
 
 /// Adds a note explaining the error.
-fn let_no_value_diag<'a>(
-    _db: &VesFileDatabase<'a>,
+fn let_no_value_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    _db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {
@@ -96,8 +102,8 @@ fn let_no_value_diag<'a>(
     diag
 }
 
-fn let_reassignment_diag<'a>(
-    _db: &VesFileDatabase<'a>,
+fn let_reassignment_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    _db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {
@@ -108,8 +114,8 @@ fn let_reassignment_diag<'a>(
     diag
 }
 
-fn fn_before_method_diag<'a>(
-    _db: &VesFileDatabase<'a>,
+fn fn_before_method_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    _db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     _e: &VesError,
 ) -> Diagnostic<FileId> {
@@ -121,8 +127,8 @@ fn fn_before_method_diag<'a>(
     diag
 }
 
-fn attempted_to_shadow_unused_diag<'a>(
-    db: &VesFileDatabase<'a>,
+fn attempted_to_shadow_unused_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {
@@ -138,8 +144,8 @@ fn attempted_to_shadow_unused_diag<'a>(
     ])
 }
 
-fn used_global_before_declaration_diag<'a>(
-    db: &VesFileDatabase<'a>,
+fn used_global_before_declaration_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    db: &VesFileDatabase<N, S>,
     mut diag: Diagnostic<FileId>,
     e: &VesError,
 ) -> Diagnostic<FileId> {

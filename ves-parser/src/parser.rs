@@ -13,7 +13,7 @@ pub type ParseResult<T> = std::result::Result<T, VesError>;
 // -> e.g. blocks/param packs, do they consume the closing '}', ')'?
 //    or is it up to the caller?
 
-pub struct Parser<'a, 'b> {
+pub struct Parser<'a, 'b, N: AsRef<str>, S: AsRef<str>> {
     lexer: Lexer<'a>,
     previous: Token<'a>,
     current: Token<'a>,
@@ -22,13 +22,13 @@ pub struct Parser<'a, 'b> {
     fid: FileId,
     scope_depth: usize,
     globals: HashSet<Global<'a>>,
-    db: &'b VesFileDatabase<'a>,
+    db: &'b VesFileDatabase<N, S>,
     imports: Vec<ast::Import<'a>>,
     exports: Vec<ast::Symbol<'a>>,
 }
 
-impl<'a, 'b> Parser<'a, 'b> {
-    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'b VesFileDatabase<'a>) -> Self {
+impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a, 'b, N, S> {
+    pub fn new(lexer: Lexer<'a>, fid: FileId, db: &'b VesFileDatabase<N, S>) -> Self {
         let source = lexer.source();
         let end = if source.is_empty() {
             0
@@ -60,7 +60,10 @@ impl<'a, 'b> Parser<'a, 'b> {
             if self.match_(&TokenKind::Import) {
                 if parsing_imports {
                     match self.import() {
-                        Ok(import) => self.imports.push(import),
+                        Ok(import) => self.imports.push(ast::Import {
+                            import,
+                            resolved_path: None,
+                        }),
                         Err(err) => {
                             self.ex.record(err);
                             self.synchronize();
@@ -102,7 +105,7 @@ impl<'a, 'b> Parser<'a, 'b> {
         }
     }
 
-    fn import(&mut self) -> ParseResult<ast::Import<'a>> {
+    fn import(&mut self) -> ParseResult<ast::ImportStmt<'a>> {
         if self.match_(&TokenKind::LeftBrace) {
             // destructured
             let mut symbols = vec![];
@@ -122,11 +125,11 @@ impl<'a, 'b> Parser<'a, 'b> {
             self.consume(&TokenKind::RightBrace, "Expected '}'")?;
             self.consume(&TokenKind::From, "Expected 'from'")?;
             let path = self.import_path(false)?;
-            Ok(ast::Import::Destructured(path, symbols))
+            Ok(ast::ImportStmt::Destructured(path, symbols))
         } else {
             // direct
             let path = self.import_path(true)?;
-            Ok(ast::Import::Direct(path))
+            Ok(ast::ImportStmt::Direct(path))
         }
     }
 
@@ -1619,10 +1622,10 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     #[inline]
-    fn consume<S: Into<String>>(
+    fn consume<Msg: Into<String>>(
         &mut self,
         kind: &TokenKind<'a>,
-        err_msg: S,
+        err_msg: Msg,
     ) -> ParseResult<Token<'a>> {
         if self.check(kind) {
             Ok(self.advance())
@@ -1636,10 +1639,10 @@ impl<'a, 'b> Parser<'a, 'b> {
     }
 
     #[inline]
-    fn consume_any<S: Into<String>>(
+    fn consume_any<Msg: Into<String>>(
         &mut self,
         kinds: &[TokenKind<'a>],
-        err_msg: S,
+        err_msg: Msg,
     ) -> ParseResult<Token<'a>> {
         for kind in kinds {
             if self.check(kind) {
@@ -1826,7 +1829,7 @@ mod tests {
     fn parse<'a>(
         src: std::borrow::Cow<'a, str>,
         fid: FileId,
-        db: &mut VesFileDatabase<'a>,
+        db: &mut VesFileDatabase<String, std::borrow::Cow<'a, str>>,
     ) -> Result<String, ErrCtx> {
         Parser::new(Lexer::new(&src), fid, &db).parse().map(|ast| {
             let imports = ast

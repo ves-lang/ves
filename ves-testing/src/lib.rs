@@ -35,7 +35,11 @@ pub fn load_test_file(tests_dir: &Path, name: &str) -> (String, String) {
 pub fn test_err<T, F>(test_name: &str, source: String, expected: String, pipeline: F)
 where
     T: std::fmt::Debug,
-    F: for<'a> Fn(Cow<'a, str>, FileId, &mut VesFileDatabase<'a>) -> Result<T, ErrCtx>,
+    F: for<'a> Fn(
+        Cow<'a, str>,
+        FileId,
+        &mut VesFileDatabase<String, Cow<'a, str>>,
+    ) -> Result<T, ErrCtx>,
 {
     let src = std::borrow::Cow::Borrowed(&source[..]);
     let mut db = VesFileDatabase::new();
@@ -53,7 +57,11 @@ where
 /// Compares the output of the given function, cleaning it using [`clean_ast()`], to the expected output.
 pub fn test_ok_ast<F>(test_name: &str, src: String, expected: String, pipeline: F)
 where
-    F: for<'a> Fn(Cow<'a, str>, FileId, &mut VesFileDatabase<'a>) -> Result<String, ErrCtx>,
+    F: for<'a> Fn(
+        Cow<'a, str>,
+        FileId,
+        &mut VesFileDatabase<String, Cow<'a, str>>,
+    ) -> Result<String, ErrCtx>,
 {
     let src = std::borrow::Cow::Borrowed(&src[..]);
     let mut db = VesFileDatabase::new();

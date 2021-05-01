@@ -44,6 +44,14 @@ impl ErrCtx {
         self.warnings.extend(other.warnings);
     }
 
+    /// Moves all errors from the given results into this context.
+    pub fn extend_result(&mut self, res: Result<Self, Self>) {
+        self.extend(match res {
+            Ok(ex) => ex,
+            Err(ex) => ex,
+        });
+    }
+
     /// Marks the last error in the errors list as a warning and moves it to the warnings list.
     pub fn mark_last_error_as_warning(&mut self) -> Option<()> {
         if let Some(e) = self.errors.pop() {
@@ -192,7 +200,7 @@ fn test() {
 }
 "#;
         let mut db = VesFileDatabase::default();
-        let id = db.add_snippet(source.into());
+        let id = db.add_snippet(source);
         let error = VesError::resolution_wildcard(
             "Variable `lol_no_type_system` is never used",
             21..39,

@@ -1,9 +1,4 @@
-use std::{
-    borrow::Cow,
-    cell::{Cell, RefCell},
-    collections::HashMap,
-    path::PathBuf,
-};
+use std::{borrow::Cow, cell::Cell, collections::HashMap, path::PathBuf};
 
 use codespan_reporting::{
     diagnostic::Diagnostic,
@@ -14,7 +9,7 @@ use codespan_reporting::{
     },
 };
 
-use crate::{diagnostics::build_diagnostic, ErrCtx, Span, VesError};
+use crate::{diagnostics::build_diagnostic, ErrCtx, VesError};
 
 /// The id of a file stored in the database
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -27,52 +22,48 @@ impl FileId {
     }
 }
 
-/// An export inside a Ves source file.
-#[derive(Debug, Clone)]
-pub struct Export {
-    /// The name of the object being exported -- a global variable, function, struct.
-    pub name: String,
-    /// THe span of the export statement.
-    pub span: crate::Span,
-}
-
 /// A ves source code file.
 #[derive(Debug, Clone)]
-pub struct VesFile<'a> {
+pub struct VesFile<S: AsRef<str>> {
     /// The source of the file
-    source: Cow<'a, str>,
+    source: S,
     /// The BLAKE hash of the source file.
     hash: blake2s_simd::Hash,
-    /// The exports this file has.
-    exports: RefCell<Vec<Export>>,
     /// The name of the module.
     module: String,
     /// Whether the module has already been parsed.
     parsed: Cell<bool>,
 }
 
-impl<'a> AsRef<str> for VesFile<'a> {
+impl<S: AsRef<str>> VesFile<S> {
+    /// Get a reference to the ves file's source.
+    pub fn source(&self) -> &S {
+        &self.source
+    }
+}
+
+impl<S: AsRef<str>> AsRef<str> for VesFile<S> {
     #[inline]
     fn as_ref(&self) -> &str {
-        &*self.source
+        self.source.as_ref()
     }
 }
 
 /// A database of the currently active Ves source code files.
 /// Used for error reporting.
 #[derive(Debug)]
-pub struct VesFileDatabase<'a> {
-    db: SimpleFiles<Cow<'a, str>, VesFile<'a>>,
-    ids: HashMap<Cow<'a, str>, FileId>,
+pub struct VesFileDatabase<N: AsRef<str>, S: AsRef<str>> {
+    db: SimpleFiles<N, VesFile<S>>,
+    name_to_id: HashMap<String, FileId>,
     config: Config,
 }
 
-impl<'a> VesFileDatabase<'a> {
+impl<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> VesFileDatabase<N, S> {
     /// Creates a new file database.
     pub fn new() -> Self {
         Self {
             db: SimpleFiles::new(),
-            ids: HashMap::new(),
+            name_to_id: HashMap::new(),
             config: Config::default(),
         }
     }
@@ -83,13 +74,12 @@ impl<'a> VesFileDatabase<'a> {
     }
 
     /// Adds a new file to the database.
-    pub fn add_file(&mut self, name: Cow<'a, str>, source: Cow<'a, str>) -> FileId {
-        let hash = hash(&source);
+    pub fn add_file(&mut self, name: N, source: S) -> FileId {
+        let hash = hash(source.as_ref());
         let file = VesFile {
             source,
             hash,
-            exports: RefCell::new(vec![]),
-            module: extract_module_name(&PathBuf::from(&name[..])),
+            module: extract_module_name(&PathBuf::from(name.as_ref())),
             parsed: Cell::new(false),
         };
         self.add(name, file)
@@ -97,28 +87,40 @@ impl<'a> VesFileDatabase<'a> {
 
     /// Adds a snippet that doesn't come from a file to the database, using
     /// the hash of the file as its name.
-    pub fn add_snippet(&mut self, source: Cow<'a, str>) -> FileId {
-        let hash = hash(&source);
-        let name = Cow::Owned(format!("<source: #{}>", &hash.to_hex()));
+    pub fn add_snippet(&mut self, source: S) -> FileId
+    where
+        N: From<String>,
+    {
+        self.add_snippet_map(source, N::from)
+    }
+
+    /// Adds a snippet that doesn't come from a file to the database, using
+    /// the hash of the file as its name. The given factory function may be used to transform the value and return
+    /// an object of type [`N`].
+    pub fn add_snippet_map(&mut self, source: S, factory: impl Fn(String) -> N) -> FileId {
+        let hash = hash(source.as_ref());
+        let name = factory(format!("<source: #{}>", &hash.to_hex()));
         let file = VesFile {
             source,
             hash,
-            exports: RefCell::new(vec![]),
             module: hash.to_hex().to_string(),
             parsed: Cell::new(false),
         };
         self.add(name, file)
     }
 
-    /// Returns the source code of the file with the given file id as a string slice.
-    pub fn source_string(&self, id: FileId) -> Result<&str, files::Error> {
-        self.db.get(id.0).map(|f| &f.source().source[..])
+    /// Adds the file with the given name to the database.
+    fn add(&mut self, name: N, file: VesFile<S>) -> FileId {
+        let cloned = name.as_ref().to_string();
+        let id = FileId(self.db.add(name, file));
+        self.name_to_id.insert(cloned, id);
+        id
     }
 
     /// Returns the id of the file with the given name if it exists.
     #[inline]
     pub fn get_id_by_name(&self, name: &str) -> Option<FileId> {
-        self.ids.get(name).copied()
+        self.name_to_id.get(name).copied()
     }
 
     /// Marks the given file as parsed.
@@ -160,17 +162,8 @@ impl<'a> VesFileDatabase<'a> {
 
     /// Returns a reference to the inner file object given a file id.
     #[inline]
-    pub fn file(&self, id: FileId) -> Option<&VesFile> {
+    pub fn file(&self, id: FileId) -> Option<&VesFile<S>> {
         self.db.get(id.0).map(|f| f.source()).ok()
-    }
-
-    /// Adds the given export to the list of the file's exports.
-    pub fn add_export(&self, file_id: FileId, name: String, span: Span) {
-        let file = self
-            .file(file_id)
-            .expect("Attempted to query a nonexistent file");
-        let mut exports = file.exports.borrow_mut();
-        exports.push(Export { name, span });
     }
 
     /// Reports the errors form the [`ErrCtx`] to STDERR.
@@ -217,13 +210,6 @@ impl<'a> VesFileDatabase<'a> {
             self.report_diagnostic(buf, &d)?;
         }
         Ok(())
-    }
-
-    /// Adds the given file to the database and remember its id.
-    fn add(&mut self, name: Cow<'a, str>, file: VesFile<'a>) -> FileId {
-        let id = FileId(self.db.add(name.clone(), file));
-        self.ids.insert(name, id);
-        id
     }
 
     /// Reports a single diagnostic to the given buffer.
@@ -290,10 +276,12 @@ macro_rules! check_fid {
     };
 }
 
-impl<'a> files::Files<'a> for VesFileDatabase<'a> {
+impl<'a, N: AsRef<str> + std::fmt::Display + Clone + 'a, S: AsRef<str> + 'a> files::Files<'a>
+    for VesFileDatabase<N, S>
+{
     type FileId = FileId;
-    type Name = Cow<'a, str>;
-    type Source = Cow<'a, str>;
+    type Name = N;
+    type Source = &'a str;
 
     #[inline]
     fn name(&'a self, id: Self::FileId) -> Result<Self::Name, files::Error> {
@@ -303,7 +291,7 @@ impl<'a> files::Files<'a> for VesFileDatabase<'a> {
     #[inline]
     fn source(&'a self, id: Self::FileId) -> Result<Self::Source, files::Error> {
         check_fid!(id);
-        self.db.source(id.0).map(|s| Cow::Borrowed(s))
+        self.db.source(id.0)
     }
 
     #[inline]
@@ -323,7 +311,7 @@ impl<'a> files::Files<'a> for VesFileDatabase<'a> {
     }
 }
 
-impl<'a> Default for VesFileDatabase<'a> {
+impl<'a, 'b> Default for VesFileDatabase<Cow<'a, str>, &'b str> {
     fn default() -> Self {
         Self::new()
     }
@@ -352,13 +340,12 @@ pub mod test {
 
     #[test]
     fn test_line_queries() {
-        let mut db = VesFileDatabase::new();
+        let mut db = VesFileDatabase::default();
         let id = db.add_snippet(
             r#"line 1
         line 2
         line 3
-        line 4"#
-                .into(),
+        line 4"#,
         );
 
         assert_eq!(db.location(id, &Span { start: 0, end: 0 }), (1, 1));
@@ -400,10 +387,10 @@ pub mod test {
             "path",
         ];
 
-        let mut db = VesFileDatabase::new();
+        let mut db = VesFileDatabase::default();
 
         for (path, module) in paths.into_iter().zip(expected.into_iter()) {
-            let id = db.add_file(path.into(), "".into());
+            let id = db.add_file(path.into(), "");
             assert_eq!(db.file(id).unwrap().module, module);
         }
     }

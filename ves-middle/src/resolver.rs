@@ -49,18 +49,14 @@ impl<'a> Resolver<'a> {
     }
 
     /// Resolves the given AST. Returns the used [`ErrCtx`] containing warnings, errors, and suggestions.
-    pub fn resolve(
-        mut self,
-        ast: &mut AST<'a>,
-        db: &VesFileDatabase<'a>,
-    ) -> Result<ErrCtx, ErrCtx> {
+    pub fn resolve(mut self, ast: &mut AST<'a>) -> Result<ErrCtx, ErrCtx> {
         self.file_id = ast.file_id;
         let mut ex = ErrCtx {
             local_file_id: self.file_id,
             ..Default::default()
         };
 
-        self.resolve_imports(&ast.imports, db, &mut ex);
+        self.resolve_imports(&ast.imports, &mut ex);
 
         let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
         sorted_globals.sort_by_key(|e| e.name.span.start);
@@ -83,24 +79,14 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_imports(
-        &mut self,
-        imports: &[Import<'a>],
-        db: &VesFileDatabase<'a>,
-        ex: &mut ErrCtx,
-    ) {
-        // The path to the current file, all imports are resolved relatively to it
-        let base_path = db
-            .name(self.file_id)
-            .expect("Attempted to resolve an anonymous file.");
-
+    fn resolve_imports(&mut self, imports: &[Import<'a>], ex: &mut ErrCtx) {
         for i in imports {
-            match i {
-                Import::Direct(path) => match path {
+            match &i.import {
+                ImportStmt::Direct(path) => match path {
                     ImportPath::Simple(symbol) => {}
                     ImportPath::Full(symbol) => {}
                 },
-                Import::Destructured(path, symbols) => {}
+                ImportStmt::Destructured(path, symbols) => {}
             }
         }
     }
@@ -758,10 +744,10 @@ pub mod tests {
     fn parse_and_resolve<'a>(
         src: Cow<'a, str>,
         fid: FileId,
-        db: &mut VesFileDatabase<'a>,
+        db: &mut VesFileDatabase<String, Cow<'a, str>>,
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
-        match Resolver::new().resolve(&mut ast, db) {
+        match Resolver::new().resolve(&mut ast) {
             Ok(warnings) => {
                 let diagnostics = db.report_to_string(&warnings).unwrap();
                 Ok(format!(

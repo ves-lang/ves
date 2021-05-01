@@ -1,16 +1,16 @@
-pub mod ves_path;
-
-use petgraph::{graphmap::GraphMap, Directed};
+use petgraph::{dot::Config, graphmap::GraphMap, Directed};
 use std::{
     borrow::Cow,
     collections::HashMap,
     path::{Component, Path, PathBuf},
 };
 
-use ves_error::{ErrCtx, Files, VesError, VesFileDatabase};
+use ves_error::{ErrCtx, FileId, Files, VesError, VesFileDatabase};
 use ves_parser::{ast::AST, lexer::Token, Lexer, Parser};
 
-use self::ves_path::VesPath;
+use crate::{constant_folder::ConstantFolder, resolver::Resolver, VesMiddle};
+
+use crate::ves_path::VesPath;
 
 /// An emission strategy for a module's dependency graph.
 #[derive(Debug, Clone)]
@@ -24,45 +24,46 @@ pub enum DepGraphOutput {
 /// A configuration struct for module imports.
 /// Currently has only one setting.
 #[derive(Clone, Debug)]
-pub struct ImportConfig<'a, 'b, S: AsRef<str>> {
+pub struct ImportConfig<'path> {
     /// The optional emission strategy for the dep graph.
     pub dep_graph_output: Option<DepGraphOutput>,
     /// The paths that will be used to to resolve "simple" imports.
-    pub ves_path: VesPath<'a>,
+    pub ves_path: VesPath<'path>,
     /// The list of variables to be used during substitution.
-    pub variables: HashMap<Cow<'b, str>, S>,
+    pub variables: HashMap<Cow<'static, str>, String>,
 }
 
 // TODO: registry
-pub fn resolve_module_graph<'source, 'a, 'b, S: AsRef<str>>(
+pub(super) fn resolve_module_graph<'path, 'source>(
     entry: AST<'source>,
-    db: &'source mut VesFileDatabase<'source>,
-    config: ImportConfig<'a, 'b, S>,
-) -> Result<Vec<AST<'source>>, ErrCtx> {
+    middle: &mut VesMiddle<'path, 'source>,
+) -> Result<(Vec<AST<'source>>, ErrCtx), ErrCtx> {
     let root_id = entry.file_id;
-    let local_path = VesPath::new(&["./{}.ves"], config.ves_path.default_base.clone()).unwrap();
+    let local_path =
+        VesPath::new(&["{}", "./{}.ves"], middle.default_base_path().to_owned()).unwrap();
 
     let mut errors = ErrCtx::new();
     let mut import_graph = GraphMap::<_, _, Directed>::new();
     let mut modules = ahash::AHashMap::new();
     modules.insert(root_id, entry);
 
+    let mut visited = std::collections::HashSet::new();
     let mut stack = vec![root_id];
     while !stack.is_empty() {
         let id = stack.pop().unwrap();
+        // TODO: search for the module in the registry instead
+        if visited.contains(&id) {
+            continue;
+        }
+        log::debug!(
+            "[VES_MID] Resolving the file `{}`",
+            middle.db.name(id).unwrap()
+        );
         import_graph.add_node(id);
+        visited.insert(id);
 
-        if !db.is_parsed(id).unwrap() {
-            let source = db
-                .source_string(id)
-                .expect("Attempted to parse a file not that's not in the database");
-
-            // Temporarily transmute the lifetime of the source.
-            // This should be fine since we (1) never mutate the source and (2) only immutably alias it.
-            // After the we're done resolving imports, the AST is transmuted back 'source
-            let source: &'static str = lifetime_fix_str(source);
-
-            let ast = match Parser::new(Lexer::new(source), id, db).parse() {
+        if !middle.is_parsed(id) {
+            let ast = match middle.parse_single(id) {
                 Ok(ast) => ast,
                 Err(e) => {
                     errors.extend(e);
@@ -72,75 +73,122 @@ pub fn resolve_module_graph<'source, 'a, 'b, S: AsRef<str>>(
             modules.insert(ast.file_id, ast);
         }
 
-        let mut base_path = PathBuf::from(db.name(id).unwrap().into_owned());
+        let mut base_path = PathBuf::from(middle.name(id));
         if !base_path.exists() {
-            base_path = config.ves_path.default_base.clone();
+            base_path = middle.default_base_path().to_owned();
         }
 
-        let module = modules.get(&id).unwrap();
-        for import in &module.imports {
-            use ves_parser::ast::{Import, ImportPath, Symbol};
+        let module = modules.get_mut(&id).unwrap();
+        for import in &mut module.imports {
+            use ves_parser::ast::{ImportPath, ImportStmt, Symbol};
 
-            let (lookup_path, import_path) = match match match import {
-                Import::Direct(path) => path,
-                Import::Destructured(path, _) => path,
+            let (lookup_path, import_path) = match match match &import.import {
+                ImportStmt::Direct(path) => path,
+                ImportStmt::Destructured(path, _) => path,
             } {
-                ImportPath::Simple(sym) => (&config.ves_path, sym),
+                ImportPath::Simple(sym) => (&middle.import_config.ves_path, sym),
                 ImportPath::Full(sym) => (&local_path, sym),
             } {
                 (path, Symbol::Bare(import)) => (path, import),
                 (path, Symbol::Aliased(import, _)) => (path, import),
             };
 
-            let module_path =
-                match try_resolve_path(lookup_path, &base_path, import_path, &config.variables) {
-                    Ok(ok) => ok,
-                    Err(e) => {
-                        errors.record(VesError::import(e, import_path.span.clone(), id));
-                        continue;
-                    }
-                };
+            let module_path = match try_resolve_path(
+                lookup_path,
+                &base_path,
+                import_path,
+                &middle.import_config.variables,
+            ) {
+                Ok(ok) => ok,
+                Err(e) => {
+                    errors.record(VesError::import(e, import_path.span.clone(), id));
+                    continue;
+                }
+            };
 
             let filename = module_path.to_string_lossy().into_owned();
-            let import_id = match db.get_id_by_name(&filename) {
-                None => db.add_file(
-                    Cow::Owned(filename.clone()),
-                    match std::fs::read_to_string(Path::new(&filename[..])) {
-                        Ok(source) => source,
-                        Err(e) => {
-                            errors.record(VesError::import(
-                                format!(
+            let import_id = match middle.id_by_name(&filename) {
+                None => {
+                    middle
+                        .store(
+                            filename.clone(),
+                            match std::fs::read_to_string(Path::new(&filename[..])) {
+                                Ok(source) => source,
+                                Err(e) => {
+                                    errors.record(VesError::import(
+                                        format!(
                                     "File at `{}` was removed in the middle of being processed: {}",
                                     filename, e
                                 ),
-                                import_path.span.clone(),
-                                id,
-                            ));
-                            continue;
-                        }
-                    }
-                    .into(),
-                ),
+                                        import_path.span.clone(),
+                                        id,
+                                    ));
+                                    continue;
+                                }
+                            },
+                        )
+                        .0
+                }
                 Some(id) => id,
             };
 
+            import.resolved_path = Some(filename);
             import_graph.add_edge(id, import_id, ());
+            stack.push(import_id);
         }
     }
 
-    println!("{:?}", petgraph::dot::Dot::new(&import_graph));
+    for (id, module) in &mut modules {
+        let _ = Resolver::new()
+            .resolve(module)
+            .map(|e| {
+                // Avoid doing constant folding if one of the modules had an error
+                if !errors.had_error() {
+                    // TODO: make this configurable
+                    ConstantFolder::new(20, true).fold(module);
+                }
+                errors.extend(e)
+            })
+            .map_err(|e| errors.extend(e));
+    }
 
-    Ok(modules
-        .into_iter()
-        .map(|(_, ast)| lifetime_fix_ast(ast))
-        .collect())
-}
+    // TODO: configurable graph export
+    println!(
+        "{:?}",
+        petgraph::dot::Dot::with_attr_getters(
+            &import_graph,
+            &[petgraph::dot::Config::EdgeNoLabel, Config::NodeNoLabel],
+            &|_, _| "".to_string(),
+            &|_, node| {
+                format!(
+                    "label = \"{}\"",
+                    middle
+                        .name(node.0)
+                        .trim_start_matches(&middle.default_base_path().to_string_lossy()[..])
+                )
+            }
+        )
+    );
 
-fn lifetime_fix_str<'a, 'b>(s: &'a str) -> &'b str {
-    unsafe { std::mem::transmute(s) }
-}
-fn lifetime_fix_ast<'a, 'b>(s: AST<'a>) -> AST<'b> {
-    unsafe { std::mem::transmute(s) }
+    // TODO: optionally detect cycles
+    #[cfg(feature = "")]
+    let resolution_order = match petgraph::algo::toposort(&import_graph, None) {
+        Ok(order) => order,
+        Err(e) => {
+            errors.record(VesError::import(
+                format!("An import within the module graph creates a cycle"),
+                span,
+                file_id,
+            ));
+            return Err(errors);
+        }
+    };
+
+    if errors.had_error() {
+        Err(errors)
+    } else {
+        Ok((modules.into_iter().map(|(_, v)| v).collect(), errors))
+    }
 }
 
 fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
@@ -149,8 +197,17 @@ fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
     import: &Token<'source>,
     vars: &HashMap<Cow<'b, str>, S>,
 ) -> Result<PathBuf, String> {
-    for path in path.paths(&import.lexeme[..], vars).map(PathBuf::from) {
+    let import_path = import.lexeme.trim_matches({
+        let x: &[_] = &['\'', '"'];
+        x
+    });
+    for path in path.paths(import_path, vars).map(PathBuf::from) {
         let path = resolve_relative_path(Path::new(base), &path);
+        log::debug!(
+            "[VES_MID] Resolving the import `{}`: Looking at `{}` ...",
+            import_path,
+            path.display()
+        );
 
         if !path.exists() {
             continue;
@@ -163,10 +220,15 @@ fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
             ));
         }
 
-        return Ok(path);
+        log::debug!(
+            "[VES_MID] Resolving the import `{}`: Successfully resolved the import",
+            import_path
+        );
+
+        return Ok(std::fs::canonicalize(path).unwrap());
     }
 
-    Err(format!("Failed to resolve `{}`", import.lexeme))
+    Err(format!("Failed to resolve `{}`", import_path))
 }
 
 /// Resolves the given path relatively to the base path.
@@ -216,8 +278,6 @@ pub fn normalize_path(path: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
-    use std::path::Path;
-
     #[test]
     fn test_relative_path_resolution() {
         let tests = vec![(
@@ -238,30 +298,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-    static TESTS_DIR: &str = "tests";
-
-    #[test]
-    fn test_module_parsing() {
-        let mut db = VesFileDatabase::new();
-        let config = ImportConfig {
-            dep_graph_output: None,
-            ves_path: VesPath::new(
-                &["./{}.ves", "tests/test_module/inner/inner.ves"],
-                Path::new(CRATE_ROOT).join(TESTS_DIR),
-            )
-            .unwrap(),
-            variables: HashMap::<_, &'static str>::new(),
-        };
-        let id =
-            db.add_snippet("import thing; import \"tests/test_module/inner/inner.ves\";".into());
-
-        let ast = Parser::new(Lexer::new(&db.source(id).unwrap()), id, &db)
-            .parse()
-            .unwrap();
-
-        let modules = resolve_module_graph(ast, &mut db, config);
     }
 }
