@@ -1,0 +1,4 @@
+import "./inner/cycle1" as cycle1
+import "./inner/cycle2" as cycle1
+import { inner, inner as inner2 } from "./inner/inner.ves"
+import thing as inner

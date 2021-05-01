@@ -1,32 +1,19 @@
-use petgraph::{dot::Config, graphmap::GraphMap, Directed};
 use std::{
     borrow::Cow,
     collections::HashMap,
     path::{Component, Path, PathBuf},
 };
 
-use ves_error::{ErrCtx, FileId, Files, VesError, VesFileDatabase};
-use ves_parser::{ast::AST, lexer::Token, Lexer, Parser};
+use ves_error::{ErrCtx, Files, VesError, VesErrorKind};
+use ves_parser::{ast::AST, lexer::Token};
 
 use crate::{constant_folder::ConstantFolder, resolver::Resolver, VesMiddle};
 
 use crate::ves_path::VesPath;
 
-/// An emission strategy for a module's dependency graph.
-#[derive(Debug, Clone)]
-pub enum DepGraphOutput {
-    /// Print the dep graph in the graphviz format to STDOUT.
-    Stdout,
-    /// Write the dep graph in the graphviz format to the given path.
-    Disk(PathBuf),
-}
-
 /// A configuration struct for module imports.
-/// Currently has only one setting.
 #[derive(Clone, Debug)]
 pub struct ImportConfig<'path> {
-    /// The optional emission strategy for the dep graph.
-    pub dep_graph_output: Option<DepGraphOutput>,
     /// The paths that will be used to to resolve "simple" imports.
     pub ves_path: VesPath<'path>,
     /// The list of variables to be used during substitution.
@@ -34,16 +21,15 @@ pub struct ImportConfig<'path> {
 }
 
 // TODO: registry
-pub(super) fn resolve_module_graph<'path, 'source>(
+pub(super) fn resolve_module_graph<'path, 'source, T>(
     entry: AST<'source>,
-    middle: &mut VesMiddle<'path, 'source>,
+    middle: &mut VesMiddle<'path, 'source, T>,
 ) -> Result<(Vec<AST<'source>>, ErrCtx), ErrCtx> {
     let root_id = entry.file_id;
     let local_path =
         VesPath::new(&["{}", "./{}.ves"], middle.default_base_path().to_owned()).unwrap();
 
     let mut errors = ErrCtx::new();
-    let mut import_graph = GraphMap::<_, _, Directed>::new();
     let mut modules = ahash::AHashMap::new();
     modules.insert(root_id, entry);
 
@@ -59,7 +45,7 @@ pub(super) fn resolve_module_graph<'path, 'source>(
             "[VES_MID] Resolving the file `{}`",
             middle.db.name(id).unwrap()
         );
-        import_graph.add_node(id);
+        middle.import_graph.add_node(id);
         visited.insert(id);
 
         if !middle.is_parsed(id) {
@@ -133,14 +119,32 @@ pub(super) fn resolve_module_graph<'path, 'source>(
             };
 
             import.resolved_path = Some(filename);
-            import_graph.add_edge(id, import_id, ());
+            middle.import_graph.add_edge(id, import_id, ());
             stack.push(import_id);
         }
     }
 
-    for (id, module) in &mut modules {
+    for (id, module) in &modules {
+        let path = middle.name(*id);
+        match middle.registry_mut().add_ves_module(path.clone(), module) {
+            Ok(_) => {}
+            Err(_) => {
+                errors.record(VesError::new(
+                    format!(
+                        "Attempted to resolve two different modules with the same name: `{}`",
+                        path
+                    ),
+                    0..1,
+                    VesErrorKind::Resolution,
+                    *id,
+                ));
+            }
+        }
+    }
+
+    for (_, module) in &mut modules {
         let _ = Resolver::new()
-            .resolve(module)
+            .resolve_with_registry(module, middle.registry_mut())
             .map(|e| {
                 // Avoid doing constant folding if one of the modules had an error
                 if !errors.had_error() {
@@ -151,38 +155,6 @@ pub(super) fn resolve_module_graph<'path, 'source>(
             })
             .map_err(|e| errors.extend(e));
     }
-
-    // TODO: configurable graph export
-    println!(
-        "{:?}",
-        petgraph::dot::Dot::with_attr_getters(
-            &import_graph,
-            &[petgraph::dot::Config::EdgeNoLabel, Config::NodeNoLabel],
-            &|_, _| "".to_string(),
-            &|_, node| {
-                format!(
-                    "label = \"{}\"",
-                    middle
-                        .name(node.0)
-                        .trim_start_matches(&middle.default_base_path().to_string_lossy()[..])
-                )
-            }
-        )
-    );
-
-    // TODO: optionally detect cycles
-    #[cfg(feature = "")]
-    let resolution_order = match petgraph::algo::toposort(&import_graph, None) {
-        Ok(order) => order,
-        Err(e) => {
-            errors.record(VesError::import(
-                format!("An import within the module graph creates a cycle"),
-                span,
-                file_id,
-            ));
-            return Err(errors);
-        }
-    };
 
     if errors.had_error() {
         Err(errors)

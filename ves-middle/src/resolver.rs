@@ -1,14 +1,14 @@
 use std::{borrow::Cow, cell::Cell, rc::Rc};
 
-use ves_error::{ErrCtx, FileId, Files, VesError, VesErrorKind, VesFileDatabase};
+use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
 use ves_parser::{
     ast::*,
     lexer::{Token, TokenKind},
     Span,
 };
 
-use crate::env::Env;
 use crate::resolver_definitions::{LoopKind, NameKind, ScopeKind, VarUsage};
+use crate::{env::Env, registry::ModuleRegistry};
 
 // TODO: some kind of settings struct?
 
@@ -48,15 +48,24 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /// Resolves the given AST without any information about modules. Returns the used [`ErrCtx`] containing warnings, errors, and suggestions.
+    pub fn resolve(self, ast: &mut AST<'a>) -> Result<ErrCtx, ErrCtx> {
+        self.resolve_with_registry::<()>(ast, &mut ModuleRegistry::default())
+    }
+
     /// Resolves the given AST. Returns the used [`ErrCtx`] containing warnings, errors, and suggestions.
-    pub fn resolve(mut self, ast: &mut AST<'a>) -> Result<ErrCtx, ErrCtx> {
+    pub fn resolve_with_registry<T>(
+        mut self,
+        ast: &mut AST<'a>,
+        registry: &mut ModuleRegistry<T>,
+    ) -> Result<ErrCtx, ErrCtx> {
         self.file_id = ast.file_id;
         let mut ex = ErrCtx {
             local_file_id: self.file_id,
             ..Default::default()
         };
 
-        self.resolve_imports(&ast.imports, &mut ex);
+        self.resolve_imports(&ast.imports, registry, &mut ex);
 
         let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
         sorted_globals.sort_by_key(|e| e.name.span.start);
@@ -65,11 +74,10 @@ impl<'a> Resolver<'a> {
         }
 
         for stmt in &mut ast.body {
-            self.resolve_stmt(stmt, &mut ex);
+            self.resolve_stmt(stmt, registry, &mut ex);
         }
 
         self.resolve_exports(&ast.exports, &mut ex);
-
         self.check_variable_usage(&mut ex);
 
         if ex.had_error() {
@@ -79,29 +87,122 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_imports(&mut self, imports: &[Import<'a>], ex: &mut ErrCtx) {
+    fn resolve_imports<T>(
+        &mut self,
+        imports: &[Import<'a>],
+        registry: &mut ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
+        let mut unresolved = std::collections::HashSet::new();
         for i in imports {
             match &i.import {
-                ImportStmt::Direct(path) => match path {
-                    ImportPath::Simple(symbol) => {}
-                    ImportPath::Full(symbol) => {}
-                },
-                ImportStmt::Destructured(path, symbols) => {}
+                ImportStmt::Direct(path) => {
+                    let name = match path {
+                        ImportPath::Simple(symbol) => match symbol {
+                            Symbol::Bare(symbol) => symbol,
+                            Symbol::Aliased(_, symbol) => symbol,
+                        },
+                        ImportPath::Full(symbol) => match symbol {
+                            Symbol::Aliased(_, symbol) => symbol,
+                            Symbol::Bare(_) => {
+                                unreachable!("The parser ensures that full imports are aliased.")
+                            }
+                        },
+                    };
+
+                    match i.resolved_path.as_ref() {
+                        Some(path) => {
+                            self.declare_module_object(path.clone(), name, ex);
+                            self.assign(name, ex);
+                        }
+                        None => {
+                            self.declare(name, Rc::new(Cell::new(0)), NameKind::Module, ex);
+                            Self::unresolved_module_error(&mut unresolved, path, ex);
+                        }
+                    }
+                }
+                ImportStmt::Destructured(path, symbols) => symbols.iter().for_each(|sym| {
+                    let name = match sym {
+                        Symbol::Bare(name) => {
+                            self.declare(name, Rc::new(Cell::new(0)), NameKind::Module, ex);
+                            self.assign(name, ex);
+                            name
+                        }
+                        Symbol::Aliased(name, alias) => {
+                            self.declare(alias, Rc::new(Cell::new(0)), NameKind::Module, ex);
+                            self.assign(alias, ex);
+                            name
+                        }
+                    };
+
+                    match i.resolved_path.as_ref() {
+                        Some(path) => {
+                            if !registry.has_symbol(path, &name.lexeme) {
+                                Self::error_of_kind(
+                                    VesErrorKind::Import,
+                                    format!(
+                                        "Export `{}` not found in the module `{}`",
+                                        name.lexeme, path
+                                    ),
+                                    name.span.clone(),
+                                    ex,
+                                );
+                            }
+                        }
+                        None => {
+                            Self::unresolved_module_error(&mut unresolved, path, ex);
+                        }
+                    }
+                }),
             }
         }
     }
 
-    fn resolve_exports(&mut self, exports: &[Symbol<'a>], ex: &mut ErrCtx) {
-        // unimplemented!()
+    fn unresolved_module_error(
+        unresolved: &mut std::collections::HashSet<Cow<'a, str>>,
+        path: &ImportPath<'a>,
+        ex: &mut ErrCtx,
+    ) {
+        let name = match match path {
+            ImportPath::Simple(name) => name,
+            ImportPath::Full(name) => name,
+        } {
+            Symbol::Bare(name) => name,
+            Symbol::Aliased(name, _) => name,
+        };
+        if unresolved.contains(&name.lexeme) {
+            return;
+        }
+        unresolved.insert(name.lexeme.clone());
+        Self::error(
+            "Attempted to import an unresolved module",
+            name.span.clone(),
+            ex,
+        );
     }
 
-    fn resolve_stmt(&mut self, stmt: &mut Stmt<'a>, ex: &mut ErrCtx) {
+    fn resolve_exports(&mut self, exports: &[Symbol<'a>], ex: &mut ErrCtx) {
+        for export in exports {
+            let name = match export {
+                Symbol::Bare(name) => name,
+                Symbol::Aliased(name, _) => name,
+            };
+            self.r#use(name, ex);
+        }
+    }
+
+    fn resolve_stmt<T>(
+        &mut self,
+        stmt: &mut Stmt<'a>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
         match &mut stmt.kind {
             StmtKind::Var(vars) => {
                 for var in vars {
                     // We have to resolve the variable first to allow shadowing.
                     if let Some(ref mut init) = var.initializer {
-                        self.resolve_expr(init, ex);
+                        self.resolve_expr(init, registry, ex);
                     } else if var.kind == VarKind::Let {
                         debug_assert!(false, "This should never happen as assignment checks are performed in the parser");
                         Self::error(
@@ -129,7 +230,7 @@ impl<'a> Resolver<'a> {
 
                 let prev_loop = self.loop_kind;
                 self.loop_kind = LoopKind::Loop;
-                self.resolve_stmt(&mut r#loop.body, ex);
+                self.resolve_stmt(&mut r#loop.body, registry, ex);
                 self.loop_kind = prev_loop;
 
                 self.pop(ex);
@@ -138,23 +239,23 @@ impl<'a> Resolver<'a> {
                 self.push();
 
                 r#for.initializers.iter_mut().for_each(|init| {
-                    self.resolve_expr(&mut init.value, ex);
+                    self.resolve_expr(&mut init.value, registry, ex);
                     self.declare(&init.name, Rc::new(Cell::new(0)), NameKind::Mut, ex);
                     self.assign(&init.name, ex);
                 });
 
                 if let Some(ref mut cond) = r#for.condition {
-                    self.resolve_expr(cond, ex);
+                    self.resolve_expr(cond, registry, ex);
                 }
                 if let Some(ref mut inc) = r#for.increment {
-                    self.resolve_expr(inc, ex);
+                    self.resolve_expr(inc, registry, ex);
                 }
 
                 self.declare_loop_label(&r#for.label, ex);
 
                 let prev_loop = self.loop_kind;
                 self.loop_kind = LoopKind::For;
-                self.resolve_stmt(&mut r#for.body, ex);
+                self.resolve_stmt(&mut r#for.body, registry, ex);
                 self.loop_kind = prev_loop;
 
                 self.pop(ex);
@@ -162,7 +263,7 @@ impl<'a> Resolver<'a> {
             StmtKind::ForEach(r#for) => {
                 self.push();
 
-                self.resolve_expr(&mut r#for.iterator, ex);
+                self.resolve_expr(&mut r#for.iterator, registry, ex);
 
                 self.declare(
                     &r#for.variable,
@@ -176,7 +277,7 @@ impl<'a> Resolver<'a> {
 
                 let prev_loop = self.loop_kind;
                 self.loop_kind = LoopKind::ForEach;
-                self.resolve_stmt(&mut r#for.body, ex);
+                self.resolve_stmt(&mut r#for.body, registry, ex);
                 self.loop_kind = prev_loop;
 
                 self.pop(ex);
@@ -188,13 +289,13 @@ impl<'a> Resolver<'a> {
             }) => {
                 self.push();
 
-                self.resolve_condition(condition, ex);
+                self.resolve_condition(condition, registry, ex);
 
                 self.declare_loop_label(label, ex);
 
                 let prev_loop = self.loop_kind;
                 self.loop_kind = LoopKind::While;
-                self.resolve_stmt(body, ex);
+                self.resolve_stmt(body, registry, ex);
                 self.loop_kind = prev_loop;
 
                 self.pop(ex);
@@ -205,15 +306,15 @@ impl<'a> Resolver<'a> {
                     self.scope_kind = ScopeKind::Local;
                 }
                 self.push();
-                self.resolve_block(statements, ex);
+                self.resolve_block(statements, registry, ex);
                 self.pop(ex);
                 self.scope_kind = prev_kind;
             }
-            StmtKind::ExprStmt(expr) => self.resolve_expr(expr, ex),
-            StmtKind::Print(expr) => self.resolve_expr(expr, ex),
+            StmtKind::ExprStmt(expr) => self.resolve_expr(expr, registry, ex),
+            StmtKind::Print(expr) => self.resolve_expr(expr, registry, ex),
             StmtKind::Return(value) => {
                 if let Some(ref mut expr) = value {
-                    self.resolve_expr(expr, ex);
+                    self.resolve_expr(expr, registry, ex);
                 }
 
                 match self.scope_kind {
@@ -276,13 +377,18 @@ impl<'a> Resolver<'a> {
                         ex,
                     );
                 }
-                self.resolve_expr(defer, ex);
+                self.resolve_expr(defer, registry, ex);
             }
             StmtKind::_Empty => {}
         }
     }
 
-    fn resolve_block(&mut self, statements: &mut Vec<Stmt<'a>>, ex: &mut ErrCtx) {
+    fn resolve_block<T>(
+        &mut self,
+        statements: &mut Vec<Stmt<'a>>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
         if let Some(StmtKind::Return(Some(ref mut expr))) =
             statements.last_mut().map(|s| &mut s.kind)
         {
@@ -320,7 +426,7 @@ impl<'a> Resolver<'a> {
 
         statements
             .iter_mut()
-            .for_each(|stmt| self.resolve_stmt(stmt, ex));
+            .for_each(|stmt| self.resolve_stmt(stmt, registry, ex));
     }
 
     fn find_call_in_do_block<'b>(&self, block: &'b mut DoBlock<'a>) -> Option<&'b mut Call<'a>> {
@@ -333,19 +439,29 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_do_block(&mut self, block: &mut DoBlock<'a>, ex: &mut ErrCtx) {
+    fn resolve_do_block<T>(
+        &mut self,
+        block: &mut DoBlock<'a>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
         self.push();
         block
             .statements
             .iter_mut()
-            .for_each(|stmt| self.resolve_stmt(stmt, ex));
+            .for_each(|stmt| self.resolve_stmt(stmt, registry, ex));
         if let Some(ref mut value) = block.value {
-            self.resolve_expr(value, ex);
+            self.resolve_expr(value, registry, ex);
         }
         self.pop(ex);
     }
 
-    fn resolve_function(&mut self, f: &mut FnInfo<'a>, ex: &mut ErrCtx) {
+    fn resolve_function<T>(
+        &mut self,
+        f: &mut FnInfo<'a>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
         if f.kind != FnKind::Initializer {
             self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
             self.assign(&f.name, ex);
@@ -361,7 +477,7 @@ impl<'a> Resolver<'a> {
         self.push();
 
         for (_, p) in &mut f.params.default {
-            self.resolve_expr(p, ex);
+            self.resolve_expr(p, registry, ex);
         }
 
         for param in f
@@ -375,13 +491,18 @@ impl<'a> Resolver<'a> {
             self.assign(&param, ex);
         }
 
-        self.resolve_block(&mut f.body, ex);
+        self.resolve_block(&mut f.body, registry, ex);
 
         self.pop(ex);
         self.scope_kind = prev_kind;
     }
 
-    fn resolve_expr(&mut self, expr: &mut Expr<'a>, ex: &mut ErrCtx) {
+    fn resolve_expr<T>(
+        &mut self,
+        expr: &mut Expr<'a>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
         match &mut expr.kind {
             ExprKind::Struct(box StructInfo {
                 ref name,
@@ -399,79 +520,105 @@ impl<'a> Resolver<'a> {
                     self.declare(&this, Rc::new(Cell::new(0)), NameKind::Let, ex);
                     self.assign(&this, ex);
                     self.r#use(&this, ex);
-                    self.resolve_function(&mut init.body, ex);
+                    self.resolve_function(&mut init.body, registry, ex);
                     self.pop(ex);
                 }
 
                 for (_, field) in fields.iter_mut().flat_map(|f| &mut f.default) {
-                    self.resolve_expr(field, ex);
+                    self.resolve_expr(field, registry, ex);
                 }
 
                 for field in r#static.fields.iter_mut().filter_map(|(_, f)| f.as_mut()) {
-                    self.resolve_expr(field, ex);
+                    self.resolve_expr(field, registry, ex);
                 }
 
                 for method in methods.iter_mut().chain(r#static.methods.iter_mut()) {
-                    self.resolve_function(method, ex);
+                    self.resolve_function(method, registry, ex);
                 }
             }
             ExprKind::Fn(box ref mut r#fn) => {
-                self.resolve_function(r#fn, ex);
+                self.resolve_function(r#fn, registry, ex);
             }
             ExprKind::If(r#if) => {
                 self.push();
 
-                self.resolve_condition(&mut r#if.condition, ex);
-                self.resolve_do_block(&mut r#if.then, ex);
+                self.resolve_condition(&mut r#if.condition, registry, ex);
+                self.resolve_do_block(&mut r#if.then, registry, ex);
                 if let Some(ref mut r#else) = r#if.otherwise {
-                    self.resolve_do_block(r#else, ex)
+                    self.resolve_do_block(r#else, registry, ex)
                 }
 
                 self.pop(ex);
             }
-            ExprKind::DoBlock(block) => self.resolve_do_block(block, ex),
+            ExprKind::DoBlock(block) => self.resolve_do_block(block, registry, ex),
             ExprKind::Binary(_, ref mut left, ref mut right) => {
-                self.resolve_expr(left, ex);
-                self.resolve_expr(right, ex);
+                self.resolve_expr(left, registry, ex);
+                self.resolve_expr(right, registry, ex);
             }
-            ExprKind::Unary(_, ref mut operand) => self.resolve_expr(operand, ex),
+            ExprKind::Unary(_, ref mut operand) => self.resolve_expr(operand, registry, ex),
             ExprKind::Comma(exprs) => exprs
                 .iter_mut()
-                .for_each(|expr| self.resolve_expr(expr, ex)),
+                .for_each(|expr| self.resolve_expr(expr, registry, ex)),
             ExprKind::Call(box Call {
                 ref mut callee,
                 ref mut args,
                 ..
             }) => {
-                self.resolve_expr(callee, ex);
-                args.iter_mut().for_each(|a| self.resolve_expr(a, ex));
+                self.resolve_expr(callee, registry, ex);
+                args.iter_mut()
+                    .for_each(|a| self.resolve_expr(a, registry, ex));
             }
-            ExprKind::Spread(spread) => self.resolve_expr(spread, ex),
-            ExprKind::GetProp(prop) => self.resolve_expr(&mut prop.node, ex),
+            ExprKind::Spread(spread) => self.resolve_expr(spread, registry, ex),
+            ExprKind::GetProp(prop) => {
+                self.resolve_expr(&mut prop.node, registry, ex);
+                if let ExprKind::Variable(name) = &prop.node.kind {
+                    if let Some(VarUsage {
+                        kind: NameKind::Module,
+                        source_module: Some(module),
+                        ..
+                    }) = self.env.get(&name.lexeme)
+                    {
+                        if !registry.has_symbol(module, &prop.field.lexeme) {
+                            Self::error_of_kind(
+                                VesErrorKind::Import,
+                                format!(
+                                    "Export `{}` not found in the module `{}`",
+                                    prop.field.lexeme, module
+                                ),
+                                prop.field.span.clone(),
+                                ex,
+                            );
+                        }
+                    }
+                }
+            }
+
             ExprKind::SetProp(prop) => {
-                self.resolve_expr(&mut prop.value, ex);
-                self.resolve_expr(&mut prop.node, ex);
+                self.resolve_expr(&mut prop.value, registry, ex);
+                self.resolve_expr(&mut prop.node, registry, ex);
             }
             ExprKind::GetItem(get) => {
-                self.resolve_expr(&mut get.node, ex);
-                self.resolve_expr(&mut get.key, ex);
+                self.resolve_expr(&mut get.node, registry, ex);
+                self.resolve_expr(&mut get.key, registry, ex);
             }
             ExprKind::SetItem(set) => {
-                self.resolve_expr(&mut set.node, ex);
-                self.resolve_expr(&mut set.key, ex);
-                self.resolve_expr(&mut set.value, ex);
+                self.resolve_expr(&mut set.node, registry, ex);
+                self.resolve_expr(&mut set.key, registry, ex);
+                self.resolve_expr(&mut set.value, registry, ex);
             }
             ExprKind::FString(s) => s.fragments.iter_mut().for_each(|f| match f {
                 FStringFrag::Str(_) => (),
-                FStringFrag::Expr(ref mut expr) => self.resolve_expr(expr, ex),
+                FStringFrag::Expr(ref mut expr) => self.resolve_expr(expr, registry, ex),
             }),
-            ExprKind::Array(arr) => arr.iter_mut().for_each(|expr| self.resolve_expr(expr, ex)),
+            ExprKind::Array(arr) => arr
+                .iter_mut()
+                .for_each(|expr| self.resolve_expr(expr, registry, ex)),
             ExprKind::Map(entries) => entries.iter_mut().for_each(|entry| match entry {
                 MapEntry::Pair(key, value) => {
-                    self.resolve_expr(key, ex);
-                    self.resolve_expr(value, ex);
+                    self.resolve_expr(key, registry, ex);
+                    self.resolve_expr(value, registry, ex);
                 }
-                MapEntry::Spread(expr) => self.resolve_expr(expr, ex),
+                MapEntry::Spread(expr) => self.resolve_expr(expr, registry, ex),
             }),
             ExprKind::Variable(v) => {
                 if matches!(v.kind, TokenKind::Self_)
@@ -492,18 +639,18 @@ impl<'a> Resolver<'a> {
                 ref mut step,
                 ..
             }) => {
-                self.resolve_expr(start, ex);
-                self.resolve_expr(end, ex);
-                self.resolve_expr(step, ex);
+                self.resolve_expr(start, registry, ex);
+                self.resolve_expr(end, registry, ex);
+                self.resolve_expr(step, registry, ex);
                 // TODO: lint for invalid range bounds?
             }
-            ExprKind::PrefixIncDec(inc) => self.resolve_expr(&mut inc.expr, ex),
-            ExprKind::PostfixIncDec(inc) => self.resolve_expr(&mut inc.expr, ex),
+            ExprKind::PrefixIncDec(inc) => self.resolve_expr(&mut inc.expr, registry, ex),
+            ExprKind::PostfixIncDec(inc) => self.resolve_expr(&mut inc.expr, registry, ex),
             ExprKind::Assignment(ass) => {
-                self.resolve_expr(&mut ass.value, ex);
+                self.resolve_expr(&mut ass.value, registry, ex);
                 self.assign(&ass.name, ex);
             }
-            ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, ex),
+            ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, registry, ex),
             ExprKind::AtIdent(ref name) => {
                 if self.env.get(&name.lexeme).is_none() {
                     self.undefined_variable_error(name, ex);
@@ -513,8 +660,13 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_condition(&mut self, condition: &mut Condition<'a>, ex: &mut ErrCtx) {
-        self.resolve_expr(&mut condition.value, ex);
+    fn resolve_condition<T>(
+        &mut self,
+        condition: &mut Condition<'a>,
+        registry: &ModuleRegistry<T>,
+        ex: &mut ErrCtx,
+    ) {
+        self.resolve_expr(&mut condition.value, registry, ex);
         match &condition.pattern {
             ConditionPattern::IsErr(v) | ConditionPattern::IsOk(v) => {
                 self.declare(v, Rc::new(Cell::new(0)), NameKind::Let, ex);
@@ -531,6 +683,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    fn declare_module_object(&mut self, module_name: String, name: &Token<'a>, ex: &mut ErrCtx) {
+        self.declare(name, Rc::new(Cell::new(0)), NameKind::Module, ex);
+        self.env.get_mut(&name.lexeme).unwrap().source_module = Some(module_name);
+    }
+
     fn declare(
         &mut self,
         name: &Token<'a>,
@@ -542,7 +699,16 @@ impl<'a> Resolver<'a> {
             if vu.declared {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowLocalVariable(vu.span.clone()),
-                    format!("Attempted to shadow a local variable `{}`", name.lexeme),
+                    format!(
+                        "Attempted to shadow a {} `{}`",
+                        match vu.kind {
+                            NameKind::Fn => "function",
+                            NameKind::Struct => "struct",
+                            NameKind::Module => "module or import",
+                            _ => "variable",
+                        },
+                        name.lexeme
+                    ),
                     name.span.clone(),
                     ex,
                 );
@@ -559,6 +725,7 @@ impl<'a> Resolver<'a> {
                 assigned: false,
                 uses,
                 span: name.span.clone(),
+                source_module: None,
             },
         );
     }
@@ -579,6 +746,7 @@ impl<'a> Resolver<'a> {
                 assigned: false,
                 uses: Rc::new(Cell::new(0)),
                 span: name.span.clone(),
+                source_module: None,
             },
         );
     }

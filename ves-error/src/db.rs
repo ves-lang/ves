@@ -73,6 +73,33 @@ impl<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> VesFileDatabase<N
         Self { config, ..self }
     }
 
+    /// Clones the database, returning a copy where every name and file is an owned [`String`].
+    pub fn clone_owned(&mut self) -> VesFileDatabase<String, String> {
+        let mut db = VesFileDatabase {
+            config: self.config.clone(),
+            db: SimpleFiles::new(),
+            name_to_id: self.name_to_id.clone(),
+        };
+
+        let mut ids = self.name_to_id.values().copied().collect::<Vec<_>>();
+        ids.sort();
+
+        for id in ids {
+            let file = self.file(id).unwrap();
+            let new_file = VesFile {
+                source: file.source.as_ref().to_owned(),
+                hash: file.hash,
+                module: file.module.clone(),
+                parsed: file.parsed.clone(),
+            };
+
+            let name = self.name(id).unwrap().clone();
+            db.db.add(name.as_ref().to_string(), new_file);
+        }
+
+        db
+    }
+
     /// Adds a new file to the database.
     pub fn add_file(&mut self, name: N, source: S) -> FileId {
         let hash = hash(source.as_ref());

@@ -31,7 +31,7 @@ error: Cannot assign twice to the immutable variable `x`
   │ │
   │ help: Consider replacing `let` with `mut` to make the variable mutable
 
-error: Attempted to shadow a local variable `y`
+error: Attempted to shadow a variable `y`
   ┌─ <source: #edae658e4fc9e594>:5:5
   │
 4 │ let y = "ok"

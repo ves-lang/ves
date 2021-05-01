@@ -1,0 +1,41 @@
+import thing
+import shadowing
+import "./test_module/inner/inner.ves" as _
+
+
+%output
+
+digraph {
+    0 [ label = "<source: #996ed886d90a271f>" ]
+    1 [ label = "/test_module/thing.ves" ]
+    2 [ label = "/test_module/shadowing.ves" ]
+    3 [ label = "/test_module/inner/inner.ves" ]
+    4 [ label = "/test_module/inner/cycle1.ves" ]
+    5 [ label = "/test_module/inner/cycle2.ves" ]
+    0 -> 1 [ ]
+    0 -> 2 [ ]
+    0 -> 3 [ ]
+    2 -> 4 [ ]
+    2 -> 5 [ ]
+    2 -> 3 [ ]
+    2 -> 1 [ ]
+    1 -> 4 [ ]
+    4 -> 5 [ ]
+    5 -> 4 [ ]
+}
+
+error: Attempted to shadow a module or import `cycle1`
+  ┌─ /test_module/shadowing.ves:2:28
+  │
+1 │ import "./inner/cycle1" as cycle1
+  │                            ------ First declared on line 1
+2 │ import "./inner/cycle2" as cycle1
+  │                            ^^^^^^ Later shadowed here
+
+error: Attempted to shadow a module or import `inner`
+  ┌─ /test_module/shadowing.ves:4:17
+  │
+3 │ import { inner, inner as inner2 } from "./inner/inner.ves"
+  │          ----- First declared on line 3
+4 │ import thing as inner
+  │                 ^^^^^ Later shadowed here

@@ -1,0 +1,13 @@
+import cycle1
+
+export let value = 5
+export fn f() {}
+export struct S {}
+
+mut a = "ok"
+a = 7
+
+let b = cycle1.TAU
+
+
+export { a, b }

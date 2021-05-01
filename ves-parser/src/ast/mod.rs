@@ -809,8 +809,7 @@ mod tests {
             "test".into(),
             r#"do { 
             try api_method()
-        }"#
-            .into(),
+        }"#,
         );
         let span = Span { start: 0, end: 1 };
         let ast = AST::new(

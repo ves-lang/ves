@@ -354,7 +354,6 @@ mod tests {
 
         for (p, e) in paths.into_iter().zip(expected.into_iter()) {
             let substs = PathSubstitutions::parse(p).unwrap();
-            println!("{:#?}\n{:#?}", substs, e);
             ves_testing::pretty_assertions::assert_eq!(substs, e, "{}", p);
         }
     }

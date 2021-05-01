@@ -44,6 +44,8 @@ pub enum NameKind {
     Fn,
     /// A struct declaration
     Struct,
+    /// An imported module.
+    Module,
 }
 
 impl From<VarKind> for NameKind {
@@ -71,6 +73,8 @@ pub struct VarUsage {
     pub kind: NameKind,
     /// The span of the variable; used for error reporting.
     pub span: Span,
+    ///  The name of the source module
+    pub source_module: Option<String>,
 }
 
 impl VarUsage {
@@ -96,11 +100,7 @@ impl VarUsage {
                 | NameKind::Struct
                 | NameKind::ForEachVar
                 | NameKind::Param
+                | NameKind::Module
         )
-    }
-
-    /// Returns true if the variable is `mut`.
-    pub fn is_mut(&self) -> bool {
-        matches!(self.kind, NameKind::Mut)
     }
 }
