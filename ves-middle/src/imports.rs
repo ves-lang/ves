@@ -35,8 +35,7 @@ pub(super) fn resolve_module_graph<'path, 'source, T>(
     // using its location as the base path for the dependency.
     let mut visited = std::collections::HashSet::new();
     let mut stack = vec![root_id];
-    while !stack.is_empty() {
-        let id = stack.pop().unwrap();
+    while let Some(id) = stack.pop() {
         if visited.contains(&id) {
             continue;
         }
@@ -330,11 +329,9 @@ fn adjust_canonicalization(p: PathBuf) -> PathBuf {
 fn adjust_canonicalization(p: PathBuf) -> String {
     const VERBATIM_PREFIX: &str = r#"\\?\"#;
     let p = p.display().to_string();
-    if p.starts_with(VERBATIM_PREFIX) {
-        p[VERBATIM_PREFIX.len()..].to_string()
-    } else {
-        p
-    }
+    p.strip_prefix(VERBATIM_PREFIX)
+        .map(String::from)
+        .unwrap_or(p)
 }
 
 #[cfg(test)]
