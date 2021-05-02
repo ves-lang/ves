@@ -1,0 +1,35 @@
+import "./test_module/inner/mod" as mod
+import { value, f, S, a, b, missing } from "./test_module/inner/mod"
+
+export { a, b }
+
+print(mod)
+print(mod.yo)
+
+let bypassed = mod;
+print(bypassed.yo);
+
+%output
+
+digraph {
+    0 [ label = "<source: #f48e2d3918bc2e62>" ]
+    1 [ label = "/test_module/inner/mod.ves" ]
+    2 [ label = "/test_module/inner/cycle1.ves" ]
+    3 [ label = "/test_module/inner/cycle2.ves" ]
+    0 -> 1 [ ]
+    1 -> 2 [ ]
+    2 -> 3 [ ]
+    3 -> 2 [ ]
+}
+
+error: Export `missing` not found in the module `/test_module/inner/mod.ves`
+  ┌─ <source: #f48e2d3918bc2e62>:2:29
+  │
+2 │ import { value, f, S, a, b, missing } from "./test_module/inner/mod"
+  │                             ^^^^^^^
+
+error: Export `yo` not found in the module `/test_module/inner/mod.ves`
+  ┌─ <source: #f48e2d3918bc2e62>:7:11
+  │
+7 │ print(mod.yo)
+  │           ^^

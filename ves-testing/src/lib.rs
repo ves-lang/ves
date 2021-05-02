@@ -5,6 +5,7 @@ use regex::Regex;
 use ves_error::{ErrCtx, FileId, VesFileDatabase};
 
 pub use lazy_static::lazy_static;
+pub use pretty_assertions;
 
 /// Cleans the given AST, removing all special characters.
 pub fn clean_tree(tree: String) -> String {
@@ -29,12 +30,30 @@ pub fn load_test_file(tests_dir: &Path, name: &str) -> (String, String) {
     (code.trim().to_owned(), expected.trim().to_owned())
 }
 
+/// Asserts that output of the given closure matches the expected output.
+pub fn test_eq<F>(test_name: &str, source: String, expected: String, f: F)
+where
+    F: Fn(String) -> String,
+{
+    let output = f(source);
+    pretty_assertions::assert_eq!(
+        DisplayAsDebugWrapper(output.trim()),
+        DisplayAsDebugWrapper(&expected[..]),
+        "Failed the error test `{}`",
+        test_name
+    );
+}
+
 /// Asserts that output of the given pipeline closure is a list of errors.
 /// Compares the diagnostics for the errors to the given expected output.
 pub fn test_err<T, F>(test_name: &str, source: String, expected: String, pipeline: F)
 where
     T: std::fmt::Debug,
-    F: for<'a> Fn(Cow<'a, str>, FileId, &mut VesFileDatabase<'a>) -> Result<T, ErrCtx>,
+    F: for<'a> Fn(
+        Cow<'a, str>,
+        FileId,
+        &mut VesFileDatabase<String, Cow<'a, str>>,
+    ) -> Result<T, ErrCtx>,
 {
     let src = std::borrow::Cow::Borrowed(&source[..]);
     let mut db = VesFileDatabase::new();
@@ -52,7 +71,11 @@ where
 /// Compares the output of the given function, cleaning it using [`clean_ast()`], to the expected output.
 pub fn test_ok_ast<F>(test_name: &str, src: String, expected: String, pipeline: F)
 where
-    F: for<'a> Fn(Cow<'a, str>, FileId, &mut VesFileDatabase<'a>) -> Result<String, ErrCtx>,
+    F: for<'a> Fn(
+        Cow<'a, str>,
+        FileId,
+        &mut VesFileDatabase<String, Cow<'a, str>>,
+    ) -> Result<String, ErrCtx>,
 {
     let src = std::borrow::Cow::Borrowed(&src[..]);
     let mut db = VesFileDatabase::new();
@@ -92,6 +115,27 @@ macro_rules! with_dollar_sign {
 /// ```
 #[macro_export]
 macro_rules! make_test_macros {
+    (eq => $crate_root:ident, $tests_dir:ident, $f:expr) => {
+        $crate::lazy_static! {
+            static ref __TESTS_DIR: std::path::PathBuf
+                = std::path::PathBuf::from($crate_root).join($tests_dir);
+        }
+
+        $crate::with_dollar_sign! {
+            ($d:tt) => {
+                macro_rules! test_eq {
+                    ($test_name:ident $d( $d attr:ident ),*) => {
+                        $d(#[$d attr])*
+                        #[test]
+                        fn $test_name() {
+                            let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
+                            $crate::test_eq(stringify!($test_name), source, output, $f);
+                        }
+                    };
+                }
+            };
+        }
+    };
     ($crate_root:ident, $tests_dir:ident, $ok_pipeline:expr, $err_pipeline:expr) => {
         $crate::lazy_static! {
             static ref __TESTS_DIR: std::path::PathBuf

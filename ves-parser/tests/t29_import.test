@@ -1,48 +1,77 @@
 import name
 import "./path" as name
-import { thing } from name
-import { thing } from "./path"
+import { thing } from name;
+import { thing } from "./path";
 import { thing as alias } from name
 import { thing as alias } from "./path"
+import { many, things, possibly, aliased as alias } from "./path"
 
 %output
 
-Import::Direct
-  path: ImportPath::Simple
-    symbol: Symbol::Bare
-      symbol: "name"
-Import::Direct
-  path: ImportPath::Full
-    symbol: Symbol::Aliased
-      name: "\"./path\""
-      as: "name"
-Import::Destructured
-  path: ImportPath::Simple
-    symbol: Symbol::Bare
-      symbol: "name"
-  symbols=
-    Symbol::Bare
-      symbol: "thing"
-Import::Destructured
-  path: ImportPath::Full
-    symbol: Symbol::Bare
-      symbol: "\"./path\""
-  symbols=
-    Symbol::Bare
-      symbol: "thing"
-Import::Destructured
-  path: ImportPath::Simple
-    symbol: Symbol::Bare
-      symbol: "name"
-  symbols=
-    Symbol::Aliased
-      name: "thing"
-      as: "alias"
-Import::Destructured
-  path: ImportPath::Full
-    symbol: Symbol::Bare
-      symbol: "\"./path\""
-  symbols=
-    Symbol::Aliased
-      name: "thing"
-      as: "alias"
+Import
+  import: ImportStmt::Direct
+    path: ImportPath::Simple
+      symbol: Symbol::Bare
+        symbol: "name"
+  resolved_path: None
+Import
+  import: ImportStmt::Direct
+    path: ImportPath::Full
+      symbol: Symbol::Aliased
+        name: "\"./path\""
+        as: "name"
+  resolved_path: None
+Import
+  import: ImportStmt::Destructured
+    path: ImportPath::Simple
+      symbol: Symbol::Bare
+        symbol: "name"
+    symbols=
+      Symbol::Bare
+        symbol: "thing"
+  resolved_path: None
+Import
+  import: ImportStmt::Destructured
+    path: ImportPath::Full
+      symbol: Symbol::Bare
+        symbol: "\"./path\""
+    symbols=
+      Symbol::Bare
+        symbol: "thing"
+  resolved_path: None
+Import
+  import: ImportStmt::Destructured
+    path: ImportPath::Simple
+      symbol: Symbol::Bare
+        symbol: "name"
+    symbols=
+      Symbol::Aliased
+        name: "thing"
+        as: "alias"
+  resolved_path: None
+Import
+  import: ImportStmt::Destructured
+    path: ImportPath::Full
+      symbol: Symbol::Bare
+        symbol: "\"./path\""
+    symbols=
+      Symbol::Aliased
+        name: "thing"
+        as: "alias"
+  resolved_path: None
+Import
+  import: ImportStmt::Destructured
+    path: ImportPath::Full
+      symbol: Symbol::Bare
+        symbol: "\"./path\""
+    symbols=
+      Symbol::Bare
+        symbol: "many"
+      Symbol::Bare
+        symbol: "things"
+      Symbol::Bare
+        symbol: "possibly"
+      Symbol::Aliased
+        name: "aliased"
+        as: "alias"
+  resolved_path: None
