@@ -15,7 +15,7 @@ pub type Args<'a> = Vec<Expr<'a>>;
 /// Returns `true` if the given token is a reserved identifier.
 pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     if token.kind == TokenKind::Identifier {
-        matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "arr")
+        matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "array")
     } else {
         token.kind == TokenKind::Self_ || token.kind == TokenKind::Some
     }

@@ -29,10 +29,34 @@ impl BytecodeBuilder {
         }
     }
 
-    pub fn op(&mut self, op: Opcode, span: Span) -> &mut Self {
+    /// Get the current offset
+    pub fn offset(&self) -> u32 {
+        self.code.len() as u32
+    }
+
+    pub fn patch<F>(&mut self, index: u32, callback: F, span: Span) -> Result<()>
+    where
+        F: Fn(&mut Opcode),
+    {
+        let end = self.code.len() - 1;
+        let fid = self.file_id;
+        callback(self.code.get_mut(index as usize).ok_or_else(|| {
+            VesError::emit(
+                format!(
+                    "Attempted to patch opcode at index out of bounds ({}/{})",
+                    index, end
+                ),
+                span,
+                fid,
+            )
+        })?);
+        Ok(())
+    }
+
+    pub fn op(&mut self, op: Opcode, span: Span) -> u32 {
         self.code.push(op);
         self.spans.push(span);
-        self
+        (self.code.len() - 1) as u32
     }
 
     pub fn constant(&mut self, value: Value, span: Span) -> Result<u32> {
@@ -49,11 +73,12 @@ impl BytecodeBuilder {
         }
     }
 
-    pub fn finish(self) -> Chunk {
+    pub fn finish(&mut self) -> Chunk {
+        use std::mem::take;
         Chunk {
-            code: self.code,
-            spans: self.spans,
-            constants: self.constants,
+            code: take(&mut self.code),
+            spans: take(&mut self.spans),
+            constants: take(&mut self.constants),
             file_id: self.file_id,
         }
     }
