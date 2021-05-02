@@ -14,13 +14,16 @@ StmtKind::ExprStmt
     name: "name"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: "c"
     body=
     kind: Function
@@ -29,13 +32,16 @@ StmtKind::ExprStmt
     name: "name"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: "c"
     body=
       StmtKind::Return
@@ -48,13 +54,16 @@ StmtKind::ExprStmt
     name: "[fn@3:1]"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: "c"
     body=
     kind: Function
@@ -63,13 +72,16 @@ StmtKind::ExprStmt
     name: "[fn@4:1]"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: "c"
     body=
       StmtKind::Return
@@ -82,13 +94,16 @@ StmtKind::ExprStmt
     name: "[fn@5:1]"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: "c"
     body=
       StmtKind::Return
@@ -116,6 +131,7 @@ StmtKind::ExprStmt
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: None
     body=
     kind: Function
@@ -128,4 +144,3 @@ StmtKind::ExprStmt
       rest: "args"
     body=
     kind: Function
-

@@ -150,7 +150,9 @@ StmtKind::ExprStmt
     name: "h"
     params: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
       rest: None
     body=

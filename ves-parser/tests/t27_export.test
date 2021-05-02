@@ -5,7 +5,7 @@ export mut v1 = 0
 
 fn a() {}
 struct B() {}
-export { a, B as C }
+export { a, B as C };
 
 %output
 

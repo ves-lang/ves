@@ -46,7 +46,7 @@ checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 [[package]]
 name = "ast2str"
 version = "0.1.0"
-source = "git+https://github.com/optimalstrategy/ast2str#7f6521097c8c58e6af3704c7be51635e2331b8dc"
+source = "git+https://github.com/optimalstrategy/ast2str#2351c57a3547dbfd218aa216e8c1f95f3302e50b"
 dependencies = [
  "ast2str-derive",
  "ast2str-lib",
@@ -55,7 +55,7 @@ dependencies = [
 [[package]]
 name = "ast2str-derive"
 version = "0.2.1"
-source = "git+https://github.com/optimalstrategy/ast2str#7f6521097c8c58e6af3704c7be51635e2331b8dc"
+source = "git+https://github.com/optimalstrategy/ast2str#2351c57a3547dbfd218aa216e8c1f95f3302e50b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -65,7 +65,7 @@ dependencies = [
 [[package]]
 name = "ast2str-lib"
 version = "0.2.0"
-source = "git+https://github.com/optimalstrategy/ast2str#7f6521097c8c58e6af3704c7be51635e2331b8dc"
+source = "git+https://github.com/optimalstrategy/ast2str#2351c57a3547dbfd218aa216e8c1f95f3302e50b"
 
 [[package]]
 name = "atty"
@@ -829,9 +829,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
 name = "syn"
-version = "1.0.70"
+version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9505f307c872bab8eb46f77ae357c8eba1fdacead58ee5a850116b1d7f82883"
+checksum = "ad184cc9470f9117b2ac6817bfe297307418819ba40552f9b3846f05c33d5373"
 dependencies = [
  "proc-macro2",
  "quote",

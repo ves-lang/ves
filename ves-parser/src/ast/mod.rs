@@ -17,7 +17,7 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     if token.kind == TokenKind::Identifier {
         matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "arr")
     } else {
-        token.kind == TokenKind::Self_
+        token.kind == TokenKind::Self_ || token.kind == TokenKind::Some
     }
 }
 
@@ -356,13 +356,14 @@ pub struct Assignment<'a> {
     pub value: Expr<'a>,
 }
 
+// TODO: tag tuples with `#[rename]`s
 /// The possible parameters a function (or struct, excluding `rest`) can take.
 #[derive(Default, Debug, Clone, PartialEq, AstToStr)]
 pub struct Params<'a> {
     /// The positional arguments to this function / struct.
-    pub positional: Vec<Token<'a>>,
+    pub positional: Vec<(Token<'a>, bool)>,
     /// The default arguments to this function / struct.
-    pub default: Vec<(Token<'a>, Expr<'a>)>,
+    pub default: Vec<(Token<'a>, Expr<'a>, bool)>,
     /// The rest argument to this function.
     pub rest: Option<Token<'a>>,
 }
@@ -373,7 +374,7 @@ impl<'a> Params<'a> {
     }
 
     pub fn is_instance_method_params(&self) -> bool {
-        !self.is_empty() && self.positional[0].lexeme == "self"
+        !self.is_empty() && self.positional[0].0.lexeme == "self"
     }
 }
 

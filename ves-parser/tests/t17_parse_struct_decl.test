@@ -46,13 +46,16 @@ StmtKind::ExprStmt
     name: "Test"
     fields: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: None
     methods=
     initializer: None
@@ -73,20 +76,25 @@ StmtKind::ExprStmt
     name: "Test"
     fields: Params
       positional=
-        "a"
+        tuple
+          field0: "a"
+          field1: false
       default=
         tuple
           field0: "b"
           field1: Lit
             token: "0"
             value: LitValue::Number(0.0)
+          field2: false
       rest: None
     methods=
       FnInfo
         name: "m"
         params: Params
           positional=
-            "self"
+            tuple
+              field0: "self"
+              field1: false
           default=
           rest: None
         body=
@@ -95,7 +103,9 @@ StmtKind::ExprStmt
         name: "ma"
         params: Params
           positional=
-            "self"
+            tuple
+              field0: "self"
+              field1: false
           default=
           rest: None
         body=
@@ -138,9 +148,15 @@ StmtKind::ExprStmt
     name: "Test"
     fields: Params
       positional=
-        "a"
-        "b"
-        "c"
+        tuple
+          field0: "a"
+          field1: false
+        tuple
+          field0: "b"
+          field1: false
+        tuple
+          field0: "c"
+          field1: false
       default=
       rest: None
     methods=

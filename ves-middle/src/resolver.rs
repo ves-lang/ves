@@ -476,7 +476,7 @@ impl<'a> Resolver<'a> {
         };
         self.push();
 
-        for (_, p) in &mut f.params.default {
+        for (_, p, _) in &mut f.params.default {
             self.resolve_expr(p, registry, ex);
         }
 
@@ -484,11 +484,19 @@ impl<'a> Resolver<'a> {
             .params
             .positional
             .iter()
-            .chain(f.params.default.iter().map(|p| &p.0))
-            .chain(f.params.rest.iter())
+            .map(|p| (&p.0, NameKind::for_param(p.1)))
+            .chain(
+                f.params
+                    .default
+                    .iter()
+                    .map(|p| (&p.0, NameKind::for_param(p.2))),
+            )
+            .chain(f.params.rest.iter().map(|r| (r, NameKind::Param)))
         {
-            self.declare(&param, Rc::new(Cell::new(0)), NameKind::Param, ex);
-            self.assign(&param, ex);
+            let kind = param.1;
+            let param = param.0;
+            self.declare(param, Rc::new(Cell::new(0)), kind, ex);
+            self.assign(param, ex);
         }
 
         self.resolve_block(&mut f.body, registry, ex);
@@ -524,7 +532,7 @@ impl<'a> Resolver<'a> {
                     self.pop(ex);
                 }
 
-                for (_, field) in fields.iter_mut().flat_map(|f| &mut f.default) {
+                for (_, field, _) in fields.iter_mut().flat_map(|f| &mut f.default) {
                     self.resolve_expr(field, registry, ex);
                 }
 

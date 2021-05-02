@@ -60,10 +60,13 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             if self.match_(&TokenKind::Import) {
                 if parsing_imports {
                     match self.import() {
-                        Ok(import) => self.imports.push(ast::Import {
-                            import,
-                            resolved_path: None,
-                        }),
+                        Ok(import) => {
+                            self.match_(&TokenKind::Semi);
+                            self.imports.push(ast::Import {
+                                import,
+                                resolved_path: None,
+                            })
+                        }
                         Err(err) => {
                             self.ex.record(err);
                             self.synchronize();
@@ -175,7 +178,10 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn export_stmt(&mut self) -> ParseResult<Option<ast::Stmt<'a>>> {
         if self.match_(&TokenKind::Export) {
-            self.export()
+            self.export().map(|v| {
+                self.skip_semi();
+                v
+            })
         } else {
             Ok(Some(self.stmt(true)?))
         }
@@ -731,7 +737,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         };
         // parse fields
         let fields = if self.match_(&TokenKind::LeftParen) {
-            let fields = self.param_pack(false, false)?;
+            let fields = self.param_pack(ParamListKind::StructFields)?;
             self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
             Some(fields)
         } else {
@@ -782,7 +788,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }));
                 } else if self.match_(&TokenKind::LeftParen) {
                     // this is a method
-                    let params = self.param_pack(true, true)?;
+                    let params = self.param_pack(ParamListKind::Method)?;
                     self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
                     let body = self.fn_decl_body()?;
                     if params.is_instance_method_params() {
@@ -854,7 +860,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             &TokenKind::LeftParen,
             "Expected an opening `(` after the function name or keyword",
         )?;
-        let params = self.param_pack(true, false)?;
+        let params = self.param_pack(ParamListKind::Function)?;
         self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
         let body = self.fn_decl_body()?;
         Ok(ast::FnInfo {
@@ -884,14 +890,15 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
     }
 
-    fn param_pack(&mut self, rest_args: bool, in_method: bool) -> ParseResult<ast::Params<'a>> {
+    // TODO: test new cases
+    fn param_pack(&mut self, kind: ParamListKind) -> ParseResult<ast::Params<'a>> {
         let mut parsing_default = false;
         let mut positional = vec![];
         let mut default = vec![];
         let mut rest = None;
         while !self.check(&TokenKind::RightParen) {
             if self.match_(&TokenKind::Ellipsis) {
-                if !rest_args {
+                if kind == ParamListKind::StructFields {
                     return Err(VesError::parse(
                         "Rest arguments are not allowed here",
                         self.previous.span.clone(),
@@ -904,12 +911,31 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 break;
             } else {
                 // positional or default argument
+                let is_mutable = if self.match_(&TokenKind::Mut) {
+                    if kind == ParamListKind::StructFields {
+                        return Err(VesError::parse(
+                            "Struct fields do not have mutability modifiers",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
+                    }
+                    true
+                } else {
+                    false
+                };
                 let name = self.consume_any(
                     &[TokenKind::Identifier, TokenKind::Self_],
                     "Expected a parameter name",
                 )?;
+                if is_mutable && kind == ParamListKind::Method && name.lexeme == "self" {
+                    return Err(VesError::parse(
+                        "'self' may not be mutable",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
+                }
                 let value = if self.match_(&TokenKind::Equal) {
-                    if in_method && name.lexeme == "self" {
+                    if kind == ParamListKind::Method && name.lexeme == "self" {
                         return Err(VesError::parse(
                             "'self' may not have a default value",
                             self.previous.span.clone(),
@@ -923,7 +949,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 match value {
                     Some(value) => {
                         parsing_default = true;
-                        default.push((name, value));
+                        default.push((name, value, is_mutable));
                     }
                     None => {
                         if parsing_default {
@@ -933,7 +959,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                                     self.fid,
                                 ));
                         }
-                        positional.push(name);
+                        positional.push((name, is_mutable));
                     }
                 }
             }
@@ -1428,15 +1454,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         if self.match_(&TokenKind::False) {
             return Ok(literal!(self, ast::LitValue::Bool(false)));
         }
-        // 'self'
-        if self.match_(&TokenKind::Self_) {
-            return Ok(ast::Expr {
-                span: self.previous.span.clone(),
-                kind: ast::ExprKind::Variable(self.previous.clone()),
-            });
-        }
-        // identifier
-        if self.match_(&TokenKind::Identifier) {
+        // 'self', some, identifier
+        if self.match_any(&[TokenKind::Self_, TokenKind::Some, TokenKind::Identifier]) {
             return Ok(ast::Expr {
                 span: self.previous.span.clone(),
                 kind: ast::ExprKind::Variable(self.previous.clone()),
@@ -1770,6 +1789,13 @@ fn desugar_assignment<'a>(
         TokenKind::PercentEqual => desugar!(receiver, Rem, value),
         _ => unreachable!(),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ParamListKind {
+    Function,
+    Method,
+    StructFields,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
