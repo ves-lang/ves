@@ -319,7 +319,7 @@ mod tests {
             out.join("\n")
         })
         .replace(
-            &results.config.ves_path.default_base.display().to_string(),
+            &crate::imports::into_os_agnostic(results.config.ves_path.default_base.display().to_string()),
             "",
         )
     }

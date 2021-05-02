@@ -93,17 +93,18 @@ pub(super) fn resolve_module_graph<'path, 'source, T>(
             };
 
             let filename = module_path.to_string_lossy().into_owned();
-            let import_id = match middle.id_by_name(&filename) {
+            let agnostic = into_os_agnostic(filename.clone());
+            let import_id = match middle.id_by_name(&agnostic) {
                 None => {
                     middle
                         .store(
-                            filename.clone(),
+                            agnostic.clone(),
                             match std::fs::read_to_string(Path::new(&filename[..])) {
                                 Ok(source) => source,
                                 Err(e) => {
                                     errors.record(VesError::import(
                                         format!(
-                                    "File at `{}` was removed in the middle of being processed: {}",
+                                    "File at `{}` was removed while being processed: {}",
                                     filename, e
                                 ),
                                         import_path.span.clone(),
@@ -118,7 +119,7 @@ pub(super) fn resolve_module_graph<'path, 'source, T>(
                 Some(id) => id,
             };
 
-            import.resolved_path = Some(filename);
+            import.resolved_path = Some(agnostic);
             middle.import_graph.add_edge(id, import_id, ());
             stack.push(import_id);
         }
@@ -163,6 +164,46 @@ pub(super) fn resolve_module_graph<'path, 'source, T>(
     }
 }
 
+
+
+#[cfg(not(target_os = "windows"))]
+fn into_os_specific(path: PathBuf) -> PathBuf {
+    path
+}
+
+#[cfg(target_os = "windows")]
+fn into_os_specific(path: PathBuf) -> PathBuf {
+    PathBuf::from(path.to_string_lossy().replace('/', &std::path::MAIN_SEPARATOR.to_string()[..]))
+}
+
+
+#[cfg(not(target_os = "windows"))]
+pub(super)fn into_os_agnostic(path: String) -> String {
+    path
+}
+
+#[cfg(target_os = "windows")]
+pub(super)fn into_os_agnostic(path: String) -> String {
+    path.replace(std::path::MAIN_SEPARATOR, "/")
+}
+
+#[cfg(not(target_os = "windows"))]
+fn adjust_canonicalization(p: PathBuf) -> PathBuf {
+    p
+}
+
+#[cfg(target_os = "windows")]
+fn adjust_canonicalization(p: PathBuf) -> String {
+    const VERBATIM_PREFIX: &str = r#"\\?\"#;
+    let p = p.display().to_string();
+    if p.starts_with(VERBATIM_PREFIX) {
+        p[VERBATIM_PREFIX.len()..].to_string()
+    } else {
+        p
+    }
+}
+
+
 fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
     path: &VesPath<'a>,
     base: &Path,
@@ -174,6 +215,7 @@ fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
         x
     });
     for path in path.paths(import_path, vars).map(PathBuf::from) {
+        let path = into_os_specific(path);
         let path = resolve_relative_path(Path::new(base), &path);
         log::debug!(
             "[VES_MID] Resolving the import `{}`: Looking at `{}` ...",
@@ -197,7 +239,7 @@ fn try_resolve_path<'a, 'b, 'source, S: AsRef<str>>(
             import_path
         );
 
-        return Ok(std::fs::canonicalize(path).unwrap());
+        return Ok(PathBuf::from(adjust_canonicalization(std::fs::canonicalize(path).unwrap())));
     }
 
     Err(format!("Failed to resolve `{}`", import_path))
