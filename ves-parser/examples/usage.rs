@@ -7,13 +7,14 @@ fn main() {
 
     // Add the file to the database and get its ID
     let mut db = VesFileDatabase::default();
-    let id = db.add_snippet(source.into());
+    let id = db.add_snippet(source);
 
     // Create a parser for the given file ID, and run it
     let ast = match Parser::new(Lexer::new(&source), id, &db).parse() {
         Ok(ast) => ast,
         Err(ex) => return db.report(&ex).unwrap(),
     };
-    // The AST contains the imports, exports, globals, and every statement in the body
-    println!("{:?}", ast);
+
+    // The AST contains the imports, exports, globals, and every statement in the body.
+    println!("{}", ast.to_str_with_db(&db));
 }

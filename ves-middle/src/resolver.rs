@@ -696,7 +696,7 @@ impl<'a> Resolver<'a> {
         ex: &mut ErrCtx,
     ) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if vu.declared {
+            if vu.declared && name.lexeme != "_" {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowLocalVariable(vu.span.clone()),
                     format!(

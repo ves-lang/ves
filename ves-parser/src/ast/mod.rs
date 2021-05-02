@@ -47,6 +47,16 @@ pub enum Symbol<'a> {
     ),
 }
 
+impl<'a> Symbol<'a> {
+    /// Returns the "bare" part of the symbol.
+    pub fn bare(&self) -> &str {
+        match self {
+            Symbol::Bare(bare) => bare.lexeme.as_ref(),
+            Symbol::Aliased(bare, _) => bare.lexeme.as_ref(),
+        }
+    }
+}
+
 /// A relative import of a file.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum ImportPath<'a> {

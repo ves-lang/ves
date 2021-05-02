@@ -1,0 +1,47 @@
+import { input, open } from "@std/io"
+import { exists      } from local
+import { exists as _ } from "local"
+import { STRING      } from "test_module/local"
+
+
+import "./local"  as _                 // error
+import "../local" as _                 // error
+import { doesnt_exist } from "local"   // error
+
+%output
+
+digraph {
+    0 [ label = "<source: #677f20e59f1fb22d>" ]
+    1 [ label = "/test_module/local.ves" ]
+    0 -> 1 [ ]
+}
+
+error: Failed to resolve `./local`
+  ┌─ <source: #677f20e59f1fb22d>:7:8
+  │
+7 │ import "./local"  as _                 // error
+  │        ^^^^^^^^^
+
+error: Failed to resolve `../local`
+  ┌─ <source: #677f20e59f1fb22d>:8:8
+  │
+8 │ import "../local" as _                 // error
+  │        ^^^^^^^^^^
+
+error: Attempted to import an unresolved module
+  ┌─ <source: #677f20e59f1fb22d>:7:8
+  │
+7 │ import "./local"  as _                 // error
+  │        ^^^^^^^^^
+
+error: Attempted to import an unresolved module
+  ┌─ <source: #677f20e59f1fb22d>:8:8
+  │
+8 │ import "../local" as _                 // error
+  │        ^^^^^^^^^^
+
+error: Export `doesnt_exist` not found in the module `local`
+  ┌─ <source: #677f20e59f1fb22d>:9:10
+  │
+9 │ import { doesnt_exist } from "local"   // error
+  │          ^^^^^^^^^^^^

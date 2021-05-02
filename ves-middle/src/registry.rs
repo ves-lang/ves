@@ -42,6 +42,12 @@ impl<T> ModuleRegistry<T> {
             .map(|m| m.has_symbol(sym))
             .unwrap_or(false)
     }
+
+    /// Returns `true` if the module with the given name exists in the registry.
+    #[inline]
+    pub fn has_module(&self, module: &str) -> bool {
+        self.modules.contains_key(module)
+    }
 }
 
 /// An error returned when trying to add a new module.
@@ -59,7 +65,8 @@ impl<T> ModuleRegistry<T> {
         }
     }
 
-    /// Adds a new `Ves` module to the registry.
+    /// Adds a new `Ves` module to the registry. If a collision occurs, checks if the stored id matches the id on the given ast.
+    /// If the ids match, updates the module. If the ids don't match, returns a module collision error.
     pub fn add_ves_module<'a>(&mut self, path: String, ast: &AST<'a>) -> Result<(), ModuleError> {
         if let Some(module) = self.modules.get(&path) {
             match &module.implementation {
@@ -92,6 +99,28 @@ impl<T> ModuleRegistry<T> {
                     .collect(),
             },
         );
+        Ok(())
+    }
+
+    /// Adds a new native module to the registry. Returns an collision error if a module with such name already exists.
+    pub fn add_native_module(
+        &mut self,
+        name: String,
+        module: T,
+        interface: HashSet<String>,
+    ) -> Result<(), ModuleError> {
+        if self.modules.contains_key(&name) {
+            return Err(ModuleError::ModuleCollision);
+        }
+
+        self.modules.insert(
+            name,
+            Module {
+                implementation: ModuleImpl::Native(module),
+                exports: interface,
+            },
+        );
+
         Ok(())
     }
 }
