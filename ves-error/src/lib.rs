@@ -38,6 +38,20 @@ impl ErrCtx {
         }
     }
 
+    /// Moves all errors from the given context to this context.
+    pub fn extend(&mut self, other: ErrCtx) {
+        self.errors.extend(other.errors);
+        self.warnings.extend(other.warnings);
+    }
+
+    /// Moves all errors from the given results into this context.
+    pub fn extend_result(&mut self, res: Result<Self, Self>) {
+        self.extend(match res {
+            Ok(ex) => ex,
+            Err(ex) => ex,
+        });
+    }
+
     /// Marks the last error in the errors list as a warning and moves it to the warnings list.
     pub fn mark_last_error_as_warning(&mut self) -> Option<()> {
         if let Some(e) = self.errors.pop() {
@@ -91,6 +105,8 @@ pub enum VesErrorKind {
     AttemptedToShadowLocalVariable(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
+    /// A module import error.
+    Import,
     /// A `let` variable without an initializer
     LetWithoutValue,
     /// Represents an error that has occurred at runtime.
@@ -155,6 +171,11 @@ impl VesError {
         VesError::new(msg, span, VesErrorKind::ResolutionSuggestWildcard, file_id)
     }
 
+    /// Creates a new [`VesErrorKind::Import`] error.
+    pub fn import<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Import, file_id)
+    }
+
     /// Adds the name of the function the error originates from to this error.
     pub fn with_function<S: Into<String>>(self, function: S) -> Self {
         Self {
@@ -179,7 +200,7 @@ fn test() {
 }
 "#;
         let mut db = VesFileDatabase::default();
-        let id = db.add_snippet(source.into());
+        let id = db.add_snippet(source);
         let error = VesError::resolution_wildcard(
             "Variable `lol_no_type_system` is never used",
             21..39,

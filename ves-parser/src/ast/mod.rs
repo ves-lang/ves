@@ -31,6 +31,7 @@ pub struct Global<'a> {
     pub kind: VarKind,
 }
 
+/// An imported or exported symbol.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum Symbol<'a> {
     /// An imported/exported name without an alias
@@ -46,6 +47,17 @@ pub enum Symbol<'a> {
     ),
 }
 
+impl<'a> Symbol<'a> {
+    /// Returns the "bare" part of the symbol.
+    pub fn bare(&self) -> &str {
+        match self {
+            Symbol::Bare(bare) => bare.lexeme.as_ref(),
+            Symbol::Aliased(bare, _) => bare.lexeme.as_ref(),
+        }
+    }
+}
+
+/// A relative import of a file.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
 pub enum ImportPath<'a> {
     /// A simple path (e.g. `import thing`)
@@ -57,8 +69,9 @@ pub enum ImportPath<'a> {
     Full(#[rename = "symbol"] Symbol<'a>),
 }
 
+/// An import statement.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
-pub enum Import<'a> {
+pub enum ImportStmt<'a> {
     /// A direct import (e.g. `import thing`)
     Direct(#[rename = "path"] ImportPath<'a>),
     /// A destructured import (e.g. `import { a, b as c } from thing`)
@@ -66,6 +79,15 @@ pub enum Import<'a> {
         #[rename = "path"] ImportPath<'a>,
         #[rename = "symbols"] Vec<Symbol<'a>>,
     ),
+}
+
+/// An import statement with a resolved path to the file being imported.
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub struct Import<'a> {
+    /// The import statement.
+    pub import: ImportStmt<'a>,
+    /// The actual file being imported.
+    pub resolved_path: Option<String>,
 }
 
 /// An Abstract Syntax Tree for a Ves source file.
@@ -78,9 +100,9 @@ pub struct AST<'a> {
     pub file_id: FileId,
     /// The set of all global variables declared in the source file.
     pub globals: HashSet<Global<'a>>,
-    /// The file's imported symbols
+    /// The file's imported symbols.
     pub imports: Vec<Import<'a>>,
-    /// The file's exported symbols
+    /// The file's exported symbols>
     pub exports: Vec<Symbol<'a>>,
 }
 
@@ -114,7 +136,10 @@ impl<'a> AST<'a> {
     }
 
     /// Pretty-prints the AST into a string, using the file name and hash from the database.
-    pub fn to_str_with_db(&self, db: &VesFileDatabase<'a>) -> String {
+    pub fn to_str_with_db<N: AsRef<str> + Clone + std::fmt::Display, S: AsRef<str>>(
+        &self,
+        db: &VesFileDatabase<N, S>,
+    ) -> String {
         let rows = if db.name(self.file_id).is_ok() {
             vec![
                 format!("Script: {}", db.name(self.file_id).unwrap()),
@@ -795,8 +820,7 @@ mod tests {
             "test".into(),
             r#"do { 
             try api_method()
-        }"#
-            .into(),
+        }"#,
         );
         let span = Span { start: 0, end: 1 };
         let ast = AST::new(

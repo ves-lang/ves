@@ -9,6 +9,10 @@ edition = "2018"
 ves_error = { package = "ves-error", path = "../ves-error" }
 ves_parser = { package = "ves-parser", path = "../ves-parser" }
 ahash = "0.7.2"
+pathdiff = "0.2.0"
+petgraph = "0.5.1"
+log = "0.4.14"
 
 [dev-dependencies]
 ves_testing = { package = "ves-testing", path = "../ves-testing" }
+simple-logging = "2.0.2"

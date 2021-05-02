@@ -3,21 +3,33 @@ use std::{borrow::Cow, cell::Cell, rc::Rc};
 use crate::env::Env;
 use ves_parser::ast::*;
 
+/// A (possibly) propagated variable with a use counter.
+/// If the use counter reaches 0 after the variable is propagated, its declaration is safe to remove.
 #[derive(Debug, Clone)]
 struct PropVar<'a> {
+    /// The const value of the variable.
     value: Lit<'a>,
+    /// The number of uses this variable still has.
     uses: Rc<Cell<usize>>,
 }
 
+/// A simple constant folder that computes constant expressions such as arithmetics and string addition
+/// and propagates the result if they're stored in `let` variables to all uses.
+/// Optionally removes the `let` stores that have been completely propagated.
 #[derive(Debug)]
 pub struct ConstantFolder<'a> {
+    /// The environment with both normal and const variables. However, only immutable const variables have values.
     propagated_variables: Env<Cow<'a, str>, Option<PropVar<'a>>>,
+    /// The interning threshold used to determine whether it's ok to propagate a string or not.
     interning_threshold: usize,
+    /// Whether to eliminate dead stores after the const prop / fold pass.
     eliminate_dead_stores: bool,
+    /// Whether the DSE pass has been started.
     second_pass: bool,
 }
 
 impl<'a> ConstantFolder<'a> {
+    /// Creates a new constant folder with the given interning threshold and DSE toggle.
     pub fn new(interning_threshold: usize, eliminate_dead_stores: bool) -> Self {
         Self {
             interning_threshold,
@@ -27,7 +39,8 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
-    pub fn fold(&mut self, ast: &mut AST<'a>) {
+    /// Folds the given AST, consuming the struct.
+    pub fn fold(mut self, ast: &mut AST<'a>) {
         for stmt in ast.body.iter_mut() {
             self.fold_stmt(stmt);
         }
@@ -441,7 +454,7 @@ mod tests {
     fn parse_and_fold<'a>(
         src: Cow<'a, str>,
         fid: FileId,
-        db: &mut VesFileDatabase<'a>,
+        db: &mut VesFileDatabase<String, Cow<'a, str>>,
     ) -> Result<String, ErrCtx> {
         let mut ast = Parser::new(Lexer::new(&src), fid, &db).parse().unwrap();
         Resolver::new().resolve(&mut ast).unwrap();

@@ -1,0 +1,92 @@
+import thing
+import "./test_module/inner/inner.ves" as _
+
+%output
+
+ digraph {
+    0 [ label = "<source: #f03b18799d60b979>" ]
+    1 [ label = "/test_module/thing.ves" ]
+    2 [ label = "/test_module/inner/inner.ves" ]
+    3 [ label = "/test_module/inner/cycle1.ves" ]
+    4 [ label = "/test_module/inner/cycle2.ves" ]
+    0 -> 1 [ ]
+    0 -> 2 [ ]
+    1 -> 3 [ ]
+    3 -> 4 [ ]
+    4 -> 3 [ ]
+}
+
+
+Import
+├─import: ImportStmt::Direct
+│ ╰─path: ImportPath::Full
+│   ╰─symbol: Symbol::Aliased
+│     ├─name: "\"./inner/cycle1\""
+│     ╰─as: "_"
+╰─resolved_path: "/test_module/inner/cycle1.ves"
+
+Import
+├─import: ImportStmt::Direct
+│ ╰─path: ImportPath::Simple
+│   ╰─symbol: Symbol::Bare
+│     ╰─symbol: "cycle1"
+╰─resolved_path: "/test_module/inner/cycle1.ves"
+Symbol::Bare
+╰─symbol: "PI"
+StmtKind::Var
+╰─declarations=↓
+  ╰─Var
+    ├─name: "PI"
+    ├─kind: Let
+    ├─initializer: Lit
+    │ ├─token: "3.141592"
+    │ ╰─value: LitValue::Number(3.141592)
+    ╰─n_uses: 1
+Import
+├─import: ImportStmt::Direct
+│ ╰─path: ImportPath::Simple
+│   ╰─symbol: Symbol::Bare
+│     ╰─symbol: "cycle2"
+╰─resolved_path: "/test_module/inner/cycle2.ves"
+Symbol::Bare
+╰─symbol: "TAU"
+StmtKind::Var
+╰─declarations=↓
+  ╰─Var
+    ├─name: "TAU"
+    ├─kind: Let
+    ├─initializer: GetProp
+    │ ├─node: ExprKind::Variable
+    │ │ ╰─name: "cycle2"
+    │ ├─field: "PI"
+    │ ╰─is_optional: false
+    ╰─n_uses: 1
+Import
+├─import: ImportStmt::Direct
+│ ╰─path: ImportPath::Simple
+│   ╰─symbol: Symbol::Bare
+│     ╰─symbol: "thing"
+╰─resolved_path: "/test_module/thing.ves"
+Import
+├─import: ImportStmt::Direct
+│ ╰─path: ImportPath::Full
+│   ╰─symbol: Symbol::Aliased
+│     ├─name: "\"./test_module/inner/inner.ves\""
+│     ╰─as: "_"
+╰─resolved_path: "/test_module/inner/inner.ves"
+
+Symbol::Bare
+╰─symbol: "inner"
+StmtKind::ExprStmt
+╰─expr: FnInfo
+  ├─name: "inner"
+  ├─params: Params
+  │ ├─positional=✕
+  │ ├─default=✕
+  │ ╰─rest: None
+  ├─body=↓
+  │ ╰─StmtKind::Return
+  │   ╰─return_value: Lit
+  │     ├─token: "7"
+  │     ╰─value: LitValue::Number(7.0)
+  ╰─kind: Function
