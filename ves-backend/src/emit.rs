@@ -167,7 +167,7 @@ mod tests {
             Parser::new(
                 Lexer::new("1 + 2 * 10 ** -1 / 2"),
                 FileId::anon(),
-                &VesFileDatabase::new(),
+                &VesFileDatabase::default(),
             )
             .parse()
             .unwrap()
