@@ -116,6 +116,9 @@ macro_rules! with_dollar_sign {
 #[macro_export]
 macro_rules! make_test_macros {
     (eq => $crate_root:ident, $tests_dir:ident, $f:expr) => {
+        $crate::make_test_macros!(eq => $crate_root, $tests_dir, $f, |o: String| o);
+    };
+    (eq => $crate_root:ident, $tests_dir:ident, $f:expr, $output_preprocessor:expr) => {
         $crate::lazy_static! {
             static ref __TESTS_DIR: std::path::PathBuf
                 = std::path::PathBuf::from($crate_root).join($tests_dir);
@@ -129,7 +132,7 @@ macro_rules! make_test_macros {
                         #[test]
                         fn $test_name() {
                             let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
-                            $crate::test_eq(stringify!($test_name), source, output, $f);
+                            $crate::test_eq(stringify!($test_name), source, $output_preprocessor(output), $f);
                         }
                     };
                 }
@@ -137,6 +140,9 @@ macro_rules! make_test_macros {
         }
     };
     ($crate_root:ident, $tests_dir:ident, $ok_pipeline:expr, $err_pipeline:expr) => {
+        $crate::make_test_macros!($crate_root, $tests_dir, $ok_pipeline, $err_pipeline, |o: String| o);
+    };
+    ($crate_root:ident, $tests_dir:ident, $ok_pipeline:expr, $err_pipeline:expr, $output_preprocessor:expr) => {
         $crate::lazy_static! {
             static ref __TESTS_DIR: std::path::PathBuf
                 = std::path::PathBuf::from($crate_root).join($tests_dir);
@@ -150,7 +156,7 @@ macro_rules! make_test_macros {
                         #[test]
                         fn $test_name() {
                             let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
-                            $crate::test_ok_ast(stringify!($test_name), source, output, $ok_pipeline);
+                            $crate::test_ok_ast(stringify!($test_name), source, $output_preprocessor(output), $ok_pipeline);
                         }
                     };
                 }
