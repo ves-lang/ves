@@ -112,20 +112,11 @@ impl<'a> State<'a> {
             .count() as u32
     }
 
-    fn add_local(&mut self, name: &Token<'a>) -> bool {
-        for l in self.locals.iter().rev() {
-            // The variable is already in the scope so we do not need to reserve a slot
-            if l.depth == self.scope_depth && l.name.lexeme == name.lexeme {
-                return true;
-            }
-        }
-
+    fn add_local(&mut self, name: &Token<'a>) {
         self.locals.push(Local {
             name: name.clone(),
             depth: self.scope_depth,
         });
-
-        false
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<u32> {
@@ -144,12 +135,16 @@ impl<'a> State<'a> {
             let index = self
                 .globals
                 .get(&name.lexeme[..])
-                .ok_or_else(||
-                 /* This shouldn't ever happen since we collect and check all globals */
-                 format!("Attempted to define the variable `{}` as a global variable", name.lexeme))
+                .copied()
+                .ok_or_else(|| {
+                    format!(
+                        /* This shouldn't ever happen since we collect and check all globals */
+                        "Attempted to define the variable `{}` as a global variable",
+                        name.lexeme
+                    )
+                })
                 .unwrap();
-            self.builder
-                .op(Opcode::SetGlobal(*index), name.span.clone());
+            self.builder.op(Opcode::SetGlobal(index), name.span.clone());
         } else {
             self.add_local(name);
         }
@@ -469,12 +464,10 @@ impl<'a> Emitter<'a> {
 
     fn emit_var_access(&mut self, name: &Token<'_>) -> Result<()> {
         let span = name.span.clone();
-        println!("{:?} {:?}", name, &self.state().locals);
         if let Some(index) = self.state().resolve_local(&name.lexeme) {
             self.state().builder.op(Opcode::GetLocal(index), span);
         } else {
-            println!("{}", name.lexeme);
-            let id = *self.globals.get(&name.lexeme[..]).unwrap();
+            let id = self.globals.get(&name.lexeme[..]).copied().unwrap();
             self.state().builder.op(Opcode::GetGlobal(id), span);
         }
 
