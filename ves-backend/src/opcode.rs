@@ -1,3 +1,12 @@
+// Opcode guidelines:
+// - Names should be first and foremost self-describing, so:
+//   - Try to name with a verb (e.g. `Add`) or a verb+noun (e.g. `PushTrue`)
+//   - If there is an unambigous, shorter name, then it can be used, even if it does
+//     not follow the pattern (e.g. `LessThan`)
+// QQQ(moscow): maybe we *should* store struct-like variants instead of tuple-like variants?
+// - Since the opcode enum variants with values store numeric types, it is necessary to
+//   include a comment describing the value's meaning or intended usage
+
 #[derive(Clone, Copy, PartialEq, PartialOrd, Debug)]
 #[repr(u32)]
 pub enum Opcode {
