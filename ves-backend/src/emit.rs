@@ -21,12 +21,11 @@ struct Local<'a> {
 struct ControlLabel {
     /// The scope depth of the loop we're jumping / breaking from.
     depth: usize,
-    /// The ID of the label to which a `continue` should jump
+    /// The ID of the label to which a `continue` should jump.
     start: u32,
-    /// The ID of the label to which a `break` should jump
+    /// The ID of the label to which a `break` should jump.
     end: u32,
 }
-
 #[derive(Clone, Copy, PartialEq)]
 enum LoopControl {
     Break,
@@ -318,27 +317,137 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    /// Emits the bytecode for a simple infinite loop without a condition.
+    ///
+    /// # Layout
+    /// The basic layout of this loop looks like this:
+    /// ```x86asm
+    /// start:
+    ///   <body>
+    ///   jump @start
+    /// end:
+    /// ```
+    ///
+    /// If `continue` or `break` is used, they simply target the start or end label, respectively.
+    /// Note that both statements must pop off the locals within the loop scope before jumping (not shown here).
+    /// ```x86asm
+    /// start:
+    ///   <code>
+    ///   jump @start    ; user-supplied continue
+    ///   jump @end      ; user-supplied break
+    ///   jump @start    ; default loop jump
+    /// end:
+    /// ```
     fn emit_loop(&mut self, info: &Loop<'a>, span: Span) -> Result<()> {
-        /* layout:
-        start:
-          <body>
-          jump @start
-        end:
-        */
-
         self.state().begin_loop();
-        // a simple loop needs 2 labels
+
+        // Reserve two labels - start and end of the loop.
         let [start, end] = self.state().reserve_labels::<2>();
+
+        // The labels may be used for explicit control flow with break and continue,
+        // so we need to declare them.
         self.state().add_control_label(&info.label, start, end);
-        // start:
+
+        // Emit the loop body with a jump to the start label at the end
         self.state().builder.label(start);
-        // <body>
         self.emit_stmt(&info.body)?;
-        // jump @start
         self.state().builder.op(Opcode::Jump(start), span);
-        // end:
+
+        // Emit the end label
         self.state().builder.label(end);
+
         self.state().end_loop();
+        Ok(())
+    }
+
+    /// Emits the bytecode for a while loop.
+    ///
+    /// # Layout
+    /// The basic layout of this loop looks like this:
+    /// ```x86asm
+    /// start:
+    ///     <condition>
+    ///     jump_if_false @exit
+    ///     pop condition result
+    ///     <body>
+    ///     jump @start
+    /// exit:
+    ///     pop condition result
+    /// end:
+    /// ```
+    ///
+    /// If `break` or `continue` is used, they simply target the start or end label, respectively.
+    /// Note that both statements must pop off the locals within the loop scope before jumping (not shown here).
+    /// ```x86asm
+    /// start:
+    ///     <condition>
+    ///     jump_if_false @exit
+    ///     pop condition result
+    ///     <body>
+    ///     jump @end    ; user-supplied break
+    ///     jump @start  ; user-supplied continue
+    ///     jump @start  ; default loop jump
+    /// exit:
+    ///     pop condition result
+    /// end:
+    ///
+    /// TODO: describe the layout for the loops with a binding
+    /// ```
+    fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
+        self.state().begin_loop();
+
+        // Reserve three labels as required by the layout
+        let [start, exit, end] = self.state().reserve_labels::<3>();
+
+        // Break statements jump to the @end label (not @exit), so that's what we need to declare
+        self.state().add_control_label(&info.label, start, end);
+
+        // Emit the start label and compile the condition
+        self.state().builder.label(start);
+
+        match &info.condition.pattern {
+            ConditionPattern::Value => {
+                // A simple value condition: evaluate it and jump to the exit label if it's false
+                self.emit_expr(&info.condition.value)?;
+                self.state()
+                    .builder
+                    .op(Opcode::JumpIfFalse(exit), span.clone());
+
+                // If this instruction is reached, the condition was true, and the jump didn't occur, so
+                // we need to clean up the condition value.
+                self.state().builder.op(Opcode::Pop, span.clone());
+            }
+            // TODO
+            ConditionPattern::IsOk(ref _binding) => {
+                unimplemented!();
+            }
+            ConditionPattern::IsErr(ref _binding) => {
+                unimplemented!();
+            }
+        }
+
+        // Emit the loop body with a jump to the start at the end
+        self.emit_stmt(&info.body)?;
+        self.state().builder.op(Opcode::Jump(start), span);
+
+        // Emit the loop exit block
+        self.state().builder.label(exit);
+        self.state().op_pop(1, info.condition.value.span.clone());
+
+        // Emit the loop end block (targeted `break`s)
+        self.state().builder.label(end);
+
+        self.state().end_loop();
+        Ok(())
+    }
+
+    fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
+        self.state().begin_scope();
+        for stmt in body {
+            self.emit_stmt(stmt)?;
+        }
+        self.state().end_scope(span);
+
         Ok(())
     }
 
@@ -408,59 +517,6 @@ impl<'a> Emitter<'a> {
         // end:
         self.state().builder.label(end);
         self.state().end_loop();
-        Ok(())
-    }
-
-    fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
-        /* layout:
-        condition:
-          <condition>
-          jump if false @end
-          pop condition result
-          <body>
-          jump @condition
-        end:
-        */
-
-        self.state().begin_loop();
-        let [condition, end] = self.state().reserve_labels::<2>();
-        self.state().add_control_label(&info.label, condition, end);
-        // condition:
-        self.state().builder.label(condition);
-        match &info.condition.pattern {
-            ConditionPattern::Value => {
-                // <condition>
-                self.emit_expr(&info.condition.value)?;
-                // jump if false @end
-                self.state()
-                    .builder
-                    .op(Opcode::JumpIfFalse(end), span.clone());
-                // pop condition result
-                self.state().builder.op(Opcode::Pop, span.clone());
-            }
-            // TODO
-            ConditionPattern::IsOk(ref _binding) => {
-                unimplemented!();
-            }
-            ConditionPattern::IsErr(ref _binding) => {
-                unimplemented!();
-            }
-        }
-        // <body>
-        self.emit_stmt(&info.body)?;
-        self.state().builder.op(Opcode::Jump(condition), span);
-        self.state().builder.label(end);
-        self.state().end_loop();
-        Ok(())
-    }
-
-    fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
-        self.state().begin_scope();
-        for stmt in body {
-            self.emit_stmt(stmt)?;
-        }
-        self.state().end_scope(span);
-
         Ok(())
     }
 
@@ -767,7 +823,7 @@ mod tests {
 
     static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
     static TESTS_DIR: &str = "tests";
-    ves_testing::make_test_macros!(eq => CRATE_ROOT, TESTS_DIR, r#impl::compile, r#impl::strip_comments);
+    ves_testing::make_test_macros!(eq => CRATE_ROOT, TESTS_DIR, _impl::compile, _impl::strip_comments);
 
     test_eq!(t01_simple_arithmetic_expr);
     test_eq!(t02_builtin_type_comparisons);
@@ -806,8 +862,9 @@ mod tests {
     test_eq!(t33_empty_for_loop);
     test_eq!(t34_unlabeled_for_loop);
     test_eq!(t35_unlabeled_while_loop);
+    test_eq!(t36_while_loop_with_break_and_continue);
 
-    mod r#impl {
+    mod _impl {
         use super::*;
         use ves_error::{FileId, VesFileDatabase};
         use ves_middle::Resolver;

@@ -6,3 +6,5 @@ while true {}
 |0001| JumpIfFalse(4)
 |0002| Pop
 |0003| Jump(0)
+|0004| Pop
+
