@@ -864,6 +864,7 @@ mod tests {
     test_eq!(t34_unlabeled_for_loop);
     test_eq!(t35_unlabeled_while_loop);
     test_eq!(t36_while_loop_with_break_and_continue);
+    test_eq!(t37_named_while_loop);
 
     mod _impl {
         use super::*;

@@ -2,7 +2,7 @@ mut a = 5
 
 while a {
     a -= 1
-    break    
+    break
 }
 
 print(a)
