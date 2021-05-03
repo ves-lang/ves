@@ -25,6 +25,12 @@ struct LoopLabel {
     end_label: u32,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum LoopControl {
+    Break,
+    Continue,
+}
+
 struct State<'a> {
     builder: BytecodeBuilder,
     locals: Vec<Local<'a>>,
@@ -63,7 +69,6 @@ impl<'a> State<'a> {
 
     fn end_scope(&mut self, scope_span: Span) {
         self.scope_depth -= 1;
-
         // pop locals from the closed scope
         let mut n_locals = 0;
         for local in self.locals.iter().rev() {
@@ -72,11 +77,9 @@ impl<'a> State<'a> {
             }
             n_locals += 1;
         }
-
         self.locals
             .drain(self.locals.len() - n_locals..self.locals.len());
-
-        self.op_pop(n_locals as _, scope_span);
+        self.op_pop(n_locals as u32, scope_span);
     }
 
     fn op_pop(&mut self, n: u32, span: Span) {
@@ -106,7 +109,7 @@ impl<'a> State<'a> {
             .iter()
             .rev()
             .take_while(|l| l.depth >= outer_scope_depth)
-            .count() as _
+            .count() as u32
     }
 
     fn add_local(&mut self, name: &Token<'a>) -> bool {
@@ -166,7 +169,7 @@ impl<'a> Emitter<'a> {
         let mut globals = HashMap::new();
         for global in &ast.globals {
             let idx = globals.len();
-            globals.insert(global.name.lexeme.clone().into_owned(), idx as _);
+            globals.insert(global.name.lexeme.clone().into_owned(), idx as u32);
         }
         let globals = Rc::new(globals);
         Emitter {
@@ -191,6 +194,67 @@ impl<'a> Emitter<'a> {
         Ok(self.state().finish())
     }
 
+    fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
+        let span = stmt.span.clone();
+        use StmtKind::*;
+        match &stmt.kind {
+            ExprStmt(ref expr) => self.emit_expr_stmt(expr, span)?,
+            Var(ref vars) => self.emit_var_stmt(vars)?,
+            Loop(ref loop_) => self.emit_loop(loop_, span)?,
+            For(_) => unimplemented!(),
+            ForEach(_) => unimplemented!(),
+            While(_) => unimplemented!(),
+            Block(ref body) => self.emit_block(body, span)?,
+            Print(ref expr) => self.emit_print_stmt(expr)?,
+            Return(_) => unimplemented!(),
+            // TODO: make these pretty
+            Break(label) => self.emit_loop_control(label, LoopControl::Break, span)?,
+            Continue(label) => self.emit_loop_control(label, LoopControl::Continue, span)?,
+            Defer(_) => unimplemented!(),
+            _Empty => panic!("Unexpected StmtKind::_Empty"),
+        }
+
+        Ok(())
+    }
+
+    fn emit_expr_stmt(&mut self, expr: &Expr, span: Span) -> Result<()> {
+        self.emit_expr(expr)?;
+        self.state().builder.op(Opcode::Pop, span);
+        Ok(())
+    }
+
+    fn emit_var_stmt(&mut self, vars: &[Var<'a>]) -> Result<()> {
+        for var in vars {
+            let span = var.name.span.clone();
+            if let Some(ref initializer) = var.initializer {
+                self.emit_expr(initializer)?;
+            } else {
+                self.state().builder.op(Opcode::PushNone, span);
+            }
+            self.state().define(&var.name)?;
+        }
+        Ok(())
+    }
+
+    fn emit_print_stmt(&mut self, expr: &Expr) -> Result<()> {
+        let span = expr.span.clone();
+        match &expr.kind {
+            ExprKind::Comma(ref exprs) => {
+                for expr in exprs {
+                    self.emit_expr(expr)?;
+                }
+                self.state()
+                    .builder
+                    .op(Opcode::PrintN(exprs.len() as u32), span);
+            }
+            _ => {
+                self.emit_expr(expr)?;
+                self.state().builder.op(Opcode::Print, span);
+            }
+        }
+        Ok(())
+    }
+
     fn emit_label(&mut self, named_label: Option<(&Token<'a>, usize)>) -> (u32, u32) {
         let label = self.state().reserve_label();
         let other = if let Some((name, depth)) = named_label {
@@ -211,70 +275,26 @@ impl<'a> Emitter<'a> {
         (label, other)
     }
 
-    fn emit_reserved_label(&mut self, label: u32) {
-        self.state().builder.label(label);
-    }
-
-    fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
-        use StmtKind::*;
-        match &stmt.kind {
-            ExprStmt(ref expr) => {
-                self.emit_expr(expr)?;
-                self.state().builder.op(Opcode::Pop, stmt.span.clone());
-            }
-            Var(ref vars) => {
-                for var in vars {
-                    if let Some(ref initializer) = var.initializer {
-                        self.emit_expr(initializer)?;
-                    } else {
-                        self.state()
-                            .builder
-                            .op(Opcode::PushNone, var.name.span.clone());
-                    }
-                    self.state().define(&var.name)?;
-                }
-            }
-            Loop(ref loop_) => self.emit_loop(loop_, stmt.span.clone())?,
-            For(_) => unimplemented!(),
-            ForEach(_) => unimplemented!(),
-            While(_) => unimplemented!(),
-            Block(ref body) => self.emit_block(body, stmt.span.clone())?,
-            Print(ref expr) => match &expr.kind {
-                ExprKind::Comma(ref exprs) => {
-                    for expr in exprs {
-                        self.emit_expr(expr)?;
-                    }
-                    self.state()
-                        .builder
-                        .op(Opcode::PrintN(exprs.len() as u32), expr.span.clone());
-                }
-                _ => {
-                    self.emit_expr(expr)?;
-                    self.state().builder.op(Opcode::Print, expr.span.clone());
-                }
-            },
-            Return(_) => unimplemented!(),
-            // TODO: make these pretty
-            Break(label) => {
-                let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
-                let scope_depth = loop_label.loop_scope_depth;
-                let end_label = loop_label.end_label;
-                let n_locals = self.state().count_locals_in_scope(scope_depth);
-                self.state().op_pop(n_locals, stmt.span.clone());
-                self.emit_jump(end_label, label.span.clone());
-            }
-            Continue(label) => {
-                let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
-                let scope_depth = loop_label.loop_scope_depth;
-                let start_label = loop_label.start_label;
-                let n_locals = self.state().count_locals_in_scope(scope_depth);
-                self.state().op_pop(n_locals, stmt.span.clone());
-                self.emit_jump(start_label, label.span.clone());
-            }
-            Defer(_) => unimplemented!(),
-            _Empty => panic!("Unexpected StmtKind::_Empty"),
-        }
-
+    fn emit_loop_control(
+        &mut self,
+        label: &Token<'a>,
+        kind: LoopControl,
+        span: Span,
+    ) -> Result<()> {
+        let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
+        let scope_depth = loop_label.loop_scope_depth;
+        // `break` jumps to the end of the loop, `continue` jumps to the start
+        let label_id = if kind == LoopControl::Break {
+            loop_label.end_label
+        } else {
+            loop_label.start_label
+        };
+        // Locals from the loop's inner scopes have to be popped off the stack
+        let n_locals = self.state().count_locals_in_scope(scope_depth);
+        self.state().op_pop(n_locals, span);
+        self.state()
+            .builder
+            .op(Opcode::Jump(label_id), label.span.clone());
         Ok(())
     }
 
@@ -289,17 +309,15 @@ impl<'a> Emitter<'a> {
 
         // Compile the loop body with a jump to the start at the end
         self.emit_stmt(&r#loop.body)?;
-        self.emit_jump(loop_start_label, span);
+        self.state()
+            .builder
+            .op(Opcode::Jump(loop_start_label), span);
 
         // Emit the previously reserved end label
-        self.emit_reserved_label(loop_end_label);
+        self.state().builder.label(loop_end_label);
 
         self.state().end_loop();
         Ok(())
-    }
-
-    fn emit_jump(&mut self, label: u32, span: Span) {
-        self.state().builder.op(Opcode::Jump(label), span);
     }
 
     fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
@@ -313,25 +331,11 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_expr(&mut self, expr: &Expr) -> Result<()> {
+        let span = expr.span.clone();
         match expr.kind {
             ExprKind::Lit(ref literal) => self.emit_lit(literal)?,
-            ExprKind::Binary(op, ref left, ref right) => {
-                self.emit_binary_expr(op, left, right, expr.span.clone())?
-            }
-            ExprKind::Unary(op, ref operand) => {
-                self.emit_expr(operand)?;
-                self.state().builder.op(
-                    match op {
-                        UnOpKind::Not => Opcode::Not,
-                        UnOpKind::Negate => Opcode::Negate,
-                        UnOpKind::Try => Opcode::Try,
-                        UnOpKind::WrapOk => Opcode::WrapOk,
-                        UnOpKind::WrapErr => Opcode::WrapErr,
-                    },
-                    expr.span.clone(),
-                );
-            }
-
+            ExprKind::Binary(op, ref a, ref b) => self.emit_binary_expr(op, a, b, span)?,
+            ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
             ExprKind::Struct(_) => unimplemented!(),
             ExprKind::Fn(_) => unimplemented!(),
             ExprKind::If(_) => unimplemented!(),
@@ -410,7 +414,21 @@ impl<'a> Emitter<'a> {
                 span,
             );
         }
+        Ok(())
+    }
 
+    fn emit_unary_expr(&mut self, op: UnOpKind, operand: &Expr, span: Span) -> Result<()> {
+        self.emit_expr(operand)?;
+        self.state().builder.op(
+            match op {
+                UnOpKind::Not => Opcode::Not,
+                UnOpKind::Negate => Opcode::Negate,
+                UnOpKind::Try => Opcode::Try,
+                UnOpKind::WrapOk => Opcode::WrapOk,
+                UnOpKind::WrapErr => Opcode::WrapErr,
+            },
+            span,
+        );
         Ok(())
     }
 
@@ -562,100 +580,109 @@ mod tests {
         type_comparison_struct,
         "mut T; 0 is T",
         vec![
-            Opcode::PushNone,
-            Opcode::SetGlobal(0),
-            Opcode::PushNum32(0.0),
-            Opcode::GetGlobal(0),
-            Opcode::CompareType,
-            Opcode::Pop
+            /* 00 */ Opcode::PushNone,
+            /* 01 */ Opcode::SetGlobal(0),
+            /* 02 */ Opcode::PushNum32(0.0),
+            /* 03 */ Opcode::GetGlobal(0),
+            /* 04 */ Opcode::CompareType,
+            /* 05 */ Opcode::Pop
         ]
     );
     case!(
         field_check,
         "0 in 0",
         vec![
-            Opcode::PushNum32(0.0),
-            Opcode::PushNum32(0.0),
-            Opcode::HasProperty,
-            Opcode::Pop
+            /* 00 */ Opcode::PushNum32(0.0),
+            /* 01 */ Opcode::PushNum32(0.0),
+            /* 02 */ Opcode::HasProperty,
+            /* 03 */ Opcode::Pop
         ]
     );
     case!(
         global_variable,
         "let a = 0",
-        vec![Opcode::PushNum32(0.0), Opcode::SetGlobal(0)]
+        vec![
+            /* 00 */ Opcode::PushNum32(0.0), //
+            /* 01 */ Opcode::SetGlobal(0) //    let a = 0
+        ]
     );
     case!(
         local_variable,
         "{ let a = 0; }",
-        vec![Opcode::PushNum32(0.0), Opcode::Pop]
+        vec![
+            /* 00 */ Opcode::PushNum32(0.0), // let a = 0
+            /* 01 */ Opcode::Pop //             pop a
+        ]
     );
     case!(
         many_local_variables,
         "{ mut a, b, c, d }",
         vec![
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PopN(4)
+            /* 00 */ Opcode::PushNone, //   mut a = none
+            /* 01 */ Opcode::PushNone, //   mut b = none
+            /* 02 */ Opcode::PushNone, //   mut c = none
+            /* 03 */ Opcode::PushNone, //   mut d = none
+            /* 04 */ Opcode::PopN(4) //     pop a, b, c, d
         ]
     );
     case!(
         print_one,
         "print(0)",
-        vec![Opcode::PushNum32(0.0), Opcode::Print,]
+        vec![
+            /* 00 */ Opcode::PushNum32(0.0),
+            /* 01 */ Opcode::Print,
+        ]
     );
     case!(
         print_many,
         "print(0, 2, 2)",
         vec![
-            Opcode::PushNum32(0.0),
-            Opcode::PushNum32(2.0),
-            Opcode::PushNum32(2.0),
-            Opcode::PrintN(3),
+            /* 00 */ Opcode::PushNum32(0.0),
+            /* 01 */ Opcode::PushNum32(2.0),
+            /* 02 */ Opcode::PushNum32(2.0),
+            /* 03 */ Opcode::PrintN(3),
         ]
     );
     case!(
         get_global,
         "mut a; a;",
         vec![
-            Opcode::PushNone,
-            Opcode::SetGlobal(0),
-            Opcode::GetGlobal(0),
-            Opcode::Pop
+            /* 00 */ Opcode::PushNone, //
+            /* 01 */ Opcode::SetGlobal(0), //   mut a = none
+            /* 02 */ Opcode::GetGlobal(0), //   get a
+            /* 03 */ Opcode::Pop //             pop get a
         ]
     );
     case!(
         get_local,
         "{ mut a; a; }",
         vec![
-            Opcode::PushNone,
-            Opcode::GetLocal(0),
-            Opcode::Pop,
-            Opcode::Pop
+            /* 00 */ Opcode::PushNone, //       mut a = none
+            /* 01 */ Opcode::GetLocal(0), //    get a
+            /* 02 */ Opcode::Pop, //            pop get a
+            /* 03 */ Opcode::Pop //             pop a
         ]
     );
     case!(
         multi_scope_local_resolution,
         "{ mut a; { mut a; { mut a; { mut a; a; } a; } a; } a; }",
         vec![
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::GetLocal(3),
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::GetLocal(2),
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::GetLocal(1),
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::GetLocal(0),
-            Opcode::Pop,
-            Opcode::Pop,
+            /* 00 */ Opcode::PushNone, //       mut a = none <depth: 1>
+            /* 01 */ Opcode::PushNone, //       mut a = none <depth: 2>
+            /* 02 */ Opcode::PushNone, //       mut a = none <depth: 3>
+            /* 03 */ Opcode::PushNone, //       mut a = none <depth: 4>
+            /* 04 */ Opcode::GetLocal(3), //    get a        <depth: 4>
+            /* 05 */ Opcode::Pop, //            pop get a    <depth: 4>
+            /* 06 */ Opcode::Pop, //            pop a        <depth: 4>
+            /* 07 */ Opcode::GetLocal(2), //    get a        <depth: 3>
+            /* 08 */ Opcode::Pop, //            pop get a    <depth: 3>
+            /* 09 */ Opcode::Pop, //            pop a        <depth: 3>
+            /* 10 */ Opcode::GetLocal(1), //    get a        <depth: 2>
+            /* 11 */ Opcode::Pop, //            pop get a    <depth: 2>
+            /* 12 */ Opcode::Pop, //            pop a        <depth: 2>
+            /* 13 */ Opcode::GetLocal(0), //    get a        <depth: 1>
+            /* 14 */ Opcode::Pop, //            pop get a    <depth: 1>
+            /* 15 */ Opcode::Pop, //            pop a        <depth: 1>
         ]
     );
     case!(unlabeled_loop, "loop {}", vec![Opcode::Jump(0)]);
@@ -663,92 +690,91 @@ mod tests {
         loop_with_body,
         "loop { mut a; 1 + 1; }",
         vec![
-            Opcode::PushNone,
-            Opcode::PushNum32(1.0),
-            Opcode::PushNum32(1.0),
-            Opcode::Add,
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::Jump(0)
+            /* 00 */ Opcode::PushNone, //       mut a = none <loop start>
+            /* 01 */ Opcode::PushNum32(1.0), //
+            /* 02 */ Opcode::PushNum32(1.0), //
+            /* 03 */ Opcode::Add, //            1 + 1
+            /* 04 */ Opcode::Pop, //            pop result of 1 + 1
+            /* 05 */ Opcode::Pop, //            pop a
+            /* 06 */ Opcode::Jump(0) //         jump to start of loop <loop end>
         ]
     );
     case!(
         loop_inside_scope,
         "mut a; { mut b; { mut c; loop { mut d = c; a + b; loop {} } } }",
         vec![
-            Opcode::PushNone,     //
-            Opcode::SetGlobal(0), // mut a = none
-            Opcode::PushNone,     // mut b = none
-            Opcode::PushNone,     // mut c = none
-            /* loop 1 start - at 4 */
-            Opcode::GetLocal(1),  // mut d = c
-            Opcode::GetGlobal(0), // a
-            Opcode::GetLocal(0),  // b
-            Opcode::Add,          // a + b
-            Opcode::Pop,          // pop a + b
-            /* loop 2 start - at 9 */
-            Opcode::Jump(9), // jump to loop 2
-            /* loop 2 end */
-            Opcode::Pop,     // pop d
-            Opcode::Jump(4), // jump to loop 1
-            /* loop 1 end */
-            Opcode::Pop, // pop c
-            Opcode::Pop  // pop b
+            /* 00 */ Opcode::PushNone, //
+            /* 01 */ Opcode::SetGlobal(0), //   mut a = none
+            /* 02 */ Opcode::PushNone, //       mut b = none <loop #1 start>
+            /* 03 */ Opcode::PushNone, //       mut c = none
+            /* 04 */ Opcode::GetLocal(1), //    mut d = c
+            /* 05 */ Opcode::GetGlobal(0), //   a
+            /* 06 */ Opcode::GetLocal(0), //    b
+            /* 07 */ Opcode::Add, //            a + b
+            /* 08 */ Opcode::Pop, //            pop a + b
+            /* 09 */ Opcode::Jump(9), //        jump to loop 2 <loop #2 start + end>
+            /* 10 */ Opcode::Pop, //            pop d
+            /* 11 */ Opcode::Jump(4), //        jump to loop 1 <loop #1 end>
+            /* 12 */ Opcode::Pop, //            pop c
+            /* 13 */ Opcode::Pop //             pop b
         ]
     );
     case!(
         continue_in_empty_loop,
         "loop { continue; }",
-        vec![Opcode::Jump(0), Opcode::Jump(0)]
+        vec![
+            /* 00 */ Opcode::Jump(0), //    jump to start of loop
+            /* 00 */ Opcode::Jump(0) //     (unreachable) continue
+        ]
     );
     case!(
         break_in_empty_loop,
         "loop { break; }\n  none",
         vec![
-            Opcode::Jump(2),
-            Opcode::Jump(0),
-            Opcode::PushNone,
-            Opcode::Pop
+            /* 00 */ Opcode::Jump(2), //    break
+            /* 01 */ Opcode::Jump(0), //    (unreachable) jump to start of loop
+            /* 02 */ Opcode::PushNone, //   push none <- break jumps to here
+            /* 03 */ Opcode::Pop //         pop none
         ]
     );
     case!(
         continue_in_loop_with_values,
         "mut a; loop { mut b = a; print(5 + b); continue; none; }",
         vec![
-            Opcode::PushNone,
-            Opcode::SetGlobal(0),
-            Opcode::GetGlobal(0),
-            Opcode::PushNum32(5.0),
-            Opcode::GetLocal(0),
-            Opcode::Add,
-            Opcode::Print,
-            Opcode::Pop,
-            Opcode::Jump(2),
-            Opcode::PushNone,
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::Jump(2),
+            /* 00 */ Opcode::PushNone, //
+            /* 01 */ Opcode::SetGlobal(0), //   mut a = none
+            /* 02 */ Opcode::GetGlobal(0), //   mut b = a
+            /* 03 */ Opcode::PushNum32(5.0), // push 5
+            /* 04 */ Opcode::GetLocal(0), //    get b
+            /* 05 */ Opcode::Add, //            5 + b
+            /* 06 */ Opcode::Print, //          print result of 5 + b
+            /* 07 */ Opcode::Pop, //            pop b
+            /* 08 */ Opcode::Jump(2), //        continue -> jump to start of loop
+            /* 09 */ Opcode::PushNone, //       (unreachable) none
+            /* 10 */ Opcode::Pop, //            (unreachable) pop none
+            /* 11 */ Opcode::Pop, //            (unreachable) pop b
+            /* 12 */ Opcode::Jump(2), //        < loop end >
         ]
     );
     case!(
         break_in_loop_with_values,
         "mut a; loop { mut b = a; print(5 + b); break; none; }\n print(a)",
         vec![
-            Opcode::PushNone,
-            Opcode::SetGlobal(0),
-            Opcode::GetGlobal(0),
-            Opcode::PushNum32(5.0),
-            Opcode::GetLocal(0),
-            Opcode::Add,
-            Opcode::Print,
-            Opcode::Pop,
-            Opcode::Jump(13),
-            Opcode::PushNone,
-            Opcode::Pop,
-            Opcode::Pop,
-            Opcode::Jump(2),
-            Opcode::GetGlobal(0),
-            Opcode::Print,
+            /* 00 */ Opcode::PushNone, //
+            /* 01 */ Opcode::SetGlobal(0), //   mut a = none
+            /* 02 */ Opcode::GetGlobal(0), //   mut b = a
+            /* 03 */ Opcode::PushNum32(5.0), // push 5
+            /* 04 */ Opcode::GetLocal(0), //    get b
+            /* 05 */ Opcode::Add, //            5 + b
+            /* 06 */ Opcode::Print, //          print result of 5 + b
+            /* 07 */ Opcode::Pop, //            pop b
+            /* 08 */ Opcode::Jump(13), //       break -> jump to end of loop
+            /* 09 */ Opcode::PushNone, //       (unreachable) none
+            /* 10 */ Opcode::Pop, //            (unreachable) pop none
+            /* 11 */ Opcode::Pop, //            (unreachable) pop b
+            /* 12 */ Opcode::Jump(2), //        < loop end >
+            /* 13 */ Opcode::GetGlobal(0), //   get a <- break jumps to here
+            /* 14 */ Opcode::Print, //          print a
         ]
     );
     case!(
@@ -769,25 +795,25 @@ mod tests {
             }
         }"#,
         vec![
-            Opcode::PushNone,     //
-            Opcode::SetGlobal(0), // mut a = none
-            Opcode::PushNone,     // mut b = none
-            Opcode::PushNone,     // mut c = none
-            Opcode::PopN(2),      // pop c and b
-            Opcode::Jump(2),      // continue @first
-            Opcode::Pop,          // pop c
-            Opcode::Jump(10),     // break second
-            Opcode::Pop,          // pop c
-            Opcode::Jump(3),      // continue @second
-            Opcode::PushNone,     // mut d = none
-            Opcode::PopN(2),      // pop d and b
-            Opcode::Jump(19),     // break @first
-            Opcode::Pop,          // pop d
-            Opcode::Jump(10),     // continue @third
-            Opcode::Pop,          // pop d
-            Opcode::Jump(10),     // continue @third
-            Opcode::Pop,          // pop b
-            Opcode::Jump(2),      // @continue first
+            /* 00 */ Opcode::PushNone, //
+            /* 01 */ Opcode::SetGlobal(0), //   mut a = none
+            /* 02 */ Opcode::PushNone, //       mut b = none
+            /* 03 */ Opcode::PushNone, //       mut c = none
+            /* 04 */ Opcode::PopN(2), //        pop c and b
+            /* 05 */ Opcode::Jump(2), //        continue @first
+            /* 06 */ Opcode::Pop, //            pop c
+            /* 07 */ Opcode::Jump(10), //       break second
+            /* 08 */ Opcode::Pop, //            pop c
+            /* 09 */ Opcode::Jump(3), //        continue @second
+            /* 10 */ Opcode::PushNone, //       mut d = none
+            /* 11 */ Opcode::PopN(2), //        pop d and b
+            /* 12 */ Opcode::Jump(19), //       break @first
+            /* 13 */ Opcode::Pop, //            pop d
+            /* 14 */ Opcode::Jump(10), //       continue @third
+            /* 15 */ Opcode::Pop, //            pop d
+            /* 16 */ Opcode::Jump(10), //       continue @third
+            /* 17 */ Opcode::Pop, //            pop b
+            /* 18 */ Opcode::Jump(2), //        @continue first
         ]
     );
 }

@@ -20,6 +20,8 @@ pub enum Opcode {
     GetGlobal(/* name constant index */ u32),
     /// Set a global value
     SetGlobal(/* name constant index */ u32),
+    /// Define a global value
+    DefineGlobal(/* name constant index */ u32),
     /// Instruction for pushing numeric values which fit within f32 onto the stack
     PushNum32(/* value */ f32),
     /// Push `true` onto the stack
