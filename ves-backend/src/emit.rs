@@ -17,45 +17,37 @@ struct Local<'a> {
     depth: usize,
 }
 
-#[derive(Debug)]
-struct LoopInfo {
-    jump_index: usize,
-    loop_id: usize,
-    origin: Span,
-}
-impl<'a> LoopInfo {
-    pub fn new(loop_id: usize, jump_index: usize, origin: Span) -> LoopInfo {
-        LoopInfo {
-            loop_id,
-            jump_index,
-            origin,
-        }
-    }
+/// A named label used by a loop.
+struct LoopLabel {
+    /// The scope depth of the loop we're jumping / breaking from.
+    loop_scope_depth: usize,
+    start_label: u32,
+    end_label: u32,
 }
 
 struct State<'a> {
     builder: BytecodeBuilder,
-    loops: Vec<LoopInfo>,
     locals: Vec<Local<'a>>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
 
-    // Jumps
-    loop_id: usize,
+    // The id of the next label
     label_id: u32,
-    labels: HashMap<Cow<'a, str>, u32>,
+    /// All reserved labels
+    labels: Vec<u32>,
+    /// The label used for loop jumps
+    loop_labels: HashMap<Cow<'a, str>, LoopLabel>,
 }
 
 impl<'a> State<'a> {
     fn new(file_id: FileId, globals: Rc<HashMap<String, u32>>) -> Self {
         State {
             builder: BytecodeBuilder::new(file_id),
-            loops: vec![],
             locals: vec![],
-            labels: HashMap::new(),
+            loop_labels: HashMap::new(),
+            labels: Vec::new(),
             globals,
             scope_depth: 0,
-            loop_id: 0,
             label_id: 0,
         }
     }
@@ -84,24 +76,37 @@ impl<'a> State<'a> {
         self.locals
             .drain(self.locals.len() - n_locals..self.locals.len());
 
-        if n_locals == 1 {
-            self.builder.op(Opcode::Pop, scope_span);
-        } else if n_locals > 1 {
-            self.builder.op(Opcode::PopN(n_locals as u32), scope_span);
+        self.op_pop(n_locals as _, scope_span);
+    }
+
+    fn op_pop(&mut self, n: u32, span: Span) {
+        if n == 1 {
+            self.builder.op(Opcode::Pop, span);
+        } else if n > 1 {
+            self.builder.op(Opcode::PopN(n), span);
         }
     }
 
     fn begin_loop(&mut self) {
-        self.loop_id += 1;
+        self.scope_depth += 1;
     }
 
     fn end_loop(&mut self) {
-        self.loop_id -= 1;
+        self.scope_depth -= 1;
     }
 
     fn reserve_label(&mut self) -> u32 {
+        self.labels.push(self.label_id);
         self.label_id += 1;
         self.label_id - 1
+    }
+
+    fn count_locals_in_scope(&mut self, outer_scope_depth: usize) -> u32 {
+        self.locals
+            .iter()
+            .rev()
+            .take_while(|l| l.depth >= outer_scope_depth)
+            .count() as _
     }
 
     fn add_local(&mut self, name: &Token<'a>) -> bool {
@@ -186,16 +191,28 @@ impl<'a> Emitter<'a> {
         Ok(self.state().finish())
     }
 
-    fn emit_label(&mut self, named_label: Option<&Token<'a>>) -> u32 {
+    fn emit_label(&mut self, named_label: Option<(&Token<'a>, usize)>) -> (u32, u32) {
         let label = self.state().reserve_label();
-        let name = if let Some(named) = named_label {
-            named.lexeme.clone()
+        let other = if let Some((name, depth)) = named_label {
+            let end_label = self.state().reserve_label();
+            self.state().loop_labels.insert(
+                name.lexeme.clone(),
+                LoopLabel {
+                    loop_scope_depth: depth,
+                    start_label: label,
+                    end_label,
+                },
+            );
+            end_label
         } else {
-            Cow::Owned(format!("#label-{}", label))
+            label
         };
-        self.state().labels.insert(name, label);
         self.state().builder.label(label);
-        label
+        (label, other)
+    }
+
+    fn emit_reserved_label(&mut self, label: u32) {
+        self.state().builder.label(label);
     }
 
     fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
@@ -235,8 +252,23 @@ impl<'a> Emitter<'a> {
                 }
             },
             Return(_) => unimplemented!(),
-            Break(_) => unimplemented!(),
-            Continue(_) => unimplemented!(),
+            // TODO: make these pretty
+            Break(label) => {
+                let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
+                let scope_depth = loop_label.loop_scope_depth;
+                let end_label = loop_label.end_label;
+                let n_locals = self.state().count_locals_in_scope(scope_depth);
+                self.state().op_pop(n_locals, stmt.span.clone());
+                self.emit_jump(end_label, label.span.clone());
+            }
+            Continue(label) => {
+                let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
+                let scope_depth = loop_label.loop_scope_depth;
+                let start_label = loop_label.start_label;
+                let n_locals = self.state().count_locals_in_scope(scope_depth);
+                self.state().op_pop(n_locals, stmt.span.clone());
+                self.emit_jump(start_label, label.span.clone());
+            }
             Defer(_) => unimplemented!(),
             _Empty => panic!("Unexpected StmtKind::_Empty"),
         }
@@ -245,10 +277,21 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_loop(&mut self, r#loop: &Loop<'a>, span: Span) -> Result<()> {
+        // This simply increases the scope depth (required for loop labels to work properly)
         self.state().begin_loop();
-        let loop_start_label = self.emit_label(r#loop.label.as_ref());
+
+        // Emit the loop start label and reserve one label for its end
+        let scope_depth = self.state().scope_depth;
+        let (loop_start_label, loop_end_label) =
+            self.emit_label(Some((&r#loop.label, scope_depth)));
+
+        // Compile the loop body with a jump to the start at the end
         self.emit_stmt(&r#loop.body)?;
         self.emit_jump(loop_start_label, span);
+
+        // Emit the previously reserved end label
+        self.emit_reserved_label(loop_end_label);
+
         self.state().end_loop();
         Ok(())
     }
@@ -644,6 +687,95 @@ mod tests {
             /* loop 1 end */
             Opcode::Pop, // pop c
             Opcode::Pop  // pop b
+        ]
+    );
+    case!(
+        continue_in_empty_loop,
+        "loop { continue; }",
+        vec![Opcode::Jump(0), Opcode::Jump(0)]
+    );
+    case!(
+        break_in_empty_loop,
+        "loop { break; }\n  none",
+        vec![Opcode::Jump(2), Opcode::Jump(0), Opcode::None, Opcode::Pop]
+    );
+    case!(
+        continue_in_loop_with_values,
+        "mut a; loop { mut b = a; print(5 + b); continue; none; }",
+        vec![
+            Opcode::None,
+            Opcode::SetGlobal(0),
+            Opcode::GetGlobal(0),
+            Opcode::Num32(5.0),
+            Opcode::GetLocal(0),
+            Opcode::Add,
+            Opcode::Print,
+            Opcode::Pop,
+            Opcode::Jump(2),
+            Opcode::None,
+            Opcode::Pop,
+            Opcode::Pop,
+            Opcode::Jump(2),
+        ]
+    );
+    case!(
+        break_in_loop_with_values,
+        "mut a; loop { mut b = a; print(5 + b); break; none; }\n print(a)",
+        vec![
+            Opcode::None,
+            Opcode::SetGlobal(0),
+            Opcode::GetGlobal(0),
+            Opcode::Num32(5.0),
+            Opcode::GetLocal(0),
+            Opcode::Add,
+            Opcode::Print,
+            Opcode::Pop,
+            Opcode::Jump(13),
+            Opcode::None,
+            Opcode::Pop,
+            Opcode::Pop,
+            Opcode::Jump(2),
+            Opcode::GetGlobal(0),
+            Opcode::Print,
+        ]
+    );
+    case!(
+        break_and_continue_with_labels,
+        r#"
+        mut a;
+        @first: loop { 
+            mut b;
+            @second: loop {
+                mut c;
+                continue @first;
+                break @second;
+            }
+            @third: loop {
+                mut d;
+                break @first;
+                continue @third;
+            }
+        }"#,
+        vec![
+            Opcode::None,         //
+            Opcode::SetGlobal(0), // mut a = none
+            Opcode::None,         // mut b = none
+            Opcode::None,         // mut c = none
+            Opcode::PopN(2),      // pop c and b
+            Opcode::Jump(2),      // continue @first
+            Opcode::Pop,          // pop c
+            Opcode::Jump(10),     // break second
+            Opcode::Pop,          // pop c
+            Opcode::Jump(3),      // continue @second
+            Opcode::None,         // mut d = none
+            Opcode::PopN(2),      // pop d and b
+            Opcode::Jump(19),     // break @first
+            Opcode::Pop,          // pop d
+            Opcode::Jump(10),     // continue @third
+            Opcode::Pop,          // pop d
+            Opcode::Jump(10),     // continue @third
+            Opcode::Pop,          // pop b
+            Opcode::Jump(2),      // @continue first
         ]
     );
 }

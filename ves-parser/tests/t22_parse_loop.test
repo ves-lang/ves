@@ -26,7 +26,7 @@ while err(v) = f() {}
 Loop
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 0..4>"
 Loop
   body: StmtKind::Block
     statements=
@@ -46,7 +46,7 @@ ForEach
     inclusive: true
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 25..28>"
 ForEach
   variable: "i"
   iterator: Range
@@ -62,7 +62,7 @@ ForEach
     inclusive: false
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 44..47>"
 ForEach
   variable: "i"
   iterator: Range
@@ -77,7 +77,7 @@ ForEach
     inclusive: false
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 62..65>"
 ForEach
   variable: "i"
   iterator: Range
@@ -92,7 +92,7 @@ ForEach
     inclusive: false
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 84..87>"
 ForEach
   variable: "i"
   iterator: Range
@@ -106,7 +106,7 @@ ForEach
     inclusive: false
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 103..106>"
 ForEach
   variable: "i"
   iterator: Range
@@ -122,7 +122,7 @@ ForEach
     inclusive: false
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 126..129>"
 ForEach
   variable: "i"
   iterator: Range
@@ -138,14 +138,14 @@ ForEach
     inclusive: true
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 147..150>"
 For
   initializers=
   condition: None
   increment: None
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 170..173>"
 For
   initializers=
     Assignment
@@ -157,7 +157,7 @@ For
   increment: None
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 180..183>"
 For
   initializers=
     Assignment
@@ -175,7 +175,7 @@ For
       kind: Increment
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 195..198>"
 For
   initializers=
   condition: Lit
@@ -184,7 +184,7 @@ For
   increment: None
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 219..222>"
 For
   initializers=
   condition: Lit
@@ -197,7 +197,7 @@ For
       kind: Increment
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 234..237>"
 For
   initializers=
   condition: None
@@ -208,7 +208,7 @@ For
       kind: Increment
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 253..256>"
 For
   initializers=
     Assignment
@@ -235,7 +235,7 @@ For
   increment: None
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 267..270>"
 While
   condition: Condition
     value: Lit
@@ -244,7 +244,7 @@ While
     pattern: ConditionPattern::Value
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 304..309>"
 While
   condition: Condition
     value: Call
@@ -257,7 +257,7 @@ While
       binding: "v"
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 318..323>"
 While
   condition: Condition
     value: Call
@@ -270,4 +270,4 @@ While
       binding: "v"
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 339..344>"

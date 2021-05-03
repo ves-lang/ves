@@ -347,25 +347,15 @@ impl<'a> Resolver<'a> {
             StmtKind::Break(label) => {
                 if let LoopKind::None = self.loop_kind {
                     Self::error("Cannot break outside of a loop", stmt.span.clone(), ex);
-                }
-                if let Some(name) = label.as_ref() {
-                    if self.env.get(&name.lexeme).is_none() {
-                        self.undefined_variable_error(name, ex);
-                    } else {
-                        self.r#use(name, ex);
-                    }
+                } else {
+                    self.r#use(label, ex);
                 }
             }
             StmtKind::Continue(label) => {
                 if let LoopKind::None = self.loop_kind {
                     Self::error("Cannot continue outside of a loop", stmt.span.clone(), ex);
-                }
-                if let Some(name) = label.as_ref() {
-                    if self.env.get(&name.lexeme).is_none() {
-                        self.undefined_variable_error(name, ex);
-                    } else {
-                        self.r#use(name, ex);
-                    }
+                } else {
+                    self.r#use(label, ex);
                 }
             }
             StmtKind::Defer(defer) => {
@@ -684,11 +674,15 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn declare_loop_label(&mut self, label: &Option<Token<'a>>, ex: &mut ErrCtx) {
-        if let Some(ref lbl) = label {
-            self.declare(lbl, Rc::new(Cell::new(0)), NameKind::Let, ex);
-            self.assign(lbl, ex);
-        }
+    fn declare_loop_label(&mut self, label: &Token<'a>, ex: &mut ErrCtx) {
+        // Create synthetic labels as used to avoid warnings.
+        let uses = if label.lexeme.starts_with("<@label:") {
+            1
+        } else {
+            0
+        };
+        self.declare(label, Rc::new(Cell::new(uses)), NameKind::Let, ex);
+        self.assign(label, ex);
     }
 
     fn declare_module_object(&mut self, module_name: String, name: &Token<'a>, ex: &mut ErrCtx) {

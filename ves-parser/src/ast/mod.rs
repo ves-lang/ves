@@ -649,7 +649,7 @@ pub struct Loop<'a> {
     /// The body of the loop.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A for loop statement.
@@ -664,7 +664,7 @@ pub struct For<'a> {
     /// The body of the loop.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
@@ -677,7 +677,7 @@ pub struct ForEach<'a> {
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A while loop statement, e.g. `while true {}`
@@ -688,7 +688,7 @@ pub struct While<'a> {
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A statement kind.
@@ -714,9 +714,9 @@ pub enum StmtKind<'a> {
     /// A return statement.
     Return(#[rename = "return_value"] Option<ExprPtr<'a>>),
     /// A break statement.
-    Break(#[rename = "label"] Option<Token<'a>>),
+    Break(#[rename = "label"] Token<'a>),
     /// A continue statement.
-    Continue(#[rename = "label"] Option<Token<'a>>),
+    Continue(#[rename = "label"] Token<'a>),
     /// A `defer` statement. Must store only `Call` expressions.
     Defer(#[rename = "call"] Ptr<Expr<'a>>),
     /// An empty node that compiles to nothing.

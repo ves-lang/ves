@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
 use crate::opcode::Opcode;
 use crate::Result;
@@ -81,10 +81,10 @@ impl BytecodeBuilder {
     }
 
     /// Removes all labels in the junk and patches the jumps to jump to actual instructions.
-    fn patch_jumps(&mut self, labels: HashMap<Cow<'_, str>, u32>) {
+    fn patch_jumps(&mut self, labels: Vec<u32>) {
         let mut labels = labels
             .into_iter()
-            .map(|(_, label)| (label, -1i64))
+            .map(|label| (label, -1i64))
             .collect::<HashMap<_, _>>();
         // There should be at least as many jumps as there are labels
         let mut jumps = Vec::with_capacity(labels.len());
@@ -96,7 +96,12 @@ impl BytecodeBuilder {
             match op {
                 // Map the label at this location to the next instruction
                 Opcode::Label(label) => {
-                    labels.insert(label, inst as _);
+                    assert!(
+                        matches!(labels.insert(label, inst as _), Some(-1)),
+                        "Encountered a non-unique label: {} at {}",
+                        label,
+                        inst
+                    );
                     continue;
                 }
                 // Remember the jumps and its target label
@@ -127,7 +132,7 @@ impl BytecodeBuilder {
         self.code = patched_code;
     }
 
-    pub fn finish(&mut self, labels: HashMap<Cow<'_, str>, u32>) -> Chunk {
+    pub fn finish(&mut self, labels: Vec<u32>) -> Chunk {
         use std::mem::take;
 
         self.patch_jumps(labels);

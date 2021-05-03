@@ -29,7 +29,7 @@ While
     pattern: ConditionPattern::Value
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 0..5>"
 StmtKind::ExprStmt
   expr: DoBlock
     statements=
@@ -70,7 +70,7 @@ For
         value: LitValue::Number(1.0)
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 159..162>"
 StmtKind::_Empty
 ForEach
   variable: "e"
@@ -90,4 +90,4 @@ ForEach
       StmtKind::Print
         value: ExprKind::Variable
           name: "e"
-  label: None
+  label: "<@label: 213..216>"

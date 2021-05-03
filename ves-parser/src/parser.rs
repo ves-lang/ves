@@ -21,6 +21,7 @@ pub struct Parser<'a, 'b, N: AsRef<str>, S: AsRef<str>> {
     ex: ErrCtx,
     fid: FileId,
     scope_depth: usize,
+    current_label: Token<'a>,
     globals: HashSet<Global<'a>>,
     db: &'b VesFileDatabase<N, S>,
     imports: Vec<ast::Import<'a>>,
@@ -41,8 +42,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             lexer,
             previous: eof.clone(),
             current: eof.clone(),
-            eof,
+            eof: eof.clone(),
             scope_depth: 0,
+            current_label: eof,
             globals: HashSet::new(),
             ex: ErrCtx::new(),
             fid,
@@ -301,9 +303,15 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 TokenKind::LeftBrace => self.block_stmt(),
                 TokenKind::Let | TokenKind::Mut => self.var_decl(),
                 TokenKind::Print => self.print_stmt(),
-                TokenKind::Loop => self.loop_stmt(label),
-                TokenKind::For => self.for_loop_stmt(label),
-                TokenKind::While => self.while_loop_stmt(label),
+                TokenKind::Loop => self.loop_stmt(
+                    label.unwrap_or_else(|| Self::synthesize_label(self.previous.span.clone())),
+                ),
+                TokenKind::For => self.for_loop_stmt(
+                    label.unwrap_or_else(|| Self::synthesize_label(self.previous.span.clone())),
+                ),
+                TokenKind::While => self.while_loop_stmt(
+                    label.unwrap_or_else(|| Self::synthesize_label(self.previous.span.clone())),
+                ),
                 TokenKind::Break => self.break_or_continue_stmt(ast::StmtKind::Break),
                 TokenKind::Continue => self.break_or_continue_stmt(ast::StmtKind::Continue),
                 TokenKind::Defer => self.defer_stmt(),
@@ -400,14 +408,17 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+    fn loop_stmt(&mut self, label: Token<'a>) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
 
         self.consume(
             &TokenKind::LeftBrace,
             "Expected a loop body after the keyword",
         )?;
+
+        let previous_label = std::mem::replace(&mut self.current_label, label);
         let body = self.block_stmt()?;
+        let label = std::mem::replace(&mut self.current_label, previous_label);
 
         let span_end = self.previous.span.end;
         Ok(ast::Stmt {
@@ -416,8 +427,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn for_loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+    fn for_loop_stmt(&mut self, label: Token<'a>) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
+        let previous_label = std::mem::replace(&mut self.current_label, label);
 
         let (binding, binding_span) = if self.match_(&TokenKind::Identifier) {
             (Some(self.previous.clone()), self.previous.span.clone())
@@ -459,6 +471,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
             let body = self.block_stmt()?;
             let span_end = self.previous.span.end;
+            let label = std::mem::replace(&mut self.current_label, previous_label);
             Ok(ast::Stmt {
                 kind: ast::StmtKind::ForEach(box ast::ForEach {
                     variable,
@@ -503,6 +516,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
             let body = self.block_stmt()?;
             let span_end = self.previous.span.end;
+            let label = std::mem::replace(&mut self.current_label, previous_label);
             Ok(ast::Stmt {
                 kind: ast::StmtKind::For(box ast::For {
                     initializers,
@@ -516,11 +530,13 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
     }
 
-    fn while_loop_stmt(&mut self, label: Option<Token<'a>>) -> ParseResult<ast::Stmt<'a>> {
+    fn while_loop_stmt(&mut self, label: Token<'a>) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
         let condition = self.condition()?;
         self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
+        let previous_label = std::mem::replace(&mut self.current_label, label);
         let body = self.block_stmt()?;
+        let label = std::mem::replace(&mut self.current_label, previous_label);
         let span_end = self.previous.span.end;
         Ok(ast::Stmt {
             kind: ast::StmtKind::While(box ast::While {
@@ -534,13 +550,13 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn break_or_continue_stmt<F>(&mut self, constructor: F) -> ParseResult<ast::Stmt<'a>>
     where
-        F: Fn(Option<Token<'a>>) -> ast::StmtKind,
+        F: Fn(Token<'a>) -> ast::StmtKind,
     {
         let start = self.previous.span.start;
         let label = if self.match_(&TokenKind::AtIdentifier) {
-            Some(self.previous.clone())
+            self.previous.clone()
         } else {
-            None
+            self.current_label.clone()
         };
 
         Ok(ast::Stmt {
@@ -1621,6 +1637,14 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             };
             Ok(ast::MapEntry::Pair(key, value))
         }
+    }
+
+    fn synthesize_label(span: Span) -> Token<'a> {
+        Token::new(
+            std::borrow::Cow::Owned(format!("<@label: {:?}>", span)),
+            span,
+            TokenKind::AtIdentifier,
+        )
     }
 
     fn try_unescape(&mut self, string: &mut String, span: Span) {
