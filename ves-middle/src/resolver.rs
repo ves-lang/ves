@@ -649,11 +649,6 @@ impl<'a> Resolver<'a> {
                 self.assign(&ass.name, ex);
             }
             ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, registry, ex),
-            ExprKind::AtIdent(ref name) => {
-                if self.env.get(&name.lexeme).is_none() {
-                    self.undefined_variable_error(name, ex);
-                }
-            }
             ExprKind::Lit(_) => {}
         }
     }

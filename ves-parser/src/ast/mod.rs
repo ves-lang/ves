@@ -601,8 +601,6 @@ pub enum ExprKind<'a> {
     Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.
     Grouping(#[rename = "inner"] ExprPtr<'a>),
-    /// An "at identifier", e.g. `@outer`
-    AtIdent(#[rename = "name"] Token<'a>),
 }
 
 /// An expression.

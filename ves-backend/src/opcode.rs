@@ -20,6 +20,26 @@ pub enum Opcode {
     GetGlobal(/* global slot */ u32),
     /// Set a global value
     SetGlobal(/* global slot */ u32),
+    /// Get a property
+    ///
+    /// Top of the stack should be: [object]
+    GetProp(/* name constant index */ u32),
+    /// Get a property
+    ///
+    /// Top of the stack should be: [object]
+    TryGetProp(/* name constant index */ u32),
+    /// Set a property
+    ///
+    /// Top of the stack should be: [object, value]
+    SetProp(/* name constant index */ u32),
+    /// Get an item
+    ///
+    /// Top of the stack should be: [object, key]
+    GetItem,
+    /// Set an item
+    ///
+    /// Top of the stack should be: [object, key, value]
+    SetItem,
     /// Instruction for pushing numeric values which fit within f32 onto the stack
     PushNum32(/* value */ f32),
     /// Push `true` onto the stack
@@ -30,8 +50,12 @@ pub enum Opcode {
     PushNone,
     /// Add operands
     Add,
+    /// Add `1` to operand
+    AddOne,
     /// Subtract operands
     Subtract,
+    /// Subtract `1` from operand
+    SubtractOne,
     /// Multiply operands
     Multiply,
     /// Divide operands
@@ -95,6 +119,8 @@ pub enum Opcode {
     PopN(/* count */ u32),
     /// Unconditional jump to a specific address
     Jump(/* address */ u32),
+    /// Jump to a specific address if operand is false
+    JumpIfFalse(/* address */ u32),
     /// Return from a call
     Return,
     /// A compile-time label for one or more jumps.
