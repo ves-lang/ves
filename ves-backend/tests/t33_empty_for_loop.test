@@ -3,9 +3,18 @@ for ;; { }
 
 %output
 
-|0000| Jump(1)
-|0001| PushNum32(0.0)
-|0002| Pop
-|0003| Jump(1)
-|0004| Jump(5)
-|0005| Jump(5)
+// @first.pre_start:
+// @first.start:
+|0000| Jump(1)          // jump @first.body
+// @first.latch:
+// @first.body:
+|0001| PushNum32(0.0)   // push 0
+|0002| Pop              // pop 0
+|0003| Jump(1)          // jump @first.start
+// @second.pre_start
+// @second.start
+|0004| Jump(5)          // jump @second.start
+// @second.body
+|0005| Jump(5)         // jump @second.start
+// @second.exit:
+// @second.end:

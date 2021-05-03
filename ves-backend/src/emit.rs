@@ -392,8 +392,8 @@ impl<'a> Emitter<'a> {
     ///     pop condition result
     /// end:
     ///
-    /// TODO: describe the layout for the loops with a binding
     /// ```
+    /// TODO: describe the layout for the loops with a binding
     fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
         self.state().begin_loop();
 
@@ -435,10 +435,129 @@ impl<'a> Emitter<'a> {
         self.state().builder.label(exit);
         self.state().op_pop(1, info.condition.value.span.clone());
 
-        // Emit the loop end block (targeted `break`s)
+        // Emit the loop end block (targeted by `break`s)
         self.state().builder.label(end);
 
         self.state().end_loop();
+        Ok(())
+    }
+
+    /// Emits the bytecode for a for loop.
+    ///
+    /// # Layout
+    /// The basic layout of this loop looks like this:
+    /// ```x86asm
+    /// pre_start:
+    ///     <initializer>
+    /// start:
+    ///     <condition>
+    ///     jump_if_false @exit
+    ///     pop condition result
+    ///     jump @body
+    /// latch:
+    ///     <increment>
+    ///     jump @start
+    /// body:
+    ///     <body>
+    ///     jump @latch
+    /// exit:
+    ///     pop condition result
+    /// end:
+    /// ```
+    ///
+    /// If `break` or `continue` is used, they target the latch or exit label, respectively.
+    /// Note that both statements must pop off the locals within the loop scope before jumping (not shown here).
+    /// ```x86asm
+    /// pre_start:
+    ///     <initializer>
+    /// start:
+    ///     <condition>
+    ///     jump_if_false @exit
+    ///     pop condition result
+    ///     jump @body
+    /// latch:
+    ///     <increment>
+    ///     jump @start
+    /// body:
+    ///     <body>
+    ///     jump @end     ; user-supplied break
+    ///     jump @latch   ; user-supplied continue
+    ///     jump @latch   ; default loop jump
+    /// exit:
+    ///     pop condition result
+    /// end:
+    /// ```
+    /// TODO: describe the layout for the loops with a binding
+    fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
+        // Create a new scope for the initializer in `pre_start`
+        self.state().begin_scope();
+
+        // Emit the initializer
+        for init in info.initializers.iter() {
+            self.emit_expr(&init.value)?;
+            self.state().add_local(&init.name);
+        }
+
+        // The loop begins only after we compile the initializer
+        self.state().begin_loop();
+
+        // Reserve five labels as required by the layout
+        let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
+        // Break and continue target the `latch` and `exit` labels
+        self.state().add_control_label(&info.label, latch, end);
+
+        // Emit the start label and optionally compile the condition
+        self.state().builder.label(start);
+
+        if let Some(ref condition) = info.condition {
+            // Evaluate the condition and jump to the exit label if it's false
+            self.emit_expr(condition)?;
+            self.state()
+                .builder
+                .op(Opcode::JumpIfFalse(exit), condition.span.clone());
+
+            // If this instruction is reached, the condition was true, and the jump didn't occur, so
+            // we need to clean up the condition value. After that, we jump into the loop body
+            self.state().builder.op(Opcode::Pop, condition.span.clone());
+            self.state()
+                .builder
+                .op(Opcode::Jump(body), condition.span.clone());
+        } else {
+            // if no condition is provided, it is implicitly `true`.
+            // Instead of emitting an analog of a `while true` loop, we jump directly into the loop body.
+            self.state().builder.op(Opcode::Jump(body), span.clone());
+        }
+
+        // Emit the loop latch label and compile the increment expression.
+        self.state().builder.label(latch);
+
+        if let Some(ref increment) = info.increment {
+            // Compile the increment and jump to @start
+            self.emit_expr(increment)?;
+            self.state().op_pop(1, increment.span.clone());
+            self.state()
+                .builder
+                .op(Opcode::Jump(start), increment.span.clone());
+        }
+
+        // Emit the loop body label and compile the body, with a jump to the latch at the end
+        self.state().builder.label(body);
+        self.emit_stmt(&info.body)?;
+        self.state().builder.op(Opcode::Jump(latch), span.clone());
+
+        // Emit the loop exit block only if we had a condition
+        self.state().builder.label(exit);
+        if info.condition.is_some() {
+            self.state().op_pop(1, span.clone());
+        }
+
+        // Emit the loop end block (targeted by `break`s)
+        self.state().builder.label(end);
+        self.state().end_loop();
+
+        // Pop off the initializer variables
+        self.state().end_scope(span);
+
         Ok(())
     }
 
@@ -449,75 +568,6 @@ impl<'a> Emitter<'a> {
         }
         self.state().end_scope(span);
 
-        Ok(())
-    }
-
-    fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
-        /* layout:
-          <initializer>
-        condition:
-          <condition>
-          jump if false @end
-          pop condition result
-          jump @body
-        increment:
-          <increment>
-          jump @condition
-        body:
-          <body>
-          jump @increment
-        end:
-        */
-
-        self.state().begin_loop();
-        // a for loop needs 4 labels
-        let [condition, increment, body, end] = self.state().reserve_labels::<4>();
-        // for any loop controls, the start is `increment` and the end is `end`
-        self.state().add_control_label(&info.label, increment, end);
-        // <initializer>
-        for init in info.initializers.iter() {
-            self.emit_expr(&init.value)?;
-            self.state().add_local(&init.name);
-        }
-        // condition:
-        self.state().builder.label(condition);
-        if let Some(ref condition) = info.condition {
-            // <condition>
-            self.emit_expr(condition)?;
-            // jump if false @end
-            self.state()
-                .builder
-                .op(Opcode::JumpIfFalse(end), condition.span.clone());
-            // pop condition result
-            self.state().builder.op(Opcode::Pop, condition.span.clone());
-            // jump @body
-            self.state()
-                .builder
-                .op(Opcode::Jump(body), condition.span.clone());
-        } else {
-            // if no condition is provided, it is implicity `true`. Because of this,
-            // instead of emitting `PushTrue, JumpIfFalse(end), Pop, Jump(body)`, emit only `Jump(body)`
-            self.state().builder.op(Opcode::Jump(body), span.clone());
-        }
-        // increment:
-        self.state().builder.label(increment);
-        if let Some(ref increment) = info.increment {
-            // <increment>
-            self.emit_expr(increment)?;
-            // jump @condition
-            self.state()
-                .builder
-                .op(Opcode::Jump(condition), increment.span.clone());
-        }
-        // body:
-        self.state().builder.label(body);
-        // <body>
-        self.emit_stmt(&info.body)?;
-        // jump @increment
-        self.state().builder.op(Opcode::Jump(increment), span);
-        // end:
-        self.state().builder.label(end);
-        self.state().end_loop();
         Ok(())
     }
 
@@ -865,6 +915,7 @@ mod tests {
     test_eq!(t35_unlabeled_while_loop);
     test_eq!(t36_while_loop_with_break_and_continue);
     test_eq!(t37_named_while_loop);
+    test_eq!(t38_loop_for_with_break_and_continue);
 
     mod _impl {
         use super::*;

@@ -83,7 +83,7 @@ impl BytecodeBuilder {
     /// Removes all labels in the chunk and patches virtual jumps.
     ///
     /// A virtual jump stores a *label id*, which is replaced with the label's address
-    /// once the address is guaranteed to not change anymore
+    /// once the address is guaranteed to not change anymore.
     fn patch_jumps(&mut self, labels: Vec<u32>) {
         let mut labels = labels
             .into_iter()
@@ -119,7 +119,7 @@ impl BytecodeBuilder {
         for (jump_op_addr, label) in jumps {
             let label_addr = *labels
                 .get(&label)
-                .ok_or_else(|| format!("Attempted to patch an nonexistent label -- {}", label))
+                .ok_or_else(|| format!("Attempted to patch a nonexistent label -- {}", label))
                 .unwrap();
             assert!(
                 label_addr >= 0,
