@@ -17,11 +17,9 @@ pub enum Opcode {
     /// Set a value at specified stack address
     SetLocal(/* stack slot */ u32),
     /// Get a global value
-    GetGlobal(/* name constant index */ u32),
+    GetGlobal(/* global slot */ u32),
     /// Set a global value
-    SetGlobal(/* name constant index */ u32),
-    /// Define a global value
-    DefineGlobal(/* name constant index */ u32),
+    SetGlobal(/* global slot */ u32),
     /// Instruction for pushing numeric values which fit within f32 onto the stack
     PushNum32(/* value */ f32),
     /// Push `true` onto the stack

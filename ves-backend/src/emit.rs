@@ -202,7 +202,6 @@ impl<'a> Emitter<'a> {
             Block(ref body) => self.emit_block(body, span)?,
             Print(ref expr) => self.emit_print_stmt(expr)?,
             Return(_) => unimplemented!(),
-            // TODO: make these pretty
             Break(label) => self.emit_loop_control(label, LoopControl::Break, span)?,
             Continue(label) => self.emit_loop_control(label, LoopControl::Continue, span)?,
             Defer(_) => unimplemented!(),
