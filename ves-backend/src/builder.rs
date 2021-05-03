@@ -80,7 +80,10 @@ impl BytecodeBuilder {
         }
     }
 
-    /// Removes all labels in the junk and patches the jumps to jump to actual instructions.
+    /// Removes all labels in the chunk and patches virtual jumps.
+    ///
+    /// A virtual jump stores a *label id*, which is replaced with the label's address
+    /// once the address is guaranteed to not change anymore
     fn patch_jumps(&mut self, labels: Vec<u32>) {
         let mut labels = labels
             .into_iter()
@@ -106,13 +109,14 @@ impl BytecodeBuilder {
                 }
                 // Remember the jumps and its target label
                 Opcode::Jump(label) => jumps.push((inst, label)),
+                Opcode::JumpIfFalse(label) => jumps.push((inst, label)),
                 _ => (),
             }
 
             patched_code.push(op);
         }
 
-        for (jump_addr, label) in jumps {
+        for (jump_op_addr, label) in jumps {
             let label_addr = *labels
                 .get(&label)
                 .ok_or_else(|| format!("Attempted to patch an nonexistent label -- {}", label))
@@ -122,11 +126,13 @@ impl BytecodeBuilder {
                 "Attempted to patch a label that isn't present in the chunk: {}",
                 label
             );
-            assert!(
-                matches!(patched_code[jump_addr], Opcode::Jump(_)),
-                "Attempted to patch a non-jump instruction"
-            );
-            patched_code[jump_addr] = Opcode::Jump(label_addr as u32);
+            match &mut patched_code[jump_op_addr] {
+                // Up until this point, jump stored the label ID,
+                // replace it with the address of the associated label
+                Opcode::Jump(ref mut addr) => *addr = label_addr as u32,
+                Opcode::JumpIfFalse(ref mut addr) => *addr = label_addr as u32,
+                _ => panic!("Attempted to patch a non-jump instruction"),
+            }
         }
 
         self.code = patched_code;

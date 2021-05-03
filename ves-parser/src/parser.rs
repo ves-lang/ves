@@ -1341,21 +1341,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 _ => unreachable!(),
             });
         }
-
-        let mut expr = self.call()?;
-
-        if self.match_any(&[TokenKind::Increment, TokenKind::Decrement]) {
-            let kind = self.previous.kind.clone();
-            expr = ast::Expr {
-                span: expr.span.start..self.previous.span.end,
-                kind: ast::ExprKind::PostfixIncDec(box ast::IncDec {
-                    expr,
-                    kind: ast::IncDecKind::from(kind),
-                }),
-            }
-        }
-
-        Ok(expr)
+        self.call()
     }
 
     fn call(&mut self) -> ParseResult<ast::Expr<'a>> {

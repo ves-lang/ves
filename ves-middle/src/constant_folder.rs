@@ -415,7 +415,6 @@ impl<'a> ConstantFolder<'a> {
                 };
                 *expr = std::mem::replace(data, new);
             }
-            ExprKind::AtIdent(_) => {}
             ExprKind::Lit(_) => {}
         }
     }

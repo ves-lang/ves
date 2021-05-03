@@ -8,7 +8,7 @@ use crate::{
 };
 use ves_error::FileId;
 use ves_parser::ast::*;
-use ves_parser::lexer::Token;
+use ves_parser::lexer::{Token, TokenKind};
 use ves_runtime::Value;
 
 #[derive(Debug)]
@@ -17,12 +17,14 @@ struct Local<'a> {
     depth: usize,
 }
 
-/// A named label used by a loop.
-struct LoopLabel {
+/// A label used in loop control flow (break/continue)
+struct ControlLabel {
     /// The scope depth of the loop we're jumping / breaking from.
-    loop_scope_depth: usize,
-    start_label: u32,
-    end_label: u32,
+    depth: usize,
+    /// The ID of the label to which a `continue` should jump
+    start: u32,
+    /// The ID of the label to which a `break` should jump
+    end: u32,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -30,6 +32,10 @@ enum LoopControl {
     Break,
     Continue,
 }
+
+/// QQQ(moscow): the word `label` is overloaded a lot here.
+/// can we call it `virtual address` instead of a `label` for the "label ids" that are used for virtual jumps
+/// and `labels` for the "physical" LoopLabel, which holds the start/end of a loop?
 
 struct State<'a> {
     builder: BytecodeBuilder,
@@ -39,10 +45,10 @@ struct State<'a> {
 
     // The id of the next label
     label_id: u32,
-    /// All reserved labels
+    /// Reserved label IDs
     labels: Vec<u32>,
     /// The label used for loop jumps
-    loop_labels: HashMap<Cow<'a, str>, LoopLabel>,
+    control_labels: HashMap<Cow<'a, str>, ControlLabel>,
 }
 
 impl<'a> State<'a> {
@@ -50,7 +56,7 @@ impl<'a> State<'a> {
         State {
             builder: BytecodeBuilder::new(file_id),
             locals: vec![],
-            loop_labels: HashMap::new(),
+            control_labels: HashMap::new(),
             labels: Vec::new(),
             globals,
             scope_depth: 0,
@@ -98,10 +104,30 @@ impl<'a> State<'a> {
         self.scope_depth -= 1;
     }
 
-    fn reserve_label(&mut self) -> u32 {
-        self.labels.push(self.label_id);
-        self.label_id += 1;
-        self.label_id - 1
+    fn reserve_labels<const N: usize>(&mut self) -> [u32; N] {
+        let mut out = [u32::MAX; N];
+        for label in out.iter_mut() {
+            self.labels.push(self.label_id);
+            self.label_id += 1;
+            *label = self.label_id - 1;
+        }
+        out
+    }
+
+    fn add_control_label(&mut self, name: &Token<'a>, start_label: u32, end_label: u32) {
+        let loop_scope_depth = self.scope_depth;
+        self.control_labels.insert(
+            name.lexeme.clone(),
+            ControlLabel {
+                depth: loop_scope_depth,
+                start: start_label,
+                end: end_label,
+            },
+        );
+    }
+
+    fn resolve_label(&mut self, name: &Token<'a>) -> Option<&ControlLabel> {
+        self.control_labels.get(&name.lexeme)
     }
 
     fn count_locals_in_scope(&mut self, outer_scope_depth: usize) -> u32 {
@@ -128,6 +154,26 @@ impl<'a> State<'a> {
             }
         }
         None
+    }
+
+    fn resolve_variable_get(&mut self, name: &str) -> Opcode {
+        if let Some(index) = self.resolve_local(name) {
+            Opcode::GetLocal(index)
+        } else if let Some(index) = self.globals.get(name).copied() {
+            Opcode::GetGlobal(index)
+        } else {
+            panic!("Undefined variable: {}", name)
+        }
+    }
+
+    fn resolve_variable_set(&mut self, name: &str) -> Opcode {
+        if let Some(index) = self.resolve_local(name) {
+            Opcode::SetLocal(index)
+        } else if let Some(index) = self.globals.get(name).copied() {
+            Opcode::SetGlobal(index)
+        } else {
+            panic!("Undefined variable: {}", name)
+        }
     }
 
     fn define(&mut self, name: &Token<'a>) -> Result<()> {
@@ -195,10 +241,10 @@ impl<'a> Emitter<'a> {
         match &stmt.kind {
             ExprStmt(ref expr) => self.emit_expr_stmt(expr, span)?,
             Var(ref vars) => self.emit_var_stmt(vars)?,
-            Loop(ref loop_) => self.emit_loop(loop_, span)?,
-            For(_) => unimplemented!(),
+            Loop(ref info) => self.emit_loop(info, span)?,
+            For(ref info) => self.emit_for_loop(info, span)?,
             ForEach(_) => unimplemented!(),
-            While(_) => unimplemented!(),
+            While(ref info) => self.emit_while_loop(info, span)?,
             Block(ref body) => self.emit_block(body, span)?,
             Print(ref expr) => self.emit_print_stmt(expr)?,
             Return(_) => unimplemented!(),
@@ -211,7 +257,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_expr_stmt(&mut self, expr: &Expr, span: Span) -> Result<()> {
+    fn emit_expr_stmt(&mut self, expr: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(expr)?;
         self.state().builder.op(Opcode::Pop, span);
         Ok(())
@@ -230,7 +276,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_print_stmt(&mut self, expr: &Expr) -> Result<()> {
+    fn emit_print_stmt(&mut self, expr: &Expr<'a>) -> Result<()> {
         let span = expr.span.clone();
         match &expr.kind {
             ExprKind::Comma(ref exprs) => {
@@ -249,39 +295,19 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_label(&mut self, named_label: Option<(&Token<'a>, usize)>) -> (u32, u32) {
-        let label = self.state().reserve_label();
-        let other = if let Some((name, depth)) = named_label {
-            let end_label = self.state().reserve_label();
-            self.state().loop_labels.insert(
-                name.lexeme.clone(),
-                LoopLabel {
-                    loop_scope_depth: depth,
-                    start_label: label,
-                    end_label,
-                },
-            );
-            end_label
-        } else {
-            label
-        };
-        self.state().builder.label(label);
-        (label, other)
-    }
-
     fn emit_loop_control(
         &mut self,
         label: &Token<'a>,
         kind: LoopControl,
         span: Span,
     ) -> Result<()> {
-        let loop_label = self.state().loop_labels.get(&label.lexeme).unwrap();
-        let scope_depth = loop_label.loop_scope_depth;
+        let control_label = self.state().resolve_label(label).unwrap();
+        let scope_depth = control_label.depth;
         // `break` jumps to the end of the loop, `continue` jumps to the start
         let label_id = if kind == LoopControl::Break {
-            loop_label.end_label
+            control_label.end
         } else {
-            loop_label.start_label
+            control_label.start
         };
         // Locals from the loop's inner scopes have to be popped off the stack
         let n_locals = self.state().count_locals_in_scope(scope_depth);
@@ -292,24 +318,138 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_loop(&mut self, r#loop: &Loop<'a>, span: Span) -> Result<()> {
-        // This simply increases the scope depth (required for loop labels to work properly)
+    fn emit_loop(&mut self, info: &Loop<'a>, span: Span) -> Result<()> {
+        /* layout:
+        start:
+          <body>
+          jump @start
+        end:
+        */
+
         self.state().begin_loop();
+        // a simple loop needs 2 labels
+        let [start, end] = self.state().reserve_labels::<2>();
+        self.state().add_control_label(&info.label, start, end);
+        // start:
+        self.state().builder.label(start);
+        // <body>
+        self.emit_stmt(&info.body)?;
+        // jump @start
+        self.state().builder.op(Opcode::Jump(start), span);
+        // end:
+        self.state().builder.label(end);
+        self.state().end_loop();
+        Ok(())
+    }
 
-        // Emit the loop start label and reserve one label for its end
-        let scope_depth = self.state().scope_depth;
-        let (loop_start_label, loop_end_label) =
-            self.emit_label(Some((&r#loop.label, scope_depth)));
+    fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
+        /* layout:
+          <initializer>
+        condition:
+          <condition>
+          jump if false @end
+          pop condition result
+          jump @body
+        increment:
+          <increment>
+          jump @condition
+        body:
+          <body>
+          jump @increment
+        end:
+        */
 
-        // Compile the loop body with a jump to the start at the end
-        self.emit_stmt(&r#loop.body)?;
-        self.state()
-            .builder
-            .op(Opcode::Jump(loop_start_label), span);
+        self.state().begin_loop();
+        // a for loop needs 4 labels
+        let [condition, increment, body, end] = self.state().reserve_labels::<4>();
+        // for any loop controls, the start is `increment` and the end is `end`
+        self.state().add_control_label(&info.label, increment, end);
+        // <initializer>
+        for init in info.initializers.iter() {
+            self.emit_expr(&init.value)?;
+            self.state().add_local(&init.name);
+        }
+        // condition:
+        self.state().builder.label(condition);
+        if let Some(ref condition) = info.condition {
+            // <condition>
+            self.emit_expr(condition)?;
+            // jump if false @end
+            self.state()
+                .builder
+                .op(Opcode::JumpIfFalse(end), condition.span.clone());
+            // pop condition result
+            self.state().builder.op(Opcode::Pop, condition.span.clone());
+            // jump @body
+            self.state()
+                .builder
+                .op(Opcode::Jump(body), condition.span.clone());
+        } else {
+            // if no condition is provided, it is implicity `true`. Because of this,
+            // instead of emitting `PushTrue, JumpIfFalse(end), Pop, Jump(body)`, emit only `Jump(body)`
+            self.state().builder.op(Opcode::Jump(body), span.clone());
+        }
+        // increment:
+        self.state().builder.label(increment);
+        if let Some(ref increment) = info.increment {
+            // <increment>
+            self.emit_expr(increment)?;
+            // jump @condition
+            self.state()
+                .builder
+                .op(Opcode::Jump(condition), increment.span.clone());
+        }
+        // body:
+        self.state().builder.label(body);
+        // <body>
+        self.emit_stmt(&info.body)?;
+        // jump @increment
+        self.state().builder.op(Opcode::Jump(increment), span);
+        // end:
+        self.state().builder.label(end);
+        self.state().end_loop();
+        Ok(())
+    }
 
-        // Emit the previously reserved end label
-        self.state().builder.label(loop_end_label);
+    fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
+        /* layout:
+        condition:
+          <condition>
+          jump if false @end
+          pop condition result
+          <body>
+          jump @condition
+        end:
+        */
 
+        self.state().begin_loop();
+        let [condition, end] = self.state().reserve_labels::<2>();
+        self.state().add_control_label(&info.label, condition, end);
+        // condition:
+        self.state().builder.label(condition);
+        match &info.condition.pattern {
+            ConditionPattern::Value => {
+                // <condition>
+                self.emit_expr(&info.condition.value)?;
+                // jump if false @end
+                self.state()
+                    .builder
+                    .op(Opcode::JumpIfFalse(end), span.clone());
+                // pop condition result
+                self.state().builder.op(Opcode::Pop, span.clone());
+            }
+            // TODO
+            ConditionPattern::IsOk(ref _binding) => {
+                unimplemented!();
+            }
+            ConditionPattern::IsErr(ref _binding) => {
+                unimplemented!();
+            }
+        }
+        // <body>
+        self.emit_stmt(&info.body)?;
+        self.state().builder.op(Opcode::Jump(condition), span);
+        self.state().builder.label(end);
         self.state().end_loop();
         Ok(())
     }
@@ -324,7 +464,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_expr(&mut self, expr: &Expr) -> Result<()> {
+    fn emit_expr(&mut self, expr: &Expr<'a>) -> Result<()> {
         let span = expr.span.clone();
         match expr.kind {
             ExprKind::Lit(ref literal) => self.emit_lit(literal)?,
@@ -334,23 +474,29 @@ impl<'a> Emitter<'a> {
             ExprKind::Fn(_) => unimplemented!(),
             ExprKind::If(_) => unimplemented!(),
             ExprKind::DoBlock(_) => unimplemented!(),
-            ExprKind::Comma(_) => unimplemented!(),
+            ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
             ExprKind::Call(_) => unimplemented!(),
             ExprKind::Spread(_) => unimplemented!(),
-            ExprKind::GetProp(_) => unimplemented!(),
-            ExprKind::SetProp(_) => unimplemented!(),
-            ExprKind::GetItem(_) => unimplemented!(),
-            ExprKind::SetItem(_) => unimplemented!(),
+            ExprKind::GetProp(ref get) => {
+                self.emit_get_prop(&get.node, &get.field, get.is_optional, span)?
+            }
+            ExprKind::SetProp(ref set) => {
+                self.emit_set_prop(&set.node, &set.field, &set.value, span)?
+            }
+            ExprKind::GetItem(ref get) => self.emit_get_item(&get.node, &get.key, span)?,
+            ExprKind::SetItem(ref set) => {
+                self.emit_set_item(&set.node, &set.key, &set.value, span)?
+            }
             ExprKind::FString(_) => unimplemented!(),
             ExprKind::Array(_) => unimplemented!(),
             ExprKind::Map(_) => unimplemented!(),
-            ExprKind::Variable(ref name) => self.emit_var_access(name)?,
-            ExprKind::Range(_) => unimplemented!(),
-            ExprKind::PrefixIncDec(_) => unimplemented!(),
-            ExprKind::PostfixIncDec(_) => unimplemented!(),
-            ExprKind::Assignment(_) => unimplemented!(),
+            ExprKind::Variable(ref name) => self.emit_var_expr(name)?,
+            // only emitted as part of a for-each loop, where it's manually matched
+            ExprKind::Range(..) => unreachable!(),
+            ExprKind::PrefixIncDec(ref incdec) => self.emit_incdec_expr(incdec, false, span)?,
+            ExprKind::PostfixIncDec(ref incdec) => self.emit_incdec_expr(incdec, true, span)?,
+            ExprKind::Assignment(ref a) => self.emit_assign_expr(&a.name, &a.value, span)?,
             ExprKind::Grouping(ref expr) => self.emit_expr(expr)?,
-            ExprKind::AtIdent(_) => unimplemented!(),
         }
 
         Ok(())
@@ -359,8 +505,8 @@ impl<'a> Emitter<'a> {
     fn emit_binary_expr(
         &mut self,
         op: BinOpKind,
-        left: &Expr,
-        right: &Expr,
+        left: &Expr<'a>,
+        right: &Expr<'a>,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(left)?;
@@ -411,7 +557,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_unary_expr(&mut self, op: UnOpKind, operand: &Expr, span: Span) -> Result<()> {
+    fn emit_unary_expr(&mut self, op: UnOpKind, operand: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(operand)?;
         self.state().builder.op(
             match op {
@@ -423,6 +569,19 @@ impl<'a> Emitter<'a> {
             },
             span,
         );
+        Ok(())
+    }
+
+    fn emit_comma_expr(&mut self, exprs: &[Expr<'a>], span: Span) -> Result<()> {
+        // emit every expression in the list
+        for expr in exprs {
+            self.emit_expr(expr)?;
+        }
+        // then pop all but one
+        // a comma expression is guaranteed to have at least 2 sub expressions,
+        // so this will never panic due to underflow
+        self.state().op_pop((exprs.len() - 1) as u32, span);
+
         Ok(())
     }
 
@@ -461,15 +620,132 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_var_access(&mut self, name: &Token<'_>) -> Result<()> {
+    fn emit_get_prop(
+        &mut self,
+        node: &Expr<'a>,
+        _name: &Token<'a>,
+        is_optional: bool,
+        span: Span,
+    ) -> Result<()> {
+        self.emit_expr(node)?;
+        // FIXME: stub before heap values are available
+        let offset = self.state().builder.constant(Value::None, span.clone())?;
+        // TODO: optional access
+
+        self.state().builder.op(
+            if is_optional {
+                Opcode::TryGetProp(offset)
+            } else {
+                Opcode::GetProp(offset)
+            },
+            span,
+        );
+        Ok(())
+    }
+
+    fn emit_set_prop(
+        &mut self,
+        node: &Expr<'a>,
+        _name: &Token<'a>,
+        value: &Expr<'a>,
+        span: Span,
+    ) -> Result<()> {
+        self.emit_expr(node)?;
+        self.emit_expr(value)?;
+        // FIXME: stub before heap values are available
+        let offset = self.state().builder.constant(Value::None, span.clone())?;
+        self.state().builder.op(Opcode::SetProp(offset), span);
+        Ok(())
+    }
+
+    fn emit_get_item(&mut self, node: &Expr<'a>, key: &Expr<'a>, span: Span) -> Result<()> {
+        self.emit_expr(node)?;
+        self.emit_expr(key)?;
+        self.state().builder.op(Opcode::GetItem, span);
+        Ok(())
+    }
+
+    fn emit_set_item(
+        &mut self,
+        node: &Expr<'a>,
+        key: &Expr<'a>,
+        value: &Expr<'a>,
+        span: Span,
+    ) -> Result<()> {
+        self.emit_expr(node)?;
+        self.emit_expr(key)?;
+        self.emit_expr(value)?;
+        self.state().builder.op(Opcode::SetItem, span);
+        Ok(())
+    }
+
+    fn emit_var_expr(&mut self, name: &Token<'_>) -> Result<()> {
         let span = name.span.clone();
-        if let Some(index) = self.state().resolve_local(&name.lexeme) {
+        let name = name.lexeme.as_ref();
+        if let Some(index) = self.state().resolve_local(name) {
             self.state().builder.op(Opcode::GetLocal(index), span);
+            // FIXME: once functions and upvalues are implemented, try to resolve an upvalue before a global
+        } else if let Some(index) = self.globals.get(name).copied() {
+            self.state().builder.op(Opcode::GetGlobal(index), span);
         } else {
-            let id = self.globals.get(&name.lexeme[..]).copied().unwrap();
-            self.state().builder.op(Opcode::GetGlobal(id), span);
+            panic!("Undefined variable '{}'", name);
         }
 
+        Ok(())
+    }
+
+    fn emit_assign_expr(&mut self, name: &Token<'a>, value: &Expr<'a>, span: Span) -> Result<()> {
+        self.emit_expr(&value)?;
+        let set = self.state().resolve_variable_set(name.lexeme.as_ref());
+        self.state().builder.op(set, span);
+        // we don't pop the right-side expression result, because
+        // it's the result of the assignment expression
+
+        Ok(())
+    }
+
+    fn emit_incdec_expr(
+        &mut self,
+        incdec: &IncDec<'a>,
+        is_postfix: bool,
+        span: Span,
+    ) -> Result<()> {
+        let add_or_sub_one = match incdec.kind {
+            IncDecKind::Increment => Opcode::AddOne,
+            IncDecKind::Decrement => Opcode::SubtractOne,
+        };
+        match &incdec.expr.kind {
+            ExprKind::GetProp(ref get) => {
+                self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
+                self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
+                // FIXME: stub before heap values are available
+                self.state().builder.op(add_or_sub_one, span.clone());
+                let offset = self.state().builder.constant(Value::None, span.clone())?;
+                self.state()
+                    .builder
+                    .op(Opcode::SetProp(offset), span.clone());
+            }
+            ExprKind::GetItem(ref get) => {
+                self.emit_get_item(&get.node, &get.key, span.clone())?;
+                self.emit_expr(&get.key)?;
+                self.emit_get_item(&get.node, &get.key, span.clone())?;
+                self.state().builder.op(add_or_sub_one, span.clone());
+                self.state().builder.op(Opcode::SetItem, span.clone());
+            }
+            ExprKind::Variable(ref var) => {
+                self.emit_var_expr(var)?;
+                self.state().builder.op(add_or_sub_one, span.clone());
+                let set = self.state().resolve_variable_set(var.lexeme.as_ref());
+                self.state().builder.op(set, span.clone());
+            }
+            _ => unreachable!(),
+        }
+        if is_postfix {
+            match incdec.kind {
+                IncDecKind::Increment => self.state().builder.op(Opcode::SubtractOne, span),
+                IncDecKind::Decrement => self.state().builder.op(Opcode::AddOne, span),
+            };
+        }
         Ok(())
     }
 }
@@ -806,6 +1082,263 @@ mod tests {
             /* 16 */ Opcode::Jump(10), //       continue @third
             /* 17 */ Opcode::Pop, //            pop b
             /* 18 */ Opcode::Jump(2), //        @continue first
+        ]
+    );
+    case!(
+        global_assignment,
+        "mut a = 0; a = 5",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::SetGlobal(0),
+            Opcode::PushNum32(5.0),
+            Opcode::SetGlobal(0),
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        global_compound_assignment,
+        "mut a = 0; a += 5",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::SetGlobal(0),
+            Opcode::GetGlobal(0),
+            Opcode::PushNum32(5.0),
+            Opcode::Add,
+            Opcode::SetGlobal(0),
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        local_assignment,
+        "{ mut a = 0; a = 5 }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::PushNum32(5.0),
+            Opcode::SetLocal(0),
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        local_compound_assignment,
+        "{ mut a = 0; a += 5 }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(5.0),
+            Opcode::Add,
+            Opcode::SetLocal(0),
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        comma_expression,
+        "0, 1, 2",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::PushNum32(1.0),
+            Opcode::PushNum32(2.0),
+            Opcode::PopN(2),
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        get_property,
+        "{ mut a = 0; a.b; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::GetProp(0),
+            Opcode::Pop,
+            Opcode::Pop
+        ]
+    );
+    case!(
+        get_property_optional,
+        "{ mut a = 0; a?.b }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::TryGetProp(0),
+            Opcode::Pop,
+            Opcode::Pop
+        ]
+    );
+    case!(
+        set_property,
+        "{ mut a = 0; a.b = 5; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(5.0),
+            Opcode::SetProp(0),
+            Opcode::Pop,
+            Opcode::Pop
+        ]
+    );
+    case!(
+        get_item,
+        "{ mut a = 0; a[0]; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::Pop,
+            Opcode::Pop
+        ]
+    );
+    case!(
+        set_item,
+        "{ mut a = 0; a[0] = 5; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::PushNum32(5.0),
+            Opcode::SetItem,
+            Opcode::Pop,
+            Opcode::Pop
+        ]
+    );
+    case!(
+        nested_get_access,
+        "{ mut a = 0; a[0].b.c[1]; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::GetProp(0),
+            Opcode::GetProp(1),
+            Opcode::PushNum32(1.0),
+            Opcode::GetItem,
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        prefix_increment,
+        "{ mut a = 0; ++a; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::AddOne,
+            Opcode::SetLocal(0),
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        postfix_increment,
+        "{ mut a = 0; a++; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::AddOne,
+            Opcode::SetLocal(0),
+            Opcode::SubtractOne,
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        nested_prefix_increment,
+        "{ mut a = 0; ++a[0].b.c[1]; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::GetProp(0),
+            Opcode::GetProp(1),
+            Opcode::PushNum32(1.0),
+            Opcode::GetItem,
+            Opcode::PushNum32(1.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::GetProp(2),
+            Opcode::GetProp(3),
+            Opcode::PushNum32(1.0),
+            Opcode::GetItem,
+            Opcode::AddOne,
+            Opcode::SetItem,
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    case!(
+        nested_postfix_increment,
+        "{ mut a = 0; a[0].b.c[1]++; }",
+        vec![
+            Opcode::PushNum32(0.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::GetProp(0),
+            Opcode::GetProp(1),
+            Opcode::PushNum32(1.0),
+            Opcode::GetItem,
+            Opcode::PushNum32(1.0),
+            Opcode::GetLocal(0),
+            Opcode::PushNum32(0.0),
+            Opcode::GetItem,
+            Opcode::GetProp(2),
+            Opcode::GetProp(3),
+            Opcode::PushNum32(1.0),
+            Opcode::GetItem,
+            Opcode::AddOne,
+            Opcode::SetItem,
+            Opcode::SubtractOne,
+            Opcode::Pop,
+            Opcode::Pop,
+        ]
+    );
+    // TODO: more for loop test cases
+    case!(
+        unlabeled_for_loop,
+        r#"
+        for i = 0; i < 10; ++i {
+            print(i);
+        }
+        "#,
+        vec![
+            /* 00 */ Opcode::PushNum32(0.0), //     i = 0 ; <loop start>
+            /* 01 */ Opcode::GetLocal(0), //        get i ; <condition>
+            /* 02 */ Opcode::PushNum32(10.0), //    push 10
+            /* 03 */ Opcode::LessThan, //           i < 10
+            /* 04 */ Opcode::JumpIfFalse(14), //    if false, jump to end
+            /* 05 */ Opcode::Pop, //                pop result of condition
+            /* 06 */ Opcode::Jump(11), //           jump to body
+            /* 07 */ Opcode::GetLocal(0), //        get i ; <increment>
+            /* 08 */ Opcode::AddOne, //             add 1
+            /* 09 */ Opcode::SetLocal(0), //        ++i ;
+            /* 10 */ Opcode::Jump(1), //            jump to condition
+            /* 11 */ Opcode::GetLocal(0), //        get i ; <body>
+            /* 12 */ Opcode::Print, //              print i
+            /* 13 */ Opcode::Jump(7), //            jump to increment
+        ]
+    );
+    case!(
+        empty_for_loop,
+        r#"for ;; { 0 }"#,
+        vec![
+            /* 00 */ Opcode::Jump(1),
+            /* 01 */ Opcode::PushNum32(0.0),
+            /* 02 */ Opcode::Pop,
+            /* 03 */ Opcode::Jump(1)
+        ]
+    );
+    case!(
+        unlabeled_while_loop,
+        r#"while true {}"#,
+        vec![
+            /* 00 */ Opcode::PushTrue, //       true ; <condition>
+            /* 01 */ Opcode::JumpIfFalse(4), // if false, jump to end
+            /* 02 */ Opcode::Pop, //            pop condition result
+            /* 03 */ Opcode::Jump(0), //        jump to condition ; <body>
         ]
     );
 }
