@@ -227,7 +227,9 @@ impl<'a> Emitter<'a> {
                     if let Some(ref initializer) = var.initializer {
                         self.emit_expr(initializer)?;
                     } else {
-                        self.state().builder.op(Opcode::None, var.name.span.clone());
+                        self.state()
+                            .builder
+                            .op(Opcode::PushNone, var.name.span.clone());
                     }
                     self.state().define(&var.name)?;
                 }
@@ -320,8 +322,8 @@ impl<'a> Emitter<'a> {
                 self.emit_expr(operand)?;
                 self.state().builder.op(
                     match op {
-                        UnOpKind::Not => Opcode::Not,
-                        UnOpKind::Neg => Opcode::Neg,
+                        UnOpKind::Not => Opcode::LogicalNot,
+                        UnOpKind::Neg => Opcode::Negate,
                         UnOpKind::Try => Opcode::Try,
                         UnOpKind::Ok => Opcode::WrapOk,
                         UnOpKind::Err => Opcode::WrapErr,
@@ -390,13 +392,13 @@ impl<'a> Emitter<'a> {
                 match op {
                     BinOpKind::In => Opcode::HasProperty,
                     BinOpKind::Add => Opcode::Add,
-                    BinOpKind::Sub => Opcode::Sub,
-                    BinOpKind::Mul => Opcode::Mul,
-                    BinOpKind::Div => Opcode::Div,
-                    BinOpKind::Rem => Opcode::Rem,
-                    BinOpKind::Pow => Opcode::Pow,
-                    BinOpKind::And => Opcode::And,
-                    BinOpKind::Or => Opcode::Or,
+                    BinOpKind::Sub => Opcode::Subtract,
+                    BinOpKind::Mul => Opcode::Multiply,
+                    BinOpKind::Div => Opcode::Divide,
+                    BinOpKind::Rem => Opcode::Remainder,
+                    BinOpKind::Pow => Opcode::Power,
+                    BinOpKind::And => Opcode::LogicalAnd,
+                    BinOpKind::Or => Opcode::LogicalOr,
                     BinOpKind::Eq => Opcode::Equal,
                     BinOpKind::Ne => Opcode::NotEqual,
                     BinOpKind::Lt => Opcode::LessThan,
@@ -417,7 +419,7 @@ impl<'a> Emitter<'a> {
         match lit.value {
             LitValue::Number(value) => match maybe_f32(value) {
                 Some(value) => {
-                    self.state().builder.op(Opcode::Num32(value), span);
+                    self.state().builder.op(Opcode::PushNum32(value), span);
                 }
                 None => {
                     let offset = self.state().builder.constant(value.into(), span.clone())?;
@@ -427,14 +429,14 @@ impl<'a> Emitter<'a> {
             LitValue::Bool(value) => {
                 self.state().builder.op(
                     match value {
-                        true => Opcode::True,
-                        false => Opcode::False,
+                        true => Opcode::PushTrue,
+                        false => Opcode::PushFalse,
                     },
                     span,
                 );
             }
             LitValue::None => {
-                self.state().builder.op(Opcode::None, span);
+                self.state().builder.op(Opcode::PushNone, span);
             }
             LitValue::Str(ref _value) => {
                 // FIXME: stub before heap values are available
@@ -509,14 +511,14 @@ mod tests {
         simple_arithmetic_expr,
         "1 + ((2 * (10 ** -1)) / 2)",
         vec![
-            Opcode::Num32(1.0),
-            Opcode::Num32(2.0),
-            Opcode::Num32(10.0),
-            Opcode::Num32(-1.0),
-            Opcode::Pow,
-            Opcode::Mul,
-            Opcode::Num32(2.0),
-            Opcode::Div,
+            Opcode::PushNum32(1.0),
+            Opcode::PushNum32(2.0),
+            Opcode::PushNum32(10.0),
+            Opcode::PushNum32(-1.0),
+            Opcode::Power,
+            Opcode::Multiply,
+            Opcode::PushNum32(2.0),
+            Opcode::Divide,
             Opcode::Add,
             Opcode::Pop
         ]
@@ -524,45 +526,45 @@ mod tests {
     case!(
         type_comparison_num,
         "0 is num",
-        vec![Opcode::Num32(0.0), Opcode::IsNum, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsNum, Opcode::Pop]
     );
     case!(
         type_comparison_str,
         "0 is str",
-        vec![Opcode::Num32(0.0), Opcode::IsStr, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsStr, Opcode::Pop]
     );
     case!(
         type_comparison_bool,
         "0 is bool",
-        vec![Opcode::Num32(0.0), Opcode::IsBool, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsBool, Opcode::Pop]
     );
     case!(
         type_comparison_map,
         "0 is map",
-        vec![Opcode::Num32(0.0), Opcode::IsMap, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsMap, Opcode::Pop]
     );
     case!(
         type_comparison_array,
         "0 is array",
-        vec![Opcode::Num32(0.0), Opcode::IsArray, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsArray, Opcode::Pop]
     );
     case!(
         type_comparison_none,
         "0 is none",
-        vec![Opcode::Num32(0.0), Opcode::IsNone, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsNone, Opcode::Pop]
     );
     case!(
         type_comparison_some,
         "0 is some",
-        vec![Opcode::Num32(0.0), Opcode::IsSome, Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::IsSome, Opcode::Pop]
     );
     case!(
         type_comparison_struct,
         "mut T; 0 is T",
         vec![
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::SetGlobal(0),
-            Opcode::Num32(0.0),
+            Opcode::PushNum32(0.0),
             Opcode::GetGlobal(0),
             Opcode::CompareType,
             Opcode::Pop
@@ -572,8 +574,8 @@ mod tests {
         field_check,
         "0 in 0",
         vec![
-            Opcode::Num32(0.0),
-            Opcode::Num32(0.0),
+            Opcode::PushNum32(0.0),
+            Opcode::PushNum32(0.0),
             Opcode::HasProperty,
             Opcode::Pop
         ]
@@ -581,36 +583,36 @@ mod tests {
     case!(
         global_variable,
         "let a = 0",
-        vec![Opcode::Num32(0.0), Opcode::SetGlobal(0)]
+        vec![Opcode::PushNum32(0.0), Opcode::SetGlobal(0)]
     );
     case!(
         local_variable,
         "{ let a = 0; }",
-        vec![Opcode::Num32(0.0), Opcode::Pop]
+        vec![Opcode::PushNum32(0.0), Opcode::Pop]
     );
     case!(
         many_local_variables,
         "{ mut a, b, c, d }",
         vec![
-            Opcode::None,
-            Opcode::None,
-            Opcode::None,
-            Opcode::None,
+            Opcode::PushNone,
+            Opcode::PushNone,
+            Opcode::PushNone,
+            Opcode::PushNone,
             Opcode::PopN(4)
         ]
     );
     case!(
         print_one,
         "print(0)",
-        vec![Opcode::Num32(0.0), Opcode::Print,]
+        vec![Opcode::PushNum32(0.0), Opcode::Print,]
     );
     case!(
         print_many,
         "print(0, 2, 2)",
         vec![
-            Opcode::Num32(0.0),
-            Opcode::Num32(2.0),
-            Opcode::Num32(2.0),
+            Opcode::PushNum32(0.0),
+            Opcode::PushNum32(2.0),
+            Opcode::PushNum32(2.0),
             Opcode::PrintN(3),
         ]
     );
@@ -618,7 +620,7 @@ mod tests {
         get_global,
         "mut a; a;",
         vec![
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::SetGlobal(0),
             Opcode::GetGlobal(0),
             Opcode::Pop
@@ -627,16 +629,21 @@ mod tests {
     case!(
         get_local,
         "{ mut a; a; }",
-        vec![Opcode::None, Opcode::GetLocal(0), Opcode::Pop, Opcode::Pop]
+        vec![
+            Opcode::PushNone,
+            Opcode::GetLocal(0),
+            Opcode::Pop,
+            Opcode::Pop
+        ]
     );
     case!(
         multi_scope_local_resolution,
         "{ mut a; { mut a; { mut a; { mut a; a; } a; } a; } a; }",
         vec![
-            Opcode::None,
-            Opcode::None,
-            Opcode::None,
-            Opcode::None,
+            Opcode::PushNone,
+            Opcode::PushNone,
+            Opcode::PushNone,
+            Opcode::PushNone,
             Opcode::GetLocal(3),
             Opcode::Pop,
             Opcode::Pop,
@@ -656,9 +663,9 @@ mod tests {
         loop_with_body,
         "loop { mut a; 1 + 1; }",
         vec![
-            Opcode::None,
-            Opcode::Num32(1.0),
-            Opcode::Num32(1.0),
+            Opcode::PushNone,
+            Opcode::PushNum32(1.0),
+            Opcode::PushNum32(1.0),
             Opcode::Add,
             Opcode::Pop,
             Opcode::Pop,
@@ -669,10 +676,10 @@ mod tests {
         loop_inside_scope,
         "mut a; { mut b; { mut c; loop { mut d = c; a + b; loop {} } } }",
         vec![
-            Opcode::None,         //
+            Opcode::PushNone,     //
             Opcode::SetGlobal(0), // mut a = none
-            Opcode::None,         // mut b = none
-            Opcode::None,         // mut c = none
+            Opcode::PushNone,     // mut b = none
+            Opcode::PushNone,     // mut c = none
             /* loop 1 start - at 4 */
             Opcode::GetLocal(1),  // mut d = c
             Opcode::GetGlobal(0), // a
@@ -697,22 +704,27 @@ mod tests {
     case!(
         break_in_empty_loop,
         "loop { break; }\n  none",
-        vec![Opcode::Jump(2), Opcode::Jump(0), Opcode::None, Opcode::Pop]
+        vec![
+            Opcode::Jump(2),
+            Opcode::Jump(0),
+            Opcode::PushNone,
+            Opcode::Pop
+        ]
     );
     case!(
         continue_in_loop_with_values,
         "mut a; loop { mut b = a; print(5 + b); continue; none; }",
         vec![
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::SetGlobal(0),
             Opcode::GetGlobal(0),
-            Opcode::Num32(5.0),
+            Opcode::PushNum32(5.0),
             Opcode::GetLocal(0),
             Opcode::Add,
             Opcode::Print,
             Opcode::Pop,
             Opcode::Jump(2),
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::Pop,
             Opcode::Pop,
             Opcode::Jump(2),
@@ -722,16 +734,16 @@ mod tests {
         break_in_loop_with_values,
         "mut a; loop { mut b = a; print(5 + b); break; none; }\n print(a)",
         vec![
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::SetGlobal(0),
             Opcode::GetGlobal(0),
-            Opcode::Num32(5.0),
+            Opcode::PushNum32(5.0),
             Opcode::GetLocal(0),
             Opcode::Add,
             Opcode::Print,
             Opcode::Pop,
             Opcode::Jump(13),
-            Opcode::None,
+            Opcode::PushNone,
             Opcode::Pop,
             Opcode::Pop,
             Opcode::Jump(2),
@@ -757,17 +769,17 @@ mod tests {
             }
         }"#,
         vec![
-            Opcode::None,         //
+            Opcode::PushNone,     //
             Opcode::SetGlobal(0), // mut a = none
-            Opcode::None,         // mut b = none
-            Opcode::None,         // mut c = none
+            Opcode::PushNone,     // mut b = none
+            Opcode::PushNone,     // mut c = none
             Opcode::PopN(2),      // pop c and b
             Opcode::Jump(2),      // continue @first
             Opcode::Pop,          // pop c
             Opcode::Jump(10),     // break second
             Opcode::Pop,          // pop c
             Opcode::Jump(3),      // continue @second
-            Opcode::None,         // mut d = none
+            Opcode::PushNone,     // mut d = none
             Opcode::PopN(2),      // pop d and b
             Opcode::Jump(19),     // break @first
             Opcode::Pop,          // pop d

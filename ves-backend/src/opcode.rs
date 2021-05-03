@@ -12,34 +12,34 @@ pub enum Opcode {
     /// Set a global value
     SetGlobal(/* name constant index */ u32),
     /// Instruction for pushing numeric values which fit within f32 onto the stack
-    Num32(f32),
+    PushNum32(f32),
     /// Push `true` onto the stack
-    True,
+    PushTrue,
     /// Push `false` onto the stack
-    False,
+    PushFalse,
     /// Push `none` onto the stack
-    None,
+    PushNone,
 
     /// Add operands
     Add,
     /// Subtract operands
-    Sub,
+    Subtract,
     /// Multiply operands
-    Mul,
+    Multiply,
     /// Divide operands
-    Div,
+    Divide,
     /// Divide operands, returning the remainder
-    Rem,
+    Remainder,
     /// Bring one operand to the power of another
-    Pow,
+    Power,
     /// Negate an operand
-    Neg,
+    Negate,
     /// Logical '&&'
-    And,
+    LogicalAnd,
     /// Logical '||'
-    Or,
+    LogicalOr,
     /// Logical '!'
-    Not,
+    LogicalNot,
     /// Check if operands are equal
     Equal,
     /// Check if operands are not equal
@@ -90,7 +90,7 @@ pub enum Opcode {
     /// Return from a call
     Return,
     /// A compile-time label for one or more jumps.
-    Label(u32),
+    Label(/* label id */ u32),
 }
 
 static_assertions::assert_eq_size!(Opcode, u64);
