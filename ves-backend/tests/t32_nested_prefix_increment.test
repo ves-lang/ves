@@ -1,0 +1,24 @@
+{ mut a = 0; ++a[0].b.c[1]; }
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| GetLocal(0)
+|0002| PushNum32(0.0)
+|0003| GetItem
+|0004| GetProp(0)
+|0005| GetProp(1)
+|0006| PushNum32(1.0)
+|0007| GetItem
+|0008| PushNum32(1.0)
+|0009| GetLocal(0)
+|0010| PushNum32(0.0)
+|0011| GetItem
+|0012| GetProp(2)
+|0013| GetProp(3)
+|0014| PushNum32(1.0)
+|0015| GetItem
+|0016| AddOne
+|0017| SetItem
+|0018| Pop
+|0019| Pop

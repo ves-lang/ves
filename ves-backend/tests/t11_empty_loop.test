@@ -1,0 +1,5 @@
+loop {}
+
+%output
+
+|0000| Jump(0)

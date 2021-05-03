@@ -1,0 +1,8 @@
+{ mut a; a; }
+
+%output
+
+|0000| PushNone       // mut a = none
+|0001| GetLocal(0)    // a
+|0002| Pop            // pop GetLocal(a)
+|0003| Pop            // pop a

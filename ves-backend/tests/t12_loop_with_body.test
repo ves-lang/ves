@@ -1,0 +1,14 @@
+loop { 
+    mut a
+    1 + 1
+}
+
+%output
+
+|0000| PushNone          // mut a = none <loop_start>
+|0001| PushNum32(1.0)    // 
+|0002| PushNum32(1.0)    // 
+|0003| Add               // 1 + 1
+|0004| Pop               // pop 1 + 1
+|0005| Pop               // pop a
+|0006| Jump(0)           // jump to loop_start <loop_end>

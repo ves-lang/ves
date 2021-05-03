@@ -1,0 +1,20 @@
+for i = 0; i < 10; ++i {
+    print(i)
+}
+
+%output
+
+|0000| PushNum32(0.0)     // i = 0 ; <loop start>
+|0001| GetLocal(0)        // get i ; <condition>
+|0002| PushNum32(10.0)    // push 10
+|0003| LessThan           // i < 10
+|0004| JumpIfFalse(14)    // if false, jump to end
+|0005| Pop                // pop result of condition
+|0006| Jump(11)           // jump to body
+|0007| GetLocal(0)        // get i ; <increment>
+|0008| AddOne             // add 1
+|0009| SetLocal(0)        // ++i ;
+|0010| Jump(1)            // jump to condition
+|0011| GetLocal(0)        // get i ; <body>
+|0012| Print              // print i
+|0013| Jump(7)            // jump to increment

@@ -1,0 +1,12 @@
+mut a = 0
+a += 5
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| SetGlobal(0)
+|0002| GetGlobal(0)
+|0003| PushNum32(5.0)
+|0004| Add
+|0005| SetGlobal(0)
+|0006| Pop

@@ -1,0 +1,8 @@
+mut a; a
+
+%output
+
+|0000| PushNone        //
+|0001| SetGlobal(0)    // mut a = none
+|0002| GetGlobal(0)    //
+|0003| Pop             // pop GetGlobal(a)

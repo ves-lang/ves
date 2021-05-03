@@ -1,0 +1,29 @@
+mut a; 
+{ 
+    mut b; 
+    { 
+        mut c; 
+        loop {
+            mut d = c
+            a + b
+            loop {} 
+        } 
+    } 
+}
+
+%output
+
+|0000| PushNone        //
+|0001| SetGlobal(0)    // mut a = none
+|0002| PushNone        // mut b = none <loop #1 start>
+|0003| PushNone        // mut c = none
+|0004| GetLocal(1)     // mut d = c
+|0005| GetGlobal(0)    // a
+|0006| GetLocal(0)     // b
+|0007| Add             // a + b
+|0008| Pop             // pop a + b
+|0009| Jump(9)         // jump to loop 2 <loop #2 start + end>
+|0010| Pop             // pop d
+|0011| Jump(4)         // jump to loop 1 <loop #1 end>
+|0012| Pop             // pop c
+|0013| Pop             // pop b

@@ -1,0 +1,11 @@
+mut T
+0 is T
+
+%output
+
+|0000| PushNone         // TODO: use an actual struct
+|0001| SetGlobal(0)     // mut T = none
+|0002| PushNum32(0.0)   // 0
+|0003| GetGlobal(0)     // T
+|0004| CompareType      // 0 is T
+|0005| Pop              // pop the expression value

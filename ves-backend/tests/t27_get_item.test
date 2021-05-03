@@ -1,0 +1,10 @@
+{ mut a = 0; a[0]; }
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| GetLocal(0)
+|0002| PushNum32(0.0)
+|0003| GetItem
+|0004| Pop
+|0005| Pop

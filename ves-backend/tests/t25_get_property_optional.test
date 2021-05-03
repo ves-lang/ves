@@ -1,0 +1,9 @@
+{ mut a = 0; a?.b }
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| GetLocal(0)
+|0002| TryGetProp(0)
+|0003| Pop
+|0004| Pop

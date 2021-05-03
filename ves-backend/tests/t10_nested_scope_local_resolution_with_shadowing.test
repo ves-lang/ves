@@ -1,0 +1,20 @@
+{ mut a; { mut a; { mut a; { mut a; a; } a; } a; } a; }
+
+%output
+
+|0000| PushNone       // mut a'0 = none
+|0001| PushNone       // mut a'1 = none
+|0002| PushNone       // mut a'2 = none
+|0003| PushNone       // mut a'3 = none
+|0004| GetLocal(3)    // get a'3
+|0005| Pop            // pop get a'3
+|0006| Pop            // pop a'3
+|0007| GetLocal(2)    // get a'2
+|0008| Pop            // pop get a'2
+|0009| Pop            // pop a'2
+|0010| GetLocal(1)    // get a'1
+|0011| Pop            // pop get a'1
+|0012| Pop            // pop a'1
+|0013| GetLocal(0)    // get a'0
+|0014| Pop            // pop get a'0
+|0015| Pop            // pop a'0
