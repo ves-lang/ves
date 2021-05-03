@@ -12,14 +12,13 @@ pub enum Opcode {
     /// Set a global value
     SetGlobal(/* name constant index */ u32),
     /// Instruction for pushing numeric values which fit within f32 onto the stack
-    PushNum32(f32),
+    PushNum32(/* value */ f32),
     /// Push `true` onto the stack
     PushTrue,
     /// Push `false` onto the stack
     PushFalse,
     /// Push `none` onto the stack
     PushNone,
-
     /// Add operands
     Add,
     /// Subtract operands
@@ -35,11 +34,11 @@ pub enum Opcode {
     /// Negate an operand
     Negate,
     /// Logical '&&'
-    LogicalAnd,
+    And,
     /// Logical '||'
-    LogicalOr,
+    Or,
     /// Logical '!'
-    LogicalNot,
+    Not,
     /// Check if operands are equal
     Equal,
     /// Check if operands are not equal

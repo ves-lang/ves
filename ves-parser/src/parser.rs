@@ -1205,8 +1205,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // expr == expr
         while self.match_any(&[TokenKind::BangEqual, TokenKind::EqualEqual]) {
             expr = match self.previous.kind {
-                TokenKind::EqualEqual => binary!(expr, Eq, self.comparison()?),
-                TokenKind::BangEqual => binary!(expr, Ne, self.comparison()?),
+                TokenKind::EqualEqual => binary!(expr, Equal, self.comparison()?),
+                TokenKind::BangEqual => binary!(expr, NotEqual, self.comparison()?),
                 _ => unreachable!(),
             };
         }
@@ -1230,10 +1230,10 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             TokenKind::Is,
         ]) {
             expr = match self.previous.kind {
-                TokenKind::More => binary!(expr, Gt, self.comparison()?),
-                TokenKind::Less => binary!(expr, Lt, self.comparison()?),
-                TokenKind::MoreEqual => binary!(expr, Ge, self.comparison()?),
-                TokenKind::LessEqual => binary!(expr, Le, self.comparison()?),
+                TokenKind::More => binary!(expr, GreaterThan, self.comparison()?),
+                TokenKind::Less => binary!(expr, LessThan, self.comparison()?),
+                TokenKind::MoreEqual => binary!(expr, GreaterEqual, self.comparison()?),
+                TokenKind::LessEqual => binary!(expr, LessEqual, self.comparison()?),
                 TokenKind::In => binary!(expr, In, self.comparison()?),
                 TokenKind::Is => binary!(expr, Is, self.comparison()?),
                 _ => unreachable!(),
@@ -1248,7 +1248,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // expr + expr
         while self.match_any(&[TokenKind::Minus, TokenKind::Plus]) {
             expr = match self.previous.kind {
-                TokenKind::Minus => binary!(expr, Sub, self.factor()?),
+                TokenKind::Minus => binary!(expr, Subtract, self.factor()?),
                 TokenKind::Plus => binary!(expr, Add, self.factor()?),
                 _ => unreachable!(),
             };
@@ -1263,9 +1263,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // expr % expr
         while self.match_any(&[TokenKind::Star, TokenKind::Slash, TokenKind::Percent]) {
             expr = match self.previous.kind {
-                TokenKind::Star => binary!(expr, Mul, self.power()?),
-                TokenKind::Slash => binary!(expr, Div, self.power()?),
-                TokenKind::Percent => binary!(expr, Rem, self.power()?),
+                TokenKind::Star => binary!(expr, Multiply, self.power()?),
+                TokenKind::Slash => binary!(expr, Divide, self.power()?),
+                TokenKind::Percent => binary!(expr, Remainder, self.power()?),
                 _ => unreachable!(),
             }
         }
@@ -1276,7 +1276,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         let mut expr = self.unary()?;
         // expr ** expr
         while self.match_(&TokenKind::Power) {
-            expr = binary!(expr, Pow, self.power()?);
+            expr = binary!(expr, Power, self.power()?);
         }
         Ok(expr)
     }
@@ -1313,13 +1313,13 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 // !<expr>
                 TokenKind::Bang => unary!(Not, self.unary()?, op),
                 // -<expr>
-                TokenKind::Minus => unary!(Neg, self.unary()?, op),
+                TokenKind::Minus => unary!(Negate, self.unary()?, op),
                 // try <expr>
                 TokenKind::Try => unary!(Try, self.unary()?, op),
                 // ok <expr>
-                TokenKind::Ok => unary!(Ok, self.unary()?, op),
+                TokenKind::Ok => unary!(WrapOk, self.unary()?, op),
                 // err <expr>
-                TokenKind::Err => unary!(Err, self.unary()?, op),
+                TokenKind::Err => unary!(WrapErr, self.unary()?, op),
                 // ++<expr> or --<expr>
                 TokenKind::Increment | TokenKind::Decrement => {
                     let kind = self.previous.kind.clone();
@@ -1806,11 +1806,11 @@ fn desugar_assignment<'a>(
         TokenKind::OrEqual => desugar!(receiver, Or, value),
         TokenKind::AndEqual => desugar!(receiver, And, value),
         TokenKind::PlusEqual => desugar!(receiver, Add, value),
-        TokenKind::MinusEqual => desugar!(receiver, Sub, value),
-        TokenKind::StarEqual => desugar!(receiver, Mul, value),
-        TokenKind::SlashEqual => desugar!(receiver, Div, value),
-        TokenKind::PowerEqual => desugar!(receiver, Pow, value),
-        TokenKind::PercentEqual => desugar!(receiver, Rem, value),
+        TokenKind::MinusEqual => desugar!(receiver, Subtract, value),
+        TokenKind::StarEqual => desugar!(receiver, Multiply, value),
+        TokenKind::SlashEqual => desugar!(receiver, Divide, value),
+        TokenKind::PowerEqual => desugar!(receiver, Power, value),
+        TokenKind::PercentEqual => desugar!(receiver, Remainder, value),
         _ => unreachable!(),
     }
 }

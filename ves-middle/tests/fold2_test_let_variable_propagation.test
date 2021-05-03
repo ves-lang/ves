@@ -78,18 +78,18 @@ StmtKind::Var
       name: "unfolded"
       kind: Let
       initializer: ExprKind::Binary
-        op: Div
+        op: Divide
         left: ExprKind::Binary
           op: Add
           left: ExprKind::Binary
-            op: Mul
+            op: Multiply
             left: ExprKind::Variable
               name: "a"
             right: Lit
               token: "3"
               value: LitValue::Number(3.0)
           right: ExprKind::Binary
-            op: Mul
+            op: Multiply
             left: Lit
               token: "1"
               value: LitValue::Number(1.0)
@@ -114,7 +114,7 @@ StmtKind::Var
       name: "folded"
       kind: Let
       initializer: ExprKind::Binary
-        op: Div
+        op: Divide
         left: Lit
           token: "<folded>"
           value: LitValue::Number(1.0)

@@ -205,19 +205,19 @@ impl<'a> ConstantFolder<'a> {
                         BinOpKind::Is => { /* TODO */ }
                         BinOpKind::In => { /* TODO */ }
                         BinOpKind::Add => crate::fold_binary_op!(expr, left, right, +),
-                        BinOpKind::Sub => crate::fold_binary_op!(expr, left, right, -),
-                        BinOpKind::Mul => crate::fold_binary_op!(expr, left, right, *),
-                        BinOpKind::Div => {
+                        BinOpKind::Subtract => crate::fold_binary_op!(expr, left, right, -),
+                        BinOpKind::Multiply => crate::fold_binary_op!(expr, left, right, *),
+                        BinOpKind::Divide => {
                             if !right.value.is_zero() {
                                 crate::fold_binary_op!(expr, left, right, /)
                             }
                         }
-                        BinOpKind::Rem => {
+                        BinOpKind::Remainder => {
                             if !right.value.is_zero() {
                                 crate::fold_binary_op!(expr, left, right, %)
                             }
                         }
-                        BinOpKind::Pow => crate::fold_binary_op!(expr, left, right, **),
+                        BinOpKind::Power => crate::fold_binary_op!(expr, left, right, **),
                         BinOpKind::And => crate::assign_lit_node_if_some!(
                             expr,
                             left,
@@ -234,12 +234,16 @@ impl<'a> ConstantFolder<'a> {
                                 left.value.is_truthy() && right.value.is_truthy(),
                             ))
                         ),
-                        BinOpKind::Eq => crate::fold_binary_op!(ord => expr, left, right, ==),
-                        BinOpKind::Ne => crate::fold_binary_op!(ord => expr, left, right, !=),
-                        BinOpKind::Lt => crate::fold_binary_op!(ord => expr, left, right,< ),
-                        BinOpKind::Le => crate::fold_binary_op!(ord => expr, left, right,<=),
-                        BinOpKind::Ge => crate::fold_binary_op!(ord => expr, left, right,>=),
-                        BinOpKind::Gt => crate::fold_binary_op!(ord => expr, left, right,>),
+                        BinOpKind::Equal => crate::fold_binary_op!(ord => expr, left, right, ==),
+                        BinOpKind::NotEqual => crate::fold_binary_op!(ord => expr, left, right, !=),
+                        BinOpKind::LessThan => crate::fold_binary_op!(ord => expr, left, right,< ),
+                        BinOpKind::LessEqual => crate::fold_binary_op!(ord => expr, left, right,<=),
+                        BinOpKind::GreaterEqual => {
+                            crate::fold_binary_op!(ord => expr, left, right,>=)
+                        }
+                        BinOpKind::GreaterThan => {
+                            crate::fold_binary_op!(ord => expr, left, right,>)
+                        }
                     }
                 }
             }
@@ -247,7 +251,7 @@ impl<'a> ConstantFolder<'a> {
                 self.fold_expr(operand);
                 if let ExprKind::Lit(box lit) = &mut operand.kind {
                     match op {
-                        UnOpKind::Neg => {
+                        UnOpKind::Negate => {
                             let mut new = LitValue::None;
                             std::mem::swap(&mut lit.value, &mut new);
                             crate::assign_lit_node_if_some!(
@@ -263,7 +267,7 @@ impl<'a> ConstantFolder<'a> {
                                 Some(LitValue::from(!lit.value.is_truthy()))
                             );
                         }
-                        UnOpKind::Try | UnOpKind::Ok | UnOpKind::Err => (),
+                        UnOpKind::Try | UnOpKind::WrapOk | UnOpKind::WrapErr => (),
                     }
                 }
             }

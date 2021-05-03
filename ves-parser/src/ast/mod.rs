@@ -174,31 +174,31 @@ pub enum BinOpKind {
     /// The `+` operator (addition)
     Add,
     /// The `-` operator (subtraction)
-    Sub,
+    Subtract,
     /// The `*` operator (multiplication)
-    Mul,
+    Multiply,
     /// The `/` operator (division)
-    Div,
+    Divide,
     /// The `%` operator (modulus)
-    Rem,
+    Remainder,
     /// The `**` operator (exponentiation)
-    Pow,
+    Power,
     /// The `&&` operator (logical and)
     And,
     /// The `||` operator (logical or)
     Or,
     /// The `==` operator (equality)
-    Eq,
+    Equal,
     /// The `!=` operator (not equal to)
-    Ne,
+    NotEqual,
     /// The `<` operator (less than)
-    Lt,
+    LessThan,
     /// The `<=` operator (less than or equal to)
-    Le,
+    LessEqual,
     /// The `>=` operator (greater than or equal to)
-    Ge,
+    GreaterEqual,
     /// The `>` operator (greater than)
-    Gt,
+    GreaterThan,
 }
 
 /// The possible unary operators.
@@ -207,13 +207,13 @@ pub enum UnOpKind {
     /// The `!` operator for logical inversion
     Not,
     /// The `-` operator for negation
-    Neg,
+    Negate,
     /// The `try` operator for error propagation.
     Try,
     /// The `ok` operator for marking values as `Ok`.
-    Ok,
+    WrapOk,
     /// The `err` operator for marking values as `Err`.
-    Err,
+    WrapErr,
 }
 
 /// Represents the value of a literal.

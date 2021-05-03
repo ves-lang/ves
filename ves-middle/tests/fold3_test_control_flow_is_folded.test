@@ -53,7 +53,7 @@ For
         token: "0"
         value: LitValue::Number(0.0)
   condition: ExprKind::Binary
-    op: Lt
+    op: LessThan
     left: ExprKind::Variable
       name: "i"
     right: Lit
