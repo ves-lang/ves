@@ -190,6 +190,7 @@ impl<'a> State<'a> {
                 })
                 .unwrap();
             self.builder.op(Opcode::SetGlobal(index), name.span.clone());
+            self.op_pop(1, name.span.clone());
         } else {
             self.add_local(name);
         }

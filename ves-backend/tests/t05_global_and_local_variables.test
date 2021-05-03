@@ -5,5 +5,6 @@ let a = 0
 
 |0000| PushNum32(0.0)
 |0001| SetGlobal(0)     // let a = 0 (global)
-|0002| PushNum32(0.0)   // let a = 0 (local)
-|0003| Pop              // pop a
+|0002| Pop              // pop (a = 0)
+|0003| PushNum32(0.0)   // let a = 0 (local)
+|0004| Pop              // pop a

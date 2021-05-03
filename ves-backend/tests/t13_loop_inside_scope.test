@@ -15,15 +15,16 @@ mut a;
 
 |0000| PushNone        //
 |0001| SetGlobal(0)    // mut a = none
-|0002| PushNone        // mut b = none <loop #1 start>
-|0003| PushNone        // mut c = none
-|0004| GetLocal(1)     // mut d = c
-|0005| GetGlobal(0)    // a
-|0006| GetLocal(0)     // b
-|0007| Add             // a + b
-|0008| Pop             // pop a + b
-|0009| Jump(9)         // jump to loop 2 <loop #2 start + end>
-|0010| Pop             // pop d
-|0011| Jump(4)         // jump to loop 1 <loop #1 end>
-|0012| Pop             // pop c
-|0013| Pop             // pop b
+|0002| Pop             // pop (a = none)
+|0003| PushNone        // mut b = none <loop #1 start>
+|0004| PushNone        // mut c = none
+|0005| GetLocal(1)     // mut d = c
+|0006| GetGlobal(0)    // a
+|0007| GetLocal(0)     // b
+|0008| Add             // a + b
+|0009| Pop             // pop a + b
+|0010| Jump(10)        // jump to loop 2 <loop #2 start + end>
+|0011| Pop             // pop d
+|0012| Jump(5)         // jump to loop 1 <loop #1 end>
+|0013| Pop             // pop c
+|0014| Pop             // pop b
