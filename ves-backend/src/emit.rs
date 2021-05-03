@@ -573,14 +573,14 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_comma_expr(&mut self, exprs: &[Expr<'a>], span: Span) -> Result<()> {
-        // emit every expression in the list
-        for expr in exprs {
-            self.emit_expr(expr)?;
-        }
-        // then pop all but one
         // a comma expression is guaranteed to have at least 2 sub expressions,
         // so this will never panic due to underflow
+        // we want to pop every expr except the last one (which is the result of the expression)
+        for i in 0..exprs.len() - 1 {
+            self.emit_expr(&exprs[i])?;
+        }
         self.state().op_pop((exprs.len() - 1) as u32, span);
+        self.emit_expr(exprs.last().unwrap())?;
 
         Ok(())
     }
@@ -1138,8 +1138,8 @@ mod tests {
         vec![
             Opcode::PushNum32(0.0),
             Opcode::PushNum32(1.0),
-            Opcode::PushNum32(2.0),
             Opcode::PopN(2),
+            Opcode::PushNum32(2.0),
             Opcode::Pop,
         ]
     );
