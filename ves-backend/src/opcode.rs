@@ -11,38 +11,35 @@ pub enum Opcode {
     GetGlobal(/* name constant index */ u32),
     /// Set a global value
     SetGlobal(/* name constant index */ u32),
-    /// Define a global value using the name from the constants buffer at the contained index
-    DefineGlobal(/* name constant index */ u32),
-
     /// Instruction for pushing numeric values which fit within f32 onto the stack
-    PushSmallNumber(f32),
+    Num32(f32),
     /// Push `true` onto the stack
-    PushTrue,
+    True,
     /// Push `false` onto the stack
-    PushFalse,
+    False,
     /// Push `none` onto the stack
-    PushNone,
+    None,
 
     /// Add operands
     Add,
     /// Subtract operands
-    Subtract,
+    Sub,
     /// Multiply operands
-    Multiply,
+    Mul,
     /// Divide operands
-    Divide,
+    Div,
     /// Divide operands, returning the remainder
-    Remainder,
+    Rem,
     /// Bring one operand to the power of another
-    Power,
+    Pow,
     /// Negate an operand
-    Negate,
+    Neg,
     /// Logical '&&'
-    LogicalAnd,
+    And,
     /// Logical '||'
-    LogicalOr,
+    Or,
     /// Logical '!'
-    LogicalNot,
+    Not,
     /// Check if operands are equal
     Equal,
     /// Check if operands are not equal
@@ -76,27 +73,24 @@ pub enum Opcode {
     /// If `expr` is an error, return `expr` from the current function (`expr` should stay wrapped in a Result),
     /// otherwise unwrap `expr`
     Try,
-
     /// Wrap operand in Ok
     WrapOk,
     /// Wrap operand in Err
     WrapErr,
-
     /// Print a single value
     Print,
     /// Print N values
     PrintN(/* count */ u32),
-
     /// Pop a value off the stack
     Pop,
     /// Pop N values off the stack
     PopN(/* count */ u32),
-
     /// Unconditional jump to a specific address
     Jump(/* address */ u32),
-
     /// Return from a call
     Return,
+    /// A compile-time label for one or more jumps.
+    Label(u32),
 }
 
 static_assertions::assert_eq_size!(Opcode, u64);

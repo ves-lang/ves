@@ -16,6 +16,8 @@ pub mod resolver;
 mod resolver_definitions;
 pub mod ves_path;
 
+pub use resolver::Resolver;
+
 /// The default interning threshold for strings (20 characters).
 pub const DEFAULT_INTERNING_THRESHOLD: usize = 20;
 /// The default constant folding opt-in value (true).

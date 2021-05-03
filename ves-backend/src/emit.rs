@@ -1,3 +1,5 @@
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
+
 use crate::opcode::Opcode;
 use crate::Result;
 use crate::{
@@ -9,90 +11,118 @@ use ves_parser::ast::*;
 use ves_parser::lexer::Token;
 use ves_runtime::Value;
 
+#[derive(Debug)]
 struct Local<'a> {
     name: Token<'a>,
     depth: usize,
 }
 
-struct LoopInfo<'a> {
-    label: Option<Token<'a>>,
-    start: u32,
-    depth: usize,
+#[derive(Debug)]
+struct LoopInfo {
+    jump_index: usize,
+    loop_id: usize,
+    origin: Span,
 }
-impl<'a> LoopInfo<'a> {
-    pub fn new(label: Option<Token<'a>>, start: u32, depth: usize) -> LoopInfo<'a> {
+impl<'a> LoopInfo {
+    pub fn new(loop_id: usize, jump_index: usize, origin: Span) -> LoopInfo {
         LoopInfo {
-            label,
-            start,
-            depth,
+            loop_id,
+            jump_index,
+            origin,
         }
     }
 }
 
 struct State<'a> {
     builder: BytecodeBuilder,
-    loops: Vec<LoopInfo<'a>>,
+    loops: Vec<LoopInfo>,
     locals: Vec<Local<'a>>,
+    globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
+
+    // Jumps
+    loop_id: usize,
+    label_id: u32,
+    labels: HashMap<Cow<'a, str>, u32>,
 }
+
 impl<'a> State<'a> {
-    fn new(file_id: FileId) -> State<'a> {
+    fn new(file_id: FileId, globals: Rc<HashMap<String, u32>>) -> Self {
         State {
             builder: BytecodeBuilder::new(file_id),
             loops: vec![],
             locals: vec![],
+            labels: HashMap::new(),
+            globals,
             scope_depth: 0,
+            loop_id: 0,
+            label_id: 0,
         }
     }
 
-    fn begin_scope(&mut self) {
+    fn finish(&mut self) -> Chunk {
+        self.builder.finish(std::mem::take(&mut self.labels))
+    }
+
+    fn begin_scope(&mut self) -> usize {
         self.scope_depth += 1;
+        self.scope_depth
     }
 
     fn end_scope(&mut self, scope_span: Span) {
         self.scope_depth -= 1;
 
         // pop locals from the closed scope
-        let mut pop_n = 0;
-        while !self.locals.is_empty() && self.locals[self.locals.len() - 1].depth > self.scope_depth
-        {
-            pop_n += 1;
-            self.locals.pop();
+        let mut n_locals = 0;
+        for local in self.locals.iter().rev() {
+            if local.depth <= self.scope_depth {
+                break;
+            }
+            n_locals += 1;
         }
 
-        if pop_n > 1 {
-            self.builder.op(Opcode::PopN(pop_n), scope_span);
-        } else if pop_n == 1 {
+        self.locals
+            .drain(self.locals.len() - n_locals..self.locals.len());
+
+        if n_locals == 1 {
             self.builder.op(Opcode::Pop, scope_span);
+        } else if n_locals > 1 {
+            self.builder.op(Opcode::PopN(n_locals as u32), scope_span);
         }
     }
 
-    fn begin_loop(&mut self, label: Option<&Token<'a>>) {
-        self.loops.push(LoopInfo::new(
-            label.cloned(),
-            self.builder.offset(),
-            self.scope_depth,
-        ))
+    fn begin_loop(&mut self) {
+        self.loop_id += 1;
     }
 
     fn end_loop(&mut self) {
-        self.loops.pop();
+        self.loop_id -= 1;
     }
 
-    fn in_loop(&self) -> bool {
-        !self.loops.is_empty()
+    fn reserve_label(&mut self) -> u32 {
+        self.label_id += 1;
+        self.label_id - 1
     }
 
-    fn add_local(&mut self, name: &Token<'a>) {
+    fn add_local(&mut self, name: &Token<'a>) -> bool {
+        for l in self.locals.iter().rev() {
+            // The variable is already in the scope so we do not need to reserve a slot
+            if l.depth == self.scope_depth && l.name.lexeme == name.lexeme {
+                return true;
+            }
+        }
+
         self.locals.push(Local {
             name: name.clone(),
             depth: self.scope_depth,
         });
+
+        false
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<u32> {
         // since local variables can shadow outer scopes,
-        // we have to resolve starting from the top-most scope
+        // we have to resolve starting from the innermost scope
         for (index, local) in self.locals.iter().enumerate().rev() {
             if local.name.lexeme == name {
                 return Some(index as u32);
@@ -102,17 +132,20 @@ impl<'a> State<'a> {
     }
 
     fn define(&mut self, name: &Token<'a>) -> Result<()> {
-        if self.scope_depth > 0 {
+        if self.scope_depth == 0 {
+            let index = self
+                .globals
+                .get(&name.lexeme[..])
+                .ok_or_else(||
+                 /* This shouldn't ever happen since we collect and check all globals */
+                 format!("Attempted to define the variable `{}` as a global variable", name.lexeme))
+                .unwrap();
+            self.builder
+                .op(Opcode::SetGlobal(*index), name.span.clone());
+        } else {
             self.add_local(name);
         }
-        if self.scope_depth == 0 {
-            // global scope
-            // FIXME: stub before heap values are available
-            // the constant here should be a string
-            let offset = self.builder.constant(Value::None, name.span.clone())?;
-            self.builder
-                .op(Opcode::DefineGlobal(offset), name.span.clone());
-        }
+
         Ok(())
     }
 }
@@ -120,12 +153,20 @@ impl<'a> State<'a> {
 pub struct Emitter<'a> {
     states: Vec<State<'a>>,
     ast: AST<'a>,
+    globals: Rc<HashMap<String, u32>>,
 }
 
 impl<'a> Emitter<'a> {
     pub fn new(ast: AST<'a>) -> Emitter<'a> {
+        let mut globals = HashMap::new();
+        for global in &ast.globals {
+            let idx = globals.len();
+            globals.insert(global.name.lexeme.clone().into_owned(), idx as _);
+        }
+        let globals = Rc::new(globals);
         Emitter {
-            states: vec![State::new(ast.file_id)],
+            states: vec![State::new(ast.file_id, globals.clone())],
+            globals,
             ast,
         }
     }
@@ -137,11 +178,24 @@ impl<'a> Emitter<'a> {
 
     pub fn emit(mut self) -> Result<Chunk> {
         let body = std::mem::take(&mut self.ast.body);
+
         for stmt in body.into_iter() {
             self.emit_stmt(&stmt)?;
         }
 
-        Ok(self.state().builder.finish())
+        Ok(self.state().finish())
+    }
+
+    fn emit_label(&mut self, named_label: Option<&Token<'a>>) -> u32 {
+        let label = self.state().reserve_label();
+        let name = if let Some(named) = named_label {
+            named.lexeme.clone()
+        } else {
+            Cow::Owned(format!("#label-{}", label))
+        };
+        self.state().labels.insert(name, label);
+        self.state().builder.label(label);
+        label
     }
 
     fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
@@ -156,9 +210,7 @@ impl<'a> Emitter<'a> {
                     if let Some(ref initializer) = var.initializer {
                         self.emit_expr(initializer)?;
                     } else {
-                        self.state()
-                            .builder
-                            .op(Opcode::PushNone, var.name.span.clone());
+                        self.state().builder.op(Opcode::None, var.name.span.clone());
                     }
                     self.state().define(&var.name)?;
                 }
@@ -192,13 +244,17 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_loop(&mut self, loop_: &Loop<'a>, span: Span) -> Result<()> {
-        self.state().begin_loop(loop_.label.as_ref());
-        self.emit_stmt(&loop_.body)?;
-        let address = self.state().loops.last().unwrap().start;
-        self.state().builder.op(Opcode::Jump(address), span);
+    fn emit_loop(&mut self, r#loop: &Loop<'a>, span: Span) -> Result<()> {
+        self.state().begin_loop();
+        let loop_start_label = self.emit_label(r#loop.label.as_ref());
+        self.emit_stmt(&r#loop.body)?;
+        self.emit_jump(loop_start_label, span);
         self.state().end_loop();
         Ok(())
+    }
+
+    fn emit_jump(&mut self, label: u32, span: Span) {
+        self.state().builder.op(Opcode::Jump(label), span);
     }
 
     fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
@@ -221,8 +277,8 @@ impl<'a> Emitter<'a> {
                 self.emit_expr(operand)?;
                 self.state().builder.op(
                     match op {
-                        UnOpKind::Not => Opcode::LogicalNot,
-                        UnOpKind::Neg => Opcode::Negate,
+                        UnOpKind::Not => Opcode::Not,
+                        UnOpKind::Neg => Opcode::Neg,
                         UnOpKind::Try => Opcode::Try,
                         UnOpKind::Ok => Opcode::WrapOk,
                         UnOpKind::Err => Opcode::WrapErr,
@@ -291,13 +347,13 @@ impl<'a> Emitter<'a> {
                 match op {
                     BinOpKind::In => Opcode::HasProperty,
                     BinOpKind::Add => Opcode::Add,
-                    BinOpKind::Sub => Opcode::Subtract,
-                    BinOpKind::Mul => Opcode::Multiply,
-                    BinOpKind::Div => Opcode::Divide,
-                    BinOpKind::Rem => Opcode::Remainder,
-                    BinOpKind::Pow => Opcode::Power,
-                    BinOpKind::And => Opcode::LogicalAnd,
-                    BinOpKind::Or => Opcode::LogicalOr,
+                    BinOpKind::Sub => Opcode::Sub,
+                    BinOpKind::Mul => Opcode::Mul,
+                    BinOpKind::Div => Opcode::Div,
+                    BinOpKind::Rem => Opcode::Rem,
+                    BinOpKind::Pow => Opcode::Pow,
+                    BinOpKind::And => Opcode::And,
+                    BinOpKind::Or => Opcode::Or,
                     BinOpKind::Eq => Opcode::Equal,
                     BinOpKind::Ne => Opcode::NotEqual,
                     BinOpKind::Lt => Opcode::LessThan,
@@ -318,9 +374,7 @@ impl<'a> Emitter<'a> {
         match lit.value {
             LitValue::Number(value) => match maybe_f32(value) {
                 Some(value) => {
-                    self.state()
-                        .builder
-                        .op(Opcode::PushSmallNumber(value), span);
+                    self.state().builder.op(Opcode::Num32(value), span);
                 }
                 None => {
                     let offset = self.state().builder.constant(value.into(), span.clone())?;
@@ -330,14 +384,14 @@ impl<'a> Emitter<'a> {
             LitValue::Bool(value) => {
                 self.state().builder.op(
                     match value {
-                        true => Opcode::PushTrue,
-                        false => Opcode::PushFalse,
+                        true => Opcode::True,
+                        false => Opcode::False,
                     },
                     span,
                 );
             }
             LitValue::None => {
-                self.state().builder.op(Opcode::PushNone, span);
+                self.state().builder.op(Opcode::None, span);
             }
             LitValue::Str(ref _value) => {
                 // FIXME: stub before heap values are available
@@ -352,13 +406,13 @@ impl<'a> Emitter<'a> {
 
     fn emit_var_access(&mut self, name: &Token<'_>) -> Result<()> {
         let span = name.span.clone();
+        println!("{:?} {:?}", name, &self.state().locals);
         if let Some(index) = self.state().resolve_local(&name.lexeme) {
             self.state().builder.op(Opcode::GetLocal(index), span);
         } else {
-            // FIXME: stub before heap values are available
-            // the constant here should be a string
-            let offset = self.state().builder.constant(Value::None, span.clone())?;
-            self.state().builder.op(Opcode::GetGlobal(offset), span);
+            println!("{}", name.lexeme);
+            let id = *self.globals.get(&name.lexeme[..]).unwrap();
+            self.state().builder.op(Opcode::GetGlobal(id), span);
         }
 
         Ok(())
@@ -381,18 +435,21 @@ mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
     use ves_error::{FileId, VesFileDatabase};
+    use ves_middle::Resolver;
     use ves_parser::{Lexer, Parser};
 
     macro_rules! ast {
-        ($src:literal) => {
-            Parser::new(
+        ($src:literal) => {{
+            let mut ast = Parser::new(
                 Lexer::new($src),
                 FileId::anon(),
                 &VesFileDatabase::default(),
             )
             .parse()
-            .unwrap()
-        };
+            .unwrap();
+            Resolver::new().resolve(&mut ast).unwrap();
+            ast
+        }};
     }
 
     macro_rules! case {
@@ -409,14 +466,14 @@ mod tests {
         simple_arithmetic_expr,
         "1 + ((2 * (10 ** -1)) / 2)",
         vec![
-            Opcode::PushSmallNumber(1.0),
-            Opcode::PushSmallNumber(2.0),
-            Opcode::PushSmallNumber(10.0),
-            Opcode::PushSmallNumber(-1.0),
-            Opcode::Power,
-            Opcode::Multiply,
-            Opcode::PushSmallNumber(2.0),
-            Opcode::Divide,
+            Opcode::Num32(1.0),
+            Opcode::Num32(2.0),
+            Opcode::Num32(10.0),
+            Opcode::Num32(-1.0),
+            Opcode::Pow,
+            Opcode::Mul,
+            Opcode::Num32(2.0),
+            Opcode::Div,
             Opcode::Add,
             Opcode::Pop
         ]
@@ -424,43 +481,45 @@ mod tests {
     case!(
         type_comparison_num,
         "0 is num",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsNum, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsNum, Opcode::Pop]
     );
     case!(
         type_comparison_str,
         "0 is str",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsStr, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsStr, Opcode::Pop]
     );
     case!(
         type_comparison_bool,
         "0 is bool",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsBool, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsBool, Opcode::Pop]
     );
     case!(
         type_comparison_map,
         "0 is map",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsMap, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsMap, Opcode::Pop]
     );
     case!(
         type_comparison_array,
         "0 is array",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsArray, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsArray, Opcode::Pop]
     );
     case!(
         type_comparison_none,
         "0 is none",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsNone, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsNone, Opcode::Pop]
     );
     case!(
         type_comparison_some,
         "0 is some",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::IsSome, Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::IsSome, Opcode::Pop]
     );
     case!(
         type_comparison_struct,
-        "0 is T",
+        "mut T; 0 is T",
         vec![
-            Opcode::PushSmallNumber(0.0),
+            Opcode::None,
+            Opcode::SetGlobal(0),
+            Opcode::Num32(0.0),
             Opcode::GetGlobal(0),
             Opcode::CompareType,
             Opcode::Pop
@@ -470,8 +529,8 @@ mod tests {
         field_check,
         "0 in 0",
         vec![
-            Opcode::PushSmallNumber(0.0),
-            Opcode::PushSmallNumber(0.0),
+            Opcode::Num32(0.0),
+            Opcode::Num32(0.0),
             Opcode::HasProperty,
             Opcode::Pop
         ]
@@ -479,36 +538,36 @@ mod tests {
     case!(
         global_variable,
         "let a = 0",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::DefineGlobal(0)]
+        vec![Opcode::Num32(0.0), Opcode::SetGlobal(0)]
     );
     case!(
         local_variable,
         "{ let a = 0; }",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::Pop]
+        vec![Opcode::Num32(0.0), Opcode::Pop]
     );
     case!(
         many_local_variables,
         "{ mut a, b, c, d }",
         vec![
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
+            Opcode::None,
+            Opcode::None,
+            Opcode::None,
+            Opcode::None,
             Opcode::PopN(4)
         ]
     );
     case!(
         print_one,
         "print(0)",
-        vec![Opcode::PushSmallNumber(0.0), Opcode::Print,]
+        vec![Opcode::Num32(0.0), Opcode::Print,]
     );
     case!(
         print_many,
         "print(0, 2, 2)",
         vec![
-            Opcode::PushSmallNumber(0.0),
-            Opcode::PushSmallNumber(2.0),
-            Opcode::PushSmallNumber(2.0),
+            Opcode::Num32(0.0),
+            Opcode::Num32(2.0),
+            Opcode::Num32(2.0),
             Opcode::PrintN(3),
         ]
     );
@@ -516,30 +575,25 @@ mod tests {
         get_global,
         "mut a; a;",
         vec![
-            Opcode::PushNone,
-            Opcode::DefineGlobal(0),
-            Opcode::GetGlobal(1),
+            Opcode::None,
+            Opcode::SetGlobal(0),
+            Opcode::GetGlobal(0),
             Opcode::Pop
         ]
     );
     case!(
         get_local,
         "{ mut a; a; }",
-        vec![
-            Opcode::PushNone,
-            Opcode::GetLocal(0),
-            Opcode::Pop,
-            Opcode::Pop
-        ]
+        vec![Opcode::None, Opcode::GetLocal(0), Opcode::Pop, Opcode::Pop]
     );
     case!(
         multi_scope_local_resolution,
         "{ mut a; { mut a; { mut a; { mut a; a; } a; } a; } a; }",
         vec![
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
-            Opcode::PushNone,
+            Opcode::None,
+            Opcode::None,
+            Opcode::None,
+            Opcode::None,
             Opcode::GetLocal(3),
             Opcode::Pop,
             Opcode::Pop,
@@ -555,4 +609,41 @@ mod tests {
         ]
     );
     case!(unlabeled_loop, "loop {}", vec![Opcode::Jump(0)]);
+    case!(
+        loop_with_body,
+        "loop { mut a; 1 + 1; }",
+        vec![
+            Opcode::None,
+            Opcode::Num32(1.0),
+            Opcode::Num32(1.0),
+            Opcode::Add,
+            Opcode::Pop,
+            Opcode::Pop,
+            Opcode::Jump(0)
+        ]
+    );
+    case!(
+        loop_inside_scope,
+        "mut a; { mut b; { mut c; loop { mut d = c; a + b; loop {} } } }",
+        vec![
+            Opcode::None,         //
+            Opcode::SetGlobal(0), // mut a = none
+            Opcode::None,         // mut b = none
+            Opcode::None,         // mut c = none
+            /* loop 1 start - at 4 */
+            Opcode::GetLocal(1),  // mut d = c
+            Opcode::GetGlobal(0), // a
+            Opcode::GetLocal(0),  // b
+            Opcode::Add,          // a + b
+            Opcode::Pop,          // pop a + b
+            /* loop 2 start - at 9 */
+            Opcode::Jump(9), // jump to loop 2
+            /* loop 2 end */
+            Opcode::Pop,     // pop d
+            Opcode::Jump(4), // jump to loop 1
+            /* loop 1 end */
+            Opcode::Pop, // pop c
+            Opcode::Pop  // pop b
+        ]
+    );
 }

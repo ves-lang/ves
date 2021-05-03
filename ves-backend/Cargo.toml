@@ -15,3 +15,4 @@ static_assertions = "1.1.0"
 [dev-dependencies]
 pretty_assertions = "0.7.2"
 ves_testing = { package = "ves-testing", path = "../ves-testing" }
+ves_middle = { package = "ves-middle", path = "../ves-middle" }
