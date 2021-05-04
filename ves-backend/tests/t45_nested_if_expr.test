@@ -1,0 +1,60 @@
+mut v = none
+v = if v is none {
+    "none"
+} else if v is num {
+    "num"
+} else if v is str {
+    "str"
+} else if v is bool {
+    "bool"
+} else {
+    "unknown"
+}
+print(v)
+
+%output
+
+//                                                          stack:
+|0000| PushNone         // push none                        [none]
+|0001| SetGlobal(0)     // mut v = none                     [none]
+|0002| Pop              // pop none                         []
+|0003| GetGlobal(0)     // get v                            [none]
+|0004| IsNone           // v.type is none ; <condition0>    [true]
+|0005| JumpIfFalse(9)   // jump_if_false @other0            [true]
+|0006| Pop              // pop <condition0> result          []
+|0007| GetConst(0)      // "none"                           ["none"]
+|0008| Jump(34)         // jump @end                        ["none"]
+// @other0:
+|0009| Pop              // pop <condition0> result
+|0010| GetGlobal(0)     // get v
+|0011| IsNum            // v.type is num ; <condition1>
+|0012| JumpIfFalse(16)  // jump_if_false @other1
+|0013| Pop              // pop <condition0> result
+|0014| GetConst(1)      // "num"
+|0015| Jump(34)         // jump @end
+// @other1:
+|0016| Pop              // pop <condition0> result
+|0017| GetGlobal(0)     // get v
+|0018| IsStr            // v.type is str ; <condition1>
+|0019| JumpIfFalse(23)  // jump_if_false @other2
+|0020| Pop              // pop <condition1> result
+|0021| GetConst(2)      // "str"
+|0022| Jump(34)         // jump @end
+// @other2:
+|0023| Pop              // pop <condition1> result
+|0024| GetGlobal(0)     // get v
+|0025| IsBool           // v.type is bool ; <condition2>
+|0026| JumpIfFalse(30)  // jump_if_false @other3
+|0027| Pop              // pop <condition2> result
+|0028| GetConst(3)      // "bool"
+|0029| Jump(34)         // jump @end
+// @other3:
+|0030| Pop              // pop <condition2> result
+|0031| PushNone         // [[VALUE]] = none
+|0032| GetConst(4)      // "unknown"
+|0033| SetLocal(0)      // [[VALUE]] = "unknown"
+// @end:
+|0034| SetGlobal(0)     // set v                            ["none"]
+|0035| Pop              // pop result of if expr            []
+|0036| GetGlobal(0)     // get v                            ["none"]
+|0037| Print            // print(v)                         []

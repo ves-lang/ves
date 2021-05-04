@@ -1,0 +1,20 @@
+let a = 0
+let b = 0
+let c = 0
+print(a, b, c)
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| PushNum32(0.0)
+|0004| SetGlobal(1)
+|0005| Pop
+|0006| PushNum32(0.0)
+|0007| SetGlobal(2)
+|0008| Pop
+|0009| GetGlobal(0)
+|0010| GetGlobal(1)
+|0011| GetGlobal(2)
+|0012| PrintN(3)

@@ -13,7 +13,7 @@ use ves_runtime::Value;
 
 #[derive(Debug)]
 struct Local<'a> {
-    name: Token<'a>,
+    name: Cow<'a, str>,
     depth: usize,
 }
 
@@ -87,6 +87,26 @@ impl<'a> State<'a> {
         self.op_pop(n_locals as u32, scope_span);
     }
 
+    /// Partially closing a scope means discarding all its locals,
+    /// but *without* popping the last `preserve` locals.
+    ///
+    /// NOTE: it is up to the user to ensure that at least `preserve` locals exist
+    fn end_scope_partial(&mut self, scope_span: Span, preserve: usize) {
+        // drain all locals from the scope
+        self.scope_depth -= 1;
+        let mut n_locals = 0;
+        for local in self.locals.iter().rev() {
+            if local.depth <= self.scope_depth {
+                break;
+            }
+            n_locals += 1;
+        }
+        self.locals
+            .drain(self.locals.len() - n_locals..self.locals.len());
+        // but only pop n_locals - preserve
+        self.op_pop((n_locals - preserve) as u32, scope_span);
+    }
+
     fn op_pop(&mut self, n: u32, span: Span) {
         if n == 1 {
             self.builder.op(Opcode::Pop, span);
@@ -101,6 +121,12 @@ impl<'a> State<'a> {
 
     fn end_loop(&mut self) {
         self.scope_depth -= 1;
+    }
+
+    fn reserve_label(&mut self) -> u32 {
+        self.labels.push(self.label_id);
+        self.label_id += 1;
+        self.label_id - 1
     }
 
     fn reserve_labels<const N: usize>(&mut self) -> [u32; N] {
@@ -137,18 +163,19 @@ impl<'a> State<'a> {
             .count() as u32
     }
 
-    fn add_local(&mut self, name: &Token<'a>) {
+    fn add_local<S: Into<Cow<'a, str>>>(&mut self, name: S) -> u32 {
         self.locals.push(Local {
-            name: name.clone(),
+            name: name.into(),
             depth: self.scope_depth,
         });
+        (self.locals.len() - 1) as u32
     }
 
     fn resolve_local(&mut self, name: &str) -> Option<u32> {
         // since local variables can shadow outer scopes,
         // we have to resolve starting from the innermost scope
         for (index, local) in self.locals.iter().enumerate().rev() {
-            if local.name.lexeme == name {
+            if local.name == name {
                 return Some(index as u32);
             }
         }
@@ -158,6 +185,7 @@ impl<'a> State<'a> {
     fn resolve_variable_get(&mut self, name: &str) -> Opcode {
         if let Some(index) = self.resolve_local(name) {
             Opcode::GetLocal(index)
+            // TODO: once upvalues are a thing, resolve_upvalue before resolving a global
         } else if let Some(index) = self.globals.get(name).copied() {
             Opcode::GetGlobal(index)
         } else {
@@ -168,6 +196,7 @@ impl<'a> State<'a> {
     fn resolve_variable_set(&mut self, name: &str) -> Opcode {
         if let Some(index) = self.resolve_local(name) {
             Opcode::SetLocal(index)
+            // TODO: once upvalues are a thing, resolve_upvalue before resolving a global
         } else if let Some(index) = self.globals.get(name).copied() {
             Opcode::SetGlobal(index)
         } else {
@@ -192,30 +221,33 @@ impl<'a> State<'a> {
             self.builder.op(Opcode::SetGlobal(index), name.span.clone());
             self.op_pop(1, name.span.clone());
         } else {
-            self.add_local(name);
+            self.add_local(name.lexeme.clone());
         }
 
         Ok(())
     }
 }
 
+fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> HashMap<String, u32> {
+    let mut globals = globals.iter().collect::<Vec<_>>();
+    globals.sort();
+    globals
+        .into_iter()
+        .enumerate()
+        .map(|(idx, global)| (global.name.lexeme.clone().into_owned(), idx as u32))
+        .collect()
+}
+
 pub struct Emitter<'a> {
     states: Vec<State<'a>>,
     ast: AST<'a>,
-    globals: Rc<HashMap<String, u32>>,
 }
 
 impl<'a> Emitter<'a> {
     pub fn new(ast: AST<'a>) -> Emitter<'a> {
-        let mut globals = HashMap::new();
-        for global in &ast.globals {
-            let idx = globals.len();
-            globals.insert(global.name.lexeme.clone().into_owned(), idx as u32);
-        }
-        let globals = Rc::new(globals);
+        let globals = Rc::new(extract_global_slots(&ast.globals));
         Emitter {
-            states: vec![State::new(ast.file_id, globals.clone())],
-            globals,
+            states: vec![State::new(ast.file_id, globals)],
             ast,
         }
     }
@@ -243,7 +275,7 @@ impl<'a> Emitter<'a> {
             Var(ref vars) => self.emit_var_stmt(vars)?,
             Loop(ref info) => self.emit_loop(info, span)?,
             For(ref info) => self.emit_for_loop(info, span)?,
-            ForEach(_) => unimplemented!(),
+            ForEach(ref info) => self.emit_foreach_loop(info, span)?,
             While(ref info) => self.emit_while_loop(info, span)?,
             Block(ref body) => self.emit_block(body, span)?,
             Print(ref expr) => self.emit_print_stmt(expr)?,
@@ -442,6 +474,113 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    /// Emits the bytecode for a For-Each loop.
+    ///
+    /// For-Each loops are desugared into regular For loops, so the layout is the same.
+    ///
+    /// The format is: `for ITEM in ITERATOR`, where ITEM is an identifier and ITERATOR
+    /// is either a range (`START..END`/`START..=END`) or an expression whose value
+    /// is conformant with the iterator protocol.
+    ///
+    // TODO: decide what the iterator protocol should be
+    fn emit_foreach_loop(&mut self, info: &ForEach<'a>, span: Span) -> Result<()> {
+        self.state().begin_scope();
+        let mut comparison_op = Opcode::LessThan;
+        match info.iterator {
+            IteratorKind::Range(Range {
+                ref start,
+                ref end,
+                ref step,
+                inclusive,
+            }) => {
+                if inclusive {
+                    comparison_op = Opcode::LessEqual
+                };
+                // emit item initializer (e.g. the `i` from `for i in 0..10, 2 { ... }`)
+                // this is equivalent to `for i = 0, ...`
+                self.state().add_local(info.variable.lexeme.clone());
+                self.emit_expr(start)?;
+
+                // the [[END]] and [[STEP]] initializers are given names which
+                // are not valid identifiers, so there is no way to access them
+                // from within the loop body
+
+                // emit [[END]] initializer (the `10` from `for i in 0..10, 2 { ... }`)
+                self.state().add_local("[[END]]");
+                self.emit_expr(end)?;
+                // emit [[STEP]] initializer (the `2` from `for i in 0..10, 2 { ... }`)
+                self.state().add_local("[[STEP]]");
+                self.emit_expr(step)?;
+            }
+            // TODO: iterator protocol
+            IteratorKind::Expr(_) => unimplemented!(),
+        }
+        self.state().begin_loop();
+        let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
+        self.state().add_control_label(&info.label, latch, end);
+        self.state().builder.label(start);
+        match info.iterator {
+            IteratorKind::Range(..) => {
+                // emit `info.variable < [[END]]` or `info.variable <= [[END]]`
+                // these locals are guaranteed to exist, because we create them above
+                let start_local = self
+                    .state()
+                    .resolve_local(info.variable.lexeme.as_ref())
+                    .unwrap();
+                let end_local = self.state().resolve_local("[[END]]").unwrap();
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(start_local), span.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(end_local), span.clone());
+                self.state().builder.op(comparison_op, span.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::JumpIfFalse(exit), span.clone());
+                self.state().builder.op(Opcode::Pop, span.clone());
+                self.state().builder.op(Opcode::Jump(body), span.clone());
+            }
+            // TODO: iterator protocol
+            IteratorKind::Expr(..) => unimplemented!(),
+        }
+        self.state().builder.label(latch);
+        match info.iterator {
+            IteratorKind::Range(..) => {
+                // emit `info.variable += [[STEP]]`
+                let start_local = self
+                    .state()
+                    .resolve_local(info.variable.lexeme.as_ref())
+                    .unwrap();
+                let step_local = self.state().resolve_local("[[STEP]]").unwrap();
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(start_local), span.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(step_local), span.clone());
+                self.state().builder.op(Opcode::Add, span.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::SetLocal(start_local), span.clone());
+                self.state().op_pop(1, span.clone());
+                self.state().builder.op(Opcode::Jump(start), span.clone());
+            }
+            // TODO: iterator protocol
+            IteratorKind::Expr(..) => unimplemented!(),
+        }
+        self.state().builder.label(body);
+        self.emit_stmt(&info.body)?;
+        self.state().builder.op(Opcode::Jump(latch), span.clone());
+        self.state().builder.label(exit);
+        self.state().op_pop(1, span.clone());
+        self.state().builder.label(end);
+        self.state().end_loop();
+        self.state().end_scope(span);
+
+        Ok(())
+    }
+
     /// Emits the bytecode for a for loop.
     ///
     /// # Layout
@@ -489,35 +628,21 @@ impl<'a> Emitter<'a> {
     /// ```
     /// TODO: describe the layout for the loops with a binding
     fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
-        // Create a new scope for the initializer in `pre_start`
         self.state().begin_scope();
-
-        // Emit the initializer
         for init in info.initializers.iter() {
             self.emit_expr(&init.value)?;
-            self.state().add_local(&init.name);
+            self.state().add_local(init.name.lexeme.clone());
         }
-
-        // The loop begins only after we compile the initializer
         self.state().begin_loop();
-
-        // Reserve five labels as required by the layout
         let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
         // Break and continue target the `latch` and `exit` labels
         self.state().add_control_label(&info.label, latch, end);
-
-        // Emit the start label and optionally compile the condition
         self.state().builder.label(start);
-
         if let Some(ref condition) = info.condition {
-            // Evaluate the condition and jump to the exit label if it's false
             self.emit_expr(condition)?;
             self.state()
                 .builder
                 .op(Opcode::JumpIfFalse(exit), condition.span.clone());
-
-            // If this instruction is reached, the condition was true, and the jump didn't occur, so
-            // we need to clean up the condition value. After that, we jump into the loop body
             self.state().builder.op(Opcode::Pop, condition.span.clone());
             self.state()
                 .builder
@@ -527,35 +652,23 @@ impl<'a> Emitter<'a> {
             // Instead of emitting an analog of a `while true` loop, we jump directly into the loop body.
             self.state().builder.op(Opcode::Jump(body), span.clone());
         }
-
-        // Emit the loop latch label and compile the increment expression.
         self.state().builder.label(latch);
-
         if let Some(ref increment) = info.increment {
-            // Compile the increment and jump to @start
             self.emit_expr(increment)?;
             self.state().op_pop(1, increment.span.clone());
             self.state()
                 .builder
                 .op(Opcode::Jump(start), increment.span.clone());
         }
-
-        // Emit the loop body label and compile the body, with a jump to the latch at the end
         self.state().builder.label(body);
         self.emit_stmt(&info.body)?;
         self.state().builder.op(Opcode::Jump(latch), span.clone());
-
-        // Emit the loop exit block only if we had a condition
         self.state().builder.label(exit);
         if info.condition.is_some() {
             self.state().op_pop(1, span.clone());
         }
-
-        // Emit the loop end block (targeted by `break`s)
         self.state().builder.label(end);
         self.state().end_loop();
-
-        // Pop off the initializer variables
         self.state().end_scope(span);
 
         Ok(())
@@ -579,8 +692,8 @@ impl<'a> Emitter<'a> {
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
             ExprKind::Struct(_) => unimplemented!(),
             ExprKind::Fn(_) => unimplemented!(),
-            ExprKind::If(_) => unimplemented!(),
-            ExprKind::DoBlock(_) => unimplemented!(),
+            ExprKind::If(ref info) => self.emit_if_expr(info, span, None)?,
+            ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
             ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
             ExprKind::Call(_) => unimplemented!(),
             ExprKind::Spread(_) => unimplemented!(),
@@ -600,7 +713,9 @@ impl<'a> Emitter<'a> {
             ExprKind::Variable(ref name) => self.emit_var_expr(name)?,
             ExprKind::PrefixIncDec(ref incdec) => self.emit_incdec_expr(incdec, false, span)?,
             ExprKind::PostfixIncDec(ref incdec) => self.emit_incdec_expr(incdec, true, span)?,
-            ExprKind::Assignment(ref a) => self.emit_assign_expr(&a.name, &a.value, span)?,
+            ExprKind::Assignment(ref a) => {
+                self.emit_assign_expr(a.name.lexeme.as_ref(), &a.value, span)?
+            }
             ExprKind::Grouping(ref expr) => self.emit_expr(expr)?,
         }
 
@@ -674,6 +789,108 @@ impl<'a> Emitter<'a> {
             },
             span,
         );
+        Ok(())
+    }
+
+    ///
+    ///
+    /// # Layout
+    /// ```x86asm
+    ///   <condition>
+    ///   jump_if_false @other
+    ///   pop result of condition
+    ///   <then branch>
+    ///   jump @end
+    /// other:
+    ///   pop result of condition
+    ///   <else branch>
+    /// end:
+    /// ```
+    /// With else if branch:
+    /// ```x86asm
+    ///   <condition>
+    ///   jump_if_false @other0
+    ///   pop result of condition
+    ///   <then0 branch>
+    ///   jump @end
+    /// other0:
+    ///   pop result of condition
+    ///   <condition>
+    ///   jump_if_false @other1
+    ///   pop result of condition
+    ///   <then1 branch>
+    ///   jump @end
+    /// other1:
+    ///   pop result of condition
+    /// end:
+    /// ```
+    fn emit_if_expr(&mut self, info: &If<'a>, span: Span, end_label: Option<u32>) -> Result<()> {
+        // reserve only a single `end` label, which is used as the exit point for all branches
+        let [other, end] = if let Some(end_label) = end_label {
+            [self.state().reserve_label(), end_label]
+        } else {
+            self.state().reserve_labels::<2>()
+        };
+        match info.condition.pattern {
+            ConditionPattern::Value => {
+                self.emit_expr(&info.condition.value)?;
+            }
+            // TODO
+            ConditionPattern::IsOk(_) => unimplemented!(),
+            ConditionPattern::IsErr(_) => unimplemented!(),
+        }
+        self.state()
+            .builder
+            .op(Opcode::JumpIfFalse(other), span.clone());
+        self.state().builder.op(Opcode::Pop, span.clone());
+        for stmt in info.then.statements.iter() {
+            self.emit_stmt(stmt)?;
+        }
+        if let Some(ref value) = info.then.value {
+            self.emit_expr(value)?;
+        } else {
+            self.state().builder.op(Opcode::PushNone, span.clone());
+        }
+        self.state().builder.op(Opcode::Jump(end), span.clone());
+        self.state().builder.label(other);
+        self.state().builder.op(Opcode::Pop, span.clone());
+        if let Some(ref otherwise) = info.otherwise {
+            match otherwise {
+                Else::If(ref nested) => self.emit_if_expr(nested, span, Some(end))?,
+                Else::Bare(ref block) => self.emit_do_block_expr(block, span)?,
+            }
+        }
+        // only emit the end label once, from the initial call to emit_if_expr
+        if end_label.is_none() {
+            self.state().builder.label(end);
+        }
+        Ok(())
+    }
+
+    /// Emit a `do { }` expression
+    ///
+    /// Do block expressions evaluate to the last statement in the block, but only if it is
+    /// an expression statement, and that statement is not terminated by a semicolon.
+    ///
+    /// At the start of the block, we push a hidden local variable `[[VALUE]]`, whose value will be set
+    /// to the value of the entire do block. It is normally drained from the locals array, but it's value
+    /// is *not* popped from the stack.
+    fn emit_do_block_expr(&mut self, do_block: &DoBlock<'a>, span: Span) -> Result<()> {
+        self.state().begin_scope();
+        let value_slot = self.state().add_local("[[VALUE]]");
+        self.state().builder.op(Opcode::PushNone, span.clone());
+
+        for stmt in do_block.statements.iter() {
+            self.emit_stmt(stmt)?;
+        }
+        if let Some(ref value) = do_block.value {
+            self.emit_expr(value)?;
+            self.state()
+                .builder
+                .op(Opcode::SetLocal(value_slot), span.clone());
+        }
+        // preserve one local value on the stack
+        self.state().end_scope_partial(span, 1);
         Ok(())
     }
 
@@ -785,23 +1002,15 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_var_expr(&mut self, name: &Token<'_>) -> Result<()> {
-        let span = name.span.clone();
-        let name = name.lexeme.as_ref();
-        if let Some(index) = self.state().resolve_local(name) {
-            self.state().builder.op(Opcode::GetLocal(index), span);
-            // FIXME: once functions and upvalues are implemented, try to resolve an upvalue before a global
-        } else if let Some(index) = self.globals.get(name).copied() {
-            self.state().builder.op(Opcode::GetGlobal(index), span);
-        } else {
-            panic!("Undefined variable '{}'", name);
-        }
+        let get = self.state().resolve_variable_get(name.lexeme.as_ref());
+        self.state().builder.op(get, name.span.clone());
 
         Ok(())
     }
 
-    fn emit_assign_expr(&mut self, name: &Token<'a>, value: &Expr<'a>, span: Span) -> Result<()> {
+    fn emit_assign_expr(&mut self, name: &str, value: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(&value)?;
-        let set = self.state().resolve_variable_set(name.lexeme.as_ref());
+        let set = self.state().resolve_variable_set(name);
         self.state().builder.op(set, span);
         // we don't pop the right-side expression result, because
         // it's the result of the assignment expression
@@ -914,6 +1123,13 @@ mod tests {
     test_eq!(t36_while_loop_with_break_and_continue);
     test_eq!(t37_named_while_loop);
     test_eq!(t38_loop_for_with_break_and_continue);
+    test_eq!(t39_unlabeled_foreach_loop);
+    test_eq!(t40_labeled_foreach_with_control);
+    test_eq!(t41_multiple_global_vars);
+    test_eq!(t42_empty_do_block_expr);
+    test_eq!(t43_do_block_expr_with_value);
+    test_eq!(t44_simple_if_expr);
+    test_eq!(t45_nested_if_expr);
 
     mod _impl {
         use super::*;

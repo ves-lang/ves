@@ -1,0 +1,7 @@
+let v = do { /* none */ }
+
+%output
+
+|0000| PushNone
+|0001| SetGlobal(0)
+|0002| Pop

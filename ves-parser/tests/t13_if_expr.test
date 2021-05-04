@@ -50,35 +50,31 @@ StmtKind::ExprStmt
       value: Lit
         token: "0"
         value: LitValue::Number(0.0)
-    otherwise: DoBlock
-      statements=
-      value: If
+    otherwise: If
+      condition: Condition
+        value: ExprKind::Variable
+          name: "v1"
+        pattern: ConditionPattern::Value
+      then: DoBlock
+        statements=
+        value: Lit
+          token: "1"
+          value: LitValue::Number(1.0)
+      otherwise: If
         condition: Condition
           value: ExprKind::Variable
-            name: "v1"
+            name: "v2"
           pattern: ConditionPattern::Value
         then: DoBlock
           statements=
           value: Lit
-            token: "1"
-            value: LitValue::Number(1.0)
+            token: "2"
+            value: LitValue::Number(2.0)
         otherwise: DoBlock
           statements=
-          value: If
-            condition: Condition
-              value: ExprKind::Variable
-                name: "v2"
-              pattern: ConditionPattern::Value
-            then: DoBlock
-              statements=
-              value: Lit
-                token: "2"
-                value: LitValue::Number(2.0)
-            otherwise: DoBlock
-              statements=
-              value: Lit
-                token: "0"
-                value: LitValue::Number(0.0)
+          value: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
 StmtKind::ExprStmt
   expr: If
     condition: Condition

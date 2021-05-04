@@ -999,30 +999,31 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
+        let if_ = self.if_()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::If(box if_),
+        })
+    }
+
+    fn if_(&mut self) -> ParseResult<ast::If<'a>> {
         let condition = self.condition()?;
         let then = self.do_block()?;
         let mut otherwise = None;
         if self.match_(&TokenKind::Else) {
             if self.match_(&TokenKind::If) {
                 // `else if`
-                let nested = self.if_expr()?;
-                otherwise = Some(ast::DoBlock {
-                    statements: vec![],
-                    value: Some(nested),
-                });
+                otherwise = Some(ast::Else::If(box self.if_()?));
             } else {
                 // `else`
-                otherwise = Some(self.do_block()?);
+                otherwise = Some(ast::Else::Bare(box self.do_block()?));
             }
         }
-        let span_end = self.previous.span.end;
-        Ok(ast::Expr {
-            span: span_start..span_end,
-            kind: ast::ExprKind::If(box ast::If {
-                condition,
-                then,
-                otherwise,
-            }),
+        Ok(ast::If {
+            condition,
+            then,
+            otherwise,
         })
     }
 

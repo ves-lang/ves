@@ -30,6 +30,16 @@ pub struct Global<'a> {
     /// The kind of the global.
     pub kind: VarKind,
 }
+impl<'a> PartialOrd<Global<'a>> for Global<'a> {
+    fn partial_cmp(&self, other: &Global<'a>) -> Option<std::cmp::Ordering> {
+        self.name.lexeme.partial_cmp(&other.name.lexeme)
+    }
+}
+impl<'a> Ord for Global<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.lexeme.cmp(&other.name.lexeme)
+    }
+}
 
 /// An imported or exported symbol.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
@@ -486,6 +496,12 @@ pub struct Condition<'a> {
     pub pattern: ConditionPattern<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum Else<'a> {
+    If(#[forward] Ptr<If<'a>>),
+    Bare(#[forward] Ptr<DoBlock<'a>>),
+}
+
 /// An if statement.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct If<'a> {
@@ -494,7 +510,7 @@ pub struct If<'a> {
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
-    pub otherwise: Option<DoBlock<'a>>,
+    pub otherwise: Option<Else<'a>>,
 }
 
 /// A `do` block.
