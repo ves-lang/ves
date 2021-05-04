@@ -130,7 +130,18 @@ impl<'a> ConstantFolder<'a> {
                 variable,
                 ..
             }) => {
-                self.fold_expr(iterator);
+                match iterator {
+                    IteratorKind::Range(Range {
+                        start, end, step, ..
+                    }) => {
+                        self.fold_expr(start);
+                        self.fold_expr(end);
+                        self.fold_expr(step);
+                    }
+                    IteratorKind::Expr(expr) => {
+                        self.fold_expr(expr);
+                    }
+                }
                 self.push();
                 self.propagated_variables.add(variable.lexeme.clone(), None);
                 self.fold_stmt(body);
@@ -394,13 +405,6 @@ impl<'a> ConstantFolder<'a> {
                         span: expr.span.clone(),
                     };
                 }
-            }
-            ExprKind::Range(box Range {
-                start, end, step, ..
-            }) => {
-                self.fold_expr(start);
-                self.fold_expr(end);
-                self.fold_expr(step);
             }
             ExprKind::PrefixIncDec(box inc) | ExprKind::PostfixIncDec(box inc) => {
                 self.fold_expr(&mut inc.expr)

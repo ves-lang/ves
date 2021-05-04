@@ -263,7 +263,16 @@ impl<'a> Resolver<'a> {
             StmtKind::ForEach(r#for) => {
                 self.push();
 
-                self.resolve_expr(&mut r#for.iterator, registry, ex);
+                match &mut r#for.iterator {
+                    IteratorKind::Range(ref mut range) => {
+                        self.resolve_expr(&mut range.start, registry, ex);
+                        self.resolve_expr(&mut range.end, registry, ex);
+                        self.resolve_expr(&mut range.step, registry, ex);
+                    }
+                    IteratorKind::Expr(ref mut expr) => {
+                        self.resolve_expr(expr, registry, ex);
+                    }
+                }
 
                 self.declare(
                     &r#for.variable,
@@ -630,17 +639,6 @@ impl<'a> Resolver<'a> {
                 }
 
                 self.r#use(v, ex);
-            }
-            ExprKind::Range(box Range {
-                ref mut start,
-                ref mut end,
-                ref mut step,
-                ..
-            }) => {
-                self.resolve_expr(start, registry, ex);
-                self.resolve_expr(end, registry, ex);
-                self.resolve_expr(step, registry, ex);
-                // TODO: lint for invalid range bounds?
             }
             ExprKind::PrefixIncDec(inc) => self.resolve_expr(&mut inc.expr, registry, ex),
             ExprKind::PostfixIncDec(inc) => self.resolve_expr(&mut inc.expr, registry, ex),

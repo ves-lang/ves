@@ -591,8 +591,6 @@ pub enum ExprKind<'a> {
     Map(#[rename = "values"] Vec<MapEntry<'a>>),
     /// A variable access expression (includes self).
     Variable(#[rename = "name"] Token<'a>),
-    /// A range specified, e.g. `0..10` or `start..end, -2`.
-    Range(#[forward] Ptr<Range<'a>>),
     /// A prefix increment or decrement
     PrefixIncDec(#[rename = "inner"] Ptr<IncDec<'a>>),
     /// A postfix increment or decrement
@@ -665,13 +663,19 @@ pub struct For<'a> {
     pub label: Token<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum IteratorKind<'a> {
+    Range(#[forward] Range<'a>),
+    Expr(#[rename = "iterable"] Expr<'a>),
+}
+
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct ForEach<'a> {
     /// The variable to bind the elements to.
     pub variable: Token<'a>,
     /// The iterator to iterate over.
-    pub iterator: Expr<'a>,
+    pub iterator: IteratorKind<'a>,
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.

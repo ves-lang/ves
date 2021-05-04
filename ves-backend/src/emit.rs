@@ -598,8 +598,6 @@ impl<'a> Emitter<'a> {
             ExprKind::Array(_) => unimplemented!(),
             ExprKind::Map(_) => unimplemented!(),
             ExprKind::Variable(ref name) => self.emit_var_expr(name)?,
-            // only emitted as part of a for-each loop, where it's manually matched
-            ExprKind::Range(..) => unreachable!(),
             ExprKind::PrefixIncDec(ref incdec) => self.emit_incdec_expr(incdec, false, span)?,
             ExprKind::PostfixIncDec(ref incdec) => self.emit_incdec_expr(incdec, true, span)?,
             ExprKind::Assignment(ref a) => self.emit_assign_expr(&a.name, &a.value, span)?,

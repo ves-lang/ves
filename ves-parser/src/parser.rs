@@ -441,7 +441,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             let variable = binding
                 .ok_or_else(|| VesError::parse("Expected identifier", binding_span, self.fid))?;
             // for-each
-            let iter_start = self.current.span.start;
             let start = self.expr()?;
             let iterator = if self.match_(&TokenKind::Range) {
                 let inclusive = self.previous.lexeme == "..=";
@@ -455,18 +454,14 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         Token::new("1", self.previous.span.clone(), TokenKind::Number)
                     )
                 };
-                let iter_end = self.previous.span.end;
-                ast::Expr {
-                    kind: ast::ExprKind::Range(box ast::Range {
-                        start,
-                        end,
-                        step,
-                        inclusive,
-                    }),
-                    span: iter_start..iter_end,
-                }
+                ast::IteratorKind::Range(ast::Range {
+                    start,
+                    end,
+                    step,
+                    inclusive,
+                })
             } else {
-                start
+                ast::IteratorKind::Expr(start)
             };
             self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
             let body = self.block_stmt()?;
