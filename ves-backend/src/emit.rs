@@ -719,7 +719,7 @@ impl<'a> Emitter<'a> {
             ExprKind::Call(ref call) => self.emit_call_expr(call, span)?,
             ExprKind::Spread(ref expr) => {
                 self.emit_expr(expr)?;
-                self.state().builder.op(Opcode::MarkSpread, span);
+                self.state().builder.op(Opcode::Spread, span);
             }
             ExprKind::GetProp(ref get) => {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span)?

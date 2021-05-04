@@ -112,7 +112,7 @@ pub enum Opcode {
     /// - It must be iterable (conform to the iterator protocol)
     /// - In an array literal, the values of this iterator are all pushed into the array
     /// - In a call, the values of this iterator are pushed into an the rest argument array
-    MarkSpread,
+    Spread,
     /// Call the operand with `count` arguments
     ///
     /// The stack should look like: [<function>, <receiver>, <arg 0>, <arg 1>, <arg 2>, ..., <arg [count]>]
