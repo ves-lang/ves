@@ -987,8 +987,6 @@ impl<'a> Emitter<'a> {
         self.emit_expr(node)?;
         // FIXME: stub before heap values are available
         let offset = self.state().builder.constant(Value::None, span.clone())?;
-        // TODO: optional access
-
         self.state().builder.op(
             if is_optional {
                 Opcode::TryGetProp(offset)
