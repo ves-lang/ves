@@ -311,51 +311,7 @@ impl<'a> ConstantFolder<'a> {
                     .for_each(|f| self.fold_function(f));
             }
             ExprKind::Fn(box r#fn) => self.fold_function(r#fn),
-            ExprKind::If(box If {
-                ref mut condition,
-                ref mut then,
-                ref mut otherwise,
-            }) => {
-                // TODO: propagate the value into the pattern binding
-                self.fold_expr(&mut condition.value);
-                self.fold_do_block(then);
-
-                // FIXME(moscow): I changed AST for if expressions and have no clue what this does
-                /* if let Some(r#else) = otherwise.as_mut() {
-                    self.fold_do_block(r#else);
-                }
-
-                match self.is_truthy_condition(condition) {
-                    // Condition is truthy, we can replace the node with the value of `then`
-                    Some(true) => {
-                        let then = std::mem::replace(
-                            then,
-                            DoBlock {
-                                statements: vec![],
-                                value: None,
-                            },
-                        );
-                        expr.kind = ExprKind::DoBlock(box then);
-                    }
-                    Some(false) => {
-                        // Condition is false, we can replace the node with the value of `else`
-                        if let Some(r#else) = otherwise.take() {
-                            expr.kind = ExprKind::DoBlock(box r#else);
-                        } else {
-                            // There's no else, so we can replace the node with `none`.
-                            expr.kind = ExprKind::Lit(box Lit {
-                                value: LitValue::None,
-                                token: ves_parser::lexer::Token::new(
-                                    "none",
-                                    expr.span.clone(),
-                                    ves_parser::lexer::TokenKind::None,
-                                ),
-                            });
-                        }
-                    }
-                    None => (),
-                } */
-            }
+            ExprKind::If(box r#if) => self.fold_if_expr(r#if),
             ExprKind::DoBlock(box b) => self.fold_do_block(b),
             ExprKind::Comma(list) => list.iter_mut().for_each(|e| self.fold_expr(e)),
             ExprKind::Call(box Call { callee, args, .. }) => {
@@ -424,6 +380,49 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
+    // FIXME(moscow): I changed AST for if expressions and I'm not sure how to fix this (look below)
+    fn fold_if_expr(&mut self, _if: &If<'a>) {
+        /* // TODO: propagate the value into the pattern binding
+        self.fold_expr(&mut condition.value);
+        self.fold_do_block(then);
+
+        if let Some(r#else) = otherwise.as_mut() {
+            self.fold_do_block(r#else);
+        }
+
+        match self.is_truthy_condition(condition) {
+            // Condition is truthy, we can replace the node with the value of `then`
+            Some(true) => {
+                let then = std::mem::replace(
+                    then,
+                    DoBlock {
+                        statements: vec![],
+                        value: None,
+                    },
+                );
+                expr.kind = ExprKind::DoBlock(box then);
+            }
+            Some(false) => {
+                // Condition is false, we can replace the node with the value of `else`
+                if let Some(r#else) = otherwise.take() {
+                    // FIXME: i'm not sure how this interacts with the new AST for if expressions
+                    expr.kind = ExprKind::DoBlock(box r#else);
+                } else {
+                    // There's no else, so we can replace the node with `none`.
+                    expr.kind = ExprKind::Lit(box Lit {
+                        value: LitValue::None,
+                        token: ves_parser::lexer::Token::new(
+                            "none",
+                            expr.span.clone(),
+                            ves_parser::lexer::TokenKind::None,
+                        ),
+                    });
+                }
+            }
+            None => (),
+        } */
+    }
+
     fn is_truthy_condition(&mut self, cond: &Condition<'a>) -> Option<bool> {
         match &cond.value.kind {
             ExprKind::Lit(lit) => Some(match lit.value {
@@ -479,6 +478,6 @@ mod tests {
 
     test_ok!(fold1_test_constant_folding);
     test_ok!(fold2_test_let_variable_propagation);
-    // FIXME(moscow): changed AST for if expressions
+    // TODO: re-enable this once if expression folding is fixed
     /* test_ok!(fold3_test_control_flow_is_folded); */
 }
