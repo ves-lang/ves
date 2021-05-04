@@ -367,16 +367,11 @@ impl<'a> Resolver<'a> {
                     self.r#use(label, ex);
                 }
             }
-            StmtKind::Defer(defer) => {
-                // This should never happen, but we'll look out for it just in case.
-                if !matches!(defer.kind, ExprKind::Call(_)) {
-                    Self::error(
-                        "A defer statement may only contain call expressions",
-                        defer.span.clone(),
-                        ex,
-                    );
+            StmtKind::Defer(ref mut defer) => {
+                self.resolve_expr(&mut defer.callee, registry, ex);
+                for arg in defer.args.iter_mut() {
+                    self.resolve_expr(arg, registry, ex);
                 }
-                self.resolve_expr(defer, registry, ex);
             }
             StmtKind::_Empty => {}
         }

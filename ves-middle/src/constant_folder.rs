@@ -170,7 +170,12 @@ impl<'a> ConstantFolder<'a> {
                     self.fold_expr(expr)
                 }
             }
-            StmtKind::Defer(box ref mut call) => self.fold_expr(call),
+            StmtKind::Defer(ref mut call) => {
+                self.fold_expr(&mut call.callee);
+                for arg in call.args.iter_mut() {
+                    self.fold_expr(arg)
+                }
+            }
             StmtKind::Break(_) => {}
             StmtKind::Continue(_) => {}
             StmtKind::_Empty => {}

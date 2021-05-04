@@ -111,7 +111,6 @@ pub enum Opcode {
     /// Mark the operand as `spread`, which means:
     /// - It must be iterable (conform to the iterator protocol)
     /// - In an array literal, the values of this iterator are all pushed into the array
-    /// - In a map literal, the entries of this iterator are all added to the map
     /// - In a call, the values of this iterator are pushed into an the rest argument array
     MarkSpread,
     /// Call the operand with `count` arguments
@@ -120,8 +119,23 @@ pub enum Opcode {
     ///
     /// The `receiver` stack slot is reserved and it's value is `none` if there is no receiver
     Call(/* count */ u32),
+    /// Defer a call
+    ///
+    /// This checks if the call is valid, and pushes it onto the current call's defer stack.
+    ///
+    /// When the call stack is unwound or the function returns, any deferred calls from
+    /// the defer stack are executed.
+    Defer,
     /// Join `count` fragments on the stack into a single string
     Interpolate(/* count */ u32),
+    /// Create an array from `count` items on the stack
+    CreateArray(/* count */ u32),
+    /// Create an empty map
+    CreateEmptyMap,
+    /// Insert a key/value pair into the map
+    MapInsert,
+    /// Extend a map with all entries of another map
+    MapExtend,
     /// Print a single value
     Print,
     /// Print N values

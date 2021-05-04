@@ -279,10 +279,10 @@ impl<'a> Emitter<'a> {
             While(ref info) => self.emit_while_loop(info, span)?,
             Block(ref body) => self.emit_block(body, span)?,
             Print(ref expr) => self.emit_print_stmt(expr)?,
-            Return(_) => unimplemented!(),
+            Return(ref expr) => self.emit_return_stmt(expr.as_deref(), span)?,
             Break(label) => self.emit_loop_control(label, LoopControl::Break, span)?,
             Continue(label) => self.emit_loop_control(label, LoopControl::Continue, span)?,
-            Defer(_) => unimplemented!(),
+            Defer(ref expr) => self.emit_defer_stmt(expr, span)?,
             _Empty => panic!("Unexpected StmtKind::_Empty"),
         }
 
@@ -324,6 +324,18 @@ impl<'a> Emitter<'a> {
                 self.state().builder.op(Opcode::Print, span);
             }
         }
+        Ok(())
+    }
+
+    fn emit_return_stmt(&mut self, value: Option<&Expr<'a>>, span: Span) -> Result<()> {
+        let n_locals = self.state().locals.len() as u32;
+        self.state().op_pop(n_locals, span.clone());
+        if let Some(value) = value {
+            self.emit_expr(value)?;
+        } else {
+            self.state().builder.op(Opcode::PushNone, span.clone());
+        }
+        self.state().builder.op(Opcode::Return, span);
         Ok(())
     }
 
@@ -684,6 +696,15 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    fn emit_defer_stmt(&mut self, call: &Call<'a>, span: Span) -> Result<()> {
+        self.emit_expr(&call.callee)?;
+        for arg in call.args.iter() {
+            self.emit_expr(arg)?;
+        }
+        self.state().builder.op(Opcode::Defer, span);
+        Ok(())
+    }
+
     fn emit_expr(&mut self, expr: &Expr<'a>) -> Result<()> {
         let span = expr.span.clone();
         match expr.kind {
@@ -711,8 +732,8 @@ impl<'a> Emitter<'a> {
                 self.emit_set_item(&set.node, &set.key, &set.value, span)?
             }
             ExprKind::FString(ref fstr) => self.emit_fstring(fstr, span)?,
-            ExprKind::Array(_) => unimplemented!(),
-            ExprKind::Map(_) => unimplemented!(),
+            ExprKind::Array(ref exprs) => self.emit_array_lit(exprs, span)?,
+            ExprKind::Map(ref entries) => self.emit_map_lit(entries, span)?,
             ExprKind::Variable(ref name) => self.emit_var_expr(name)?,
             ExprKind::PrefixIncDec(ref incdec) => self.emit_incdec_expr(incdec, false, span)?,
             ExprKind::PostfixIncDec(ref incdec) => self.emit_incdec_expr(incdec, true, span)?,
@@ -1028,6 +1049,36 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    fn emit_array_lit(&mut self, exprs: &[Expr<'a>], span: Span) -> Result<()> {
+        for expr in exprs {
+            self.emit_expr(expr)?;
+        }
+        self.state()
+            .builder
+            .op(Opcode::CreateArray(exprs.len() as u32), span);
+        Ok(())
+    }
+
+    fn emit_map_lit(&mut self, entries: &[MapEntry<'a>], span: Span) -> Result<()> {
+        self.state()
+            .builder
+            .op(Opcode::CreateEmptyMap, span.clone());
+        for entry in entries {
+            match entry {
+                MapEntry::Pair(ref key, ref value) => {
+                    self.emit_expr(key)?;
+                    self.emit_expr(value)?;
+                    self.state().builder.op(Opcode::MapInsert, span.clone());
+                }
+                MapEntry::Spread(ref expr) => {
+                    self.emit_expr(expr)?;
+                    self.state().builder.op(Opcode::MapExtend, span.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn emit_var_expr(&mut self, name: &Token<'_>) -> Result<()> {
         let get = self.state().resolve_variable_get(name.lexeme.as_ref());
         self.state().builder.op(get, name.span.clone());
@@ -1159,6 +1210,10 @@ mod tests {
     test_eq!(t45_nested_if_expr);
     test_eq!(t46_call_expr);
     test_eq!(t47_string_interpolation);
+    test_eq!(t48_array_literal);
+    test_eq!(t49_map_literal);
+    test_eq!(t50_defer_stmt);
+    test_eq!(t51_return_stmt);
 
     mod _impl {
         use super::*;

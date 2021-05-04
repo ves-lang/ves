@@ -562,7 +562,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn defer_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
-        let expr = if self.match_(&TokenKind::LeftBrace) {
+        let call = if self.match_(&TokenKind::LeftBrace) {
             let body_start = self.previous.span.start;
             let body = self.block()?;
             let body_end = self.previous.span.end;
@@ -573,29 +573,32 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 self.previous.span.clone(),
                 TokenKind::Identifier,
             );
-            ast::Expr {
-                kind: ast::ExprKind::Call(box ast::Call {
-                    callee: ast::Expr {
-                        kind: ast::ExprKind::Fn(box ast::FnInfo {
-                            name,
-                            params: ast::Params::default(),
-                            body,
-                            kind: ast::FnKind::Function,
-                        }),
-                        span: body_span.clone(),
-                    },
-                    args: vec![],
-                    tco: false,
-                    rest: false,
-                }),
-                span: body_span,
+            ast::Call {
+                callee: ast::Expr {
+                    kind: ast::ExprKind::Fn(box ast::FnInfo {
+                        name,
+                        params: ast::Params::default(),
+                        body,
+                        kind: ast::FnKind::Function,
+                    }),
+                    span: body_span,
+                },
+                args: vec![],
+                tco: false,
+                rest: false,
             }
+        } else if let ast::ExprKind::Call(call) = self.call()?.kind {
+            *call
         } else {
-            self.call()?
+            return Err(VesError::parse(
+                "Only calls and blocks may be deferred",
+                span_start..self.previous.span.end,
+                self.fid,
+            ));
         };
         let span_end = self.previous.span.end;
         Ok(ast::Stmt {
-            kind: ast::StmtKind::Defer(box expr),
+            kind: ast::StmtKind::Defer(box call),
             span: span_start..span_end,
         })
     }
