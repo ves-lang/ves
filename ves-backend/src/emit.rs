@@ -752,6 +752,7 @@ impl<'a> Emitter<'a> {
             ExprKind::Lit(ref literal) => self.emit_lit(literal)?,
             ExprKind::Binary(op, ref a, ref b) => self.emit_binary_expr(op, a, b, span)?,
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
+            // TODO
             ExprKind::Struct(_) => unimplemented!(),
             ExprKind::Fn(_) => unimplemented!(),
             ExprKind::If(ref info) => self.emit_if_expr(info, span, None)?,
