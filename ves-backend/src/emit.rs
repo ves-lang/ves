@@ -494,7 +494,10 @@ impl<'a> Emitter<'a> {
     /// is either a range (`START..END`/`START..=END`) or an expression whose value
     /// is conformant with the iterator protocol.
     ///
-    // TODO: decide what the iterator protocol should be
+    /// The iterator protocol has 3 parts: `@iter`, `@next`, `@done`.
+    /// - `@iter` is should return a value which has the `@next` and `@done` methods
+    /// - `@next` is should return the next value, or none if there are no more values
+    /// - `@done` is should return `true` if there are no more values, and `false` otherwise
     fn emit_foreach_loop(&mut self, info: &ForEach<'a>, span: Span) -> Result<()> {
         self.state().begin_scope();
         let mut comparison_op = Opcode::LessThan;
@@ -524,8 +527,28 @@ impl<'a> Emitter<'a> {
                 self.state().add_local("[[STEP]]");
                 self.emit_expr(step)?;
             }
-            // TODO: iterator protocol
-            IteratorKind::Expr(_) => unimplemented!(),
+            IteratorKind::Expr(ref iterable) => {
+                let iter_local = self.state().add_local("[[ITER]]");
+                self.emit_expr(iterable)?;
+                // FIXME: stub for heap-value
+                // this should be a string constant for accessing "iter"
+                let iter = self.state().builder.constant(Value::None, span.clone())?;
+                // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
+                self.state().builder.op(Opcode::GetProp(iter), span.clone());
+                self.state().builder.op(Opcode::Call(0), span.clone());
+
+                // now emit `<item>`
+                self.state().add_local(info.variable.lexeme.clone());
+                // and initialize it with `[[ITER]].next()`
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(iter_local), span.clone());
+                // FIXME: stub for heap-value
+                // this should be a string constant for accessing "next"
+                let next = self.state().builder.constant(Value::None, span.clone())?;
+                self.state().builder.op(Opcode::GetProp(next), span.clone());
+                self.state().builder.op(Opcode::Call(0), span.clone());
+            }
         }
         self.state().begin_loop();
         let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
@@ -553,8 +576,24 @@ impl<'a> Emitter<'a> {
                 self.state().builder.op(Opcode::Pop, span.clone());
                 self.state().builder.op(Opcode::Jump(body), span.clone());
             }
-            // TODO: iterator protocol
-            IteratorKind::Expr(..) => unimplemented!(),
+            IteratorKind::Expr(..) => {
+                // emit `![[ITER]].done()`
+                let iter_local = self.state().resolve_local("[[ITER]]").unwrap();
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(iter_local), span.clone());
+                // FIXME: stub for heap-value
+                // this should be a string constant for accessing "done"
+                let done = self.state().builder.constant(Value::None, span.clone())?;
+                self.state().builder.op(Opcode::GetProp(done), span.clone());
+                self.state().builder.op(Opcode::Call(0), span.clone());
+                self.state().builder.op(Opcode::Not, span.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::JumpIfFalse(exit), span.clone());
+                self.state().builder.op(Opcode::Pop, span.clone());
+                self.state().builder.op(Opcode::Jump(body), span.clone());
+            }
         }
         self.state().builder.label(latch);
         match info.iterator {
@@ -578,8 +617,27 @@ impl<'a> Emitter<'a> {
                 self.state().op_pop(1, span.clone());
                 self.state().builder.op(Opcode::Jump(start), span.clone());
             }
-            // TODO: iterator protocol
-            IteratorKind::Expr(..) => unimplemented!(),
+            IteratorKind::Expr(..) => {
+                // emit `<item> = [[ITER]].next()`
+                let iter_local = self.state().resolve_local("[[ITER]]").unwrap();
+                self.state()
+                    .builder
+                    .op(Opcode::GetLocal(iter_local), span.clone());
+                // FIXME: stub for heap-value
+                // this should be a string constant for accessing "next"
+                let next = self.state().builder.constant(Value::None, span.clone())?;
+                self.state().builder.op(Opcode::GetProp(next), span.clone());
+                self.state().builder.op(Opcode::Call(0), span.clone());
+                let item_local = self
+                    .state()
+                    .resolve_local(info.variable.lexeme.as_ref())
+                    .unwrap();
+                self.state()
+                    .builder
+                    .op(Opcode::SetLocal(item_local), span.clone());
+                self.state().op_pop(1, span.clone());
+                self.state().builder.op(Opcode::Jump(start), span.clone());
+            }
         }
         self.state().builder.label(body);
         self.emit_stmt(&info.body)?;
@@ -1212,6 +1270,7 @@ mod tests {
     test_eq!(t49_map_literal);
     test_eq!(t50_defer_stmt);
     test_eq!(t51_return_stmt);
+    test_eq!(t52_foreach_iterable);
 
     mod _impl {
         use super::*;
