@@ -1,0 +1,67 @@
+mut value
+
+while ok(value) = value {
+    print(value)
+}
+
+while err(value) = value {
+    print(value)
+}
+
+if ok(value) = value {
+    print(value)
+}
+
+if err(value) = value {
+    print(value)
+}
+
+%output
+
+|0000| PushNone         //
+|0001| SetGlobal(0)     // mut value
+|0002| Pop              //
+// @loop0.start:
+|0003| PushNone         // push none ; stack slot for <value>
+|0004| UnwrapOk(0)      // ok(value) = value ; <condition>
+|0005| JumpIfFalse(10)  // jump_if_false @loop0.exit
+|0006| Pop              // pop <condition> result
+|0007| GetLocal(0)      // get value
+|0008| Print            // print(value)
+|0009| Jump(3)          // jump @loop0.start
+// @loop0.exit:
+|0010| Pop              // pop value
+// @loop1.start:
+|0011| PushNone         // push none ; stack slot for <value>
+|0012| UnwrapErr(1)     // ok(value) = value ; <condition>
+|0013| JumpIfFalse(18)  // jump_if_false @loop1.exit
+|0014| Pop              // pop <condition> result
+|0015| GetLocal(1)      // get value
+|0016| Print            // print(value)
+|0017| Jump(11)         // jump @loop1.start
+// @loop1.exit:
+|0018| Pop              // pop value
+|0019| PushNone         // push none ; stack slot for <value>
+|0020| UnwrapOk(2)      // ok(value) = value ; <condition>
+|0021| JumpIfFalse(27)  // jump_if_false @if0.other
+|0022| Pop              // pop <condition> result
+|0023| GetLocal(2)      // get value
+|0024| Print            // print(value)
+|0025| PushNone         // <if0 result>
+|0026| Jump(28)         // jump @if0.end
+// @if0.other:
+|0027| Pop              // pop <condition> result
+// @if0.end:
+|0028| Pop              // pop <if0 result>
+|0029| PushNone         // push none ; stack slot for <value>
+|0030| UnwrapErr(3)     // ok(value) = value ; <condition>
+|0031| JumpIfFalse(37)  // jump_if_false @if1.other
+|0032| Pop              // 
+|0033| GetLocal(3)      // get value
+|0034| Print            // print(value)
+|0035| PushNone         // <if1 result>
+|0036| Jump(38)         // jump @if1.end
+// @if1.other:
+|0037| Pop              // pop <condition> result
+// @if1.end:
+|0038| Pop              // pop <if1 result>

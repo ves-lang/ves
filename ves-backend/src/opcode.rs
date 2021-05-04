@@ -108,6 +108,18 @@ pub enum Opcode {
     WrapOk,
     /// Wrap operand in Err
     WrapErr,
+    /// Unwrap an Ok
+    ///
+    /// If the operand is `Ok`, this should evaluate to `true`
+    /// and set the local at `stack slot` to the inner value.
+    /// If the operand is not `Ok`, this should only evaluate to `false`
+    UnwrapOk(/* stack slot */ u32),
+    /// Unwrap an Err
+    ///
+    /// If the operand is `Err`, this should evaluate to `true`
+    /// and set the local at `stack slot` to the inner value.
+    /// If the operand is not `Err`, this should only evaluate to `false`
+    UnwrapErr(/* stack slot */ u32),
     /// Mark the operand as `spread`, which means:
     /// - It must be iterable (conform to the iterator protocol)
     /// - In an array literal, the values of this iterator are all pushed into the array

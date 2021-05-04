@@ -1169,9 +1169,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }
                 }
                 _ => {
+                    // FIXME(moscow): this panics for `if Ok(value) = value { ... }`
+                    // it should return a proper error
                     // TODO: do not run this twice
-                    // NOTE(moscow): I don't think checking it multiple times is a problem,
-                    // because a really deep property/item access is only like 3-4 nodes
                     let kind = check_assignment_target(&expr, false);
                     return Err(self.invalid_assignment_error(kind, expr.span));
                 }

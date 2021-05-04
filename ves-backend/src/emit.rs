@@ -385,22 +385,12 @@ impl<'a> Emitter<'a> {
     /// ```
     fn emit_loop(&mut self, info: &Loop<'a>, span: Span) -> Result<()> {
         self.state().begin_loop();
-
-        // Reserve two labels - start and end of the loop.
         let [start, end] = self.state().reserve_labels::<2>();
-
-        // The labels may be used for explicit control flow with break and continue,
-        // so we need to declare them.
         self.state().add_control_label(&info.label, start, end);
-
-        // Emit the loop body with a jump to the start label at the end
         self.state().builder.label(start);
         self.emit_stmt(&info.body)?;
         self.state().builder.op(Opcode::Jump(start), span);
-
-        // Emit the end label
         self.state().builder.label(end);
-
         self.state().end_loop();
         Ok(())
     }
@@ -440,48 +430,41 @@ impl<'a> Emitter<'a> {
     /// TODO: describe the layout for the loops with a binding
     fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
         self.state().begin_loop();
-
-        // Reserve three labels as required by the layout
         let [start, exit, end] = self.state().reserve_labels::<3>();
-
-        // Break statements jump to the @end label (not @exit), so that's what we need to declare
         self.state().add_control_label(&info.label, start, end);
-
-        // Emit the start label and compile the condition
         self.state().builder.label(start);
-
         match &info.condition.pattern {
             ConditionPattern::Value => {
-                // A simple value condition: evaluate it and jump to the exit label if it's false
                 self.emit_expr(&info.condition.value)?;
+            }
+            ConditionPattern::IsOk(ref binding) => {
                 self.state()
                     .builder
-                    .op(Opcode::JumpIfFalse(exit), span.clone());
-
-                // If this instruction is reached, the condition was true, and the jump didn't occur, so
-                // we need to clean up the condition value.
-                self.state().builder.op(Opcode::Pop, span.clone());
+                    .op(Opcode::PushNone, binding.span.clone());
+                let slot = self.state().add_local(binding.lexeme.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::UnwrapOk(slot), binding.span.clone());
             }
-            // TODO
-            ConditionPattern::IsOk(ref _binding) => {
-                unimplemented!();
-            }
-            ConditionPattern::IsErr(ref _binding) => {
-                unimplemented!();
+            ConditionPattern::IsErr(ref binding) => {
+                self.state()
+                    .builder
+                    .op(Opcode::PushNone, binding.span.clone());
+                let slot = self.state().add_local(binding.lexeme.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::UnwrapErr(slot), binding.span.clone());
             }
         }
-
-        // Emit the loop body with a jump to the start at the end
+        self.state()
+            .builder
+            .op(Opcode::JumpIfFalse(exit), span.clone());
+        self.state().builder.op(Opcode::Pop, span.clone());
         self.emit_stmt(&info.body)?;
         self.state().builder.op(Opcode::Jump(start), span);
-
-        // Emit the loop exit block
         self.state().builder.label(exit);
         self.state().op_pop(1, info.condition.value.span.clone());
-
-        // Emit the loop end block (targeted by `break`s)
         self.state().builder.label(end);
-
         self.state().end_loop();
         Ok(())
     }
@@ -917,9 +900,24 @@ impl<'a> Emitter<'a> {
             ConditionPattern::Value => {
                 self.emit_expr(&info.condition.value)?;
             }
-            // TODO
-            ConditionPattern::IsOk(_) => unimplemented!(),
-            ConditionPattern::IsErr(_) => unimplemented!(),
+            ConditionPattern::IsOk(ref binding) => {
+                self.state()
+                    .builder
+                    .op(Opcode::PushNone, binding.span.clone());
+                let slot = self.state().add_local(binding.lexeme.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::UnwrapOk(slot), binding.span.clone());
+            }
+            ConditionPattern::IsErr(ref binding) => {
+                self.state()
+                    .builder
+                    .op(Opcode::PushNone, binding.span.clone());
+                let slot = self.state().add_local(binding.lexeme.clone());
+                self.state()
+                    .builder
+                    .op(Opcode::UnwrapErr(slot), binding.span.clone());
+            }
         }
         self.state()
             .builder
@@ -1271,6 +1269,7 @@ mod tests {
     test_eq!(t50_defer_stmt);
     test_eq!(t51_return_stmt);
     test_eq!(t52_foreach_iterable);
+    test_eq!(t53_condition_patterns);
 
     mod _impl {
         use super::*;
