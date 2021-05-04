@@ -1352,7 +1352,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         ]) {
             expr = match self.previous.kind {
                 TokenKind::LeftParen => {
-                    // TODO: tail call
                     let args = self.arg_list()?;
                     self.consume(&TokenKind::RightParen, "Expected ')'")?;
                     ast::Expr {

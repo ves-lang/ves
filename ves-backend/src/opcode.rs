@@ -3,7 +3,6 @@
 //   - Try to name with a verb (e.g. `Add`) or a verb+noun (e.g. `PushTrue`)
 //   - If there is an unambigous, shorter name, then it can be used, even if it does
 //     not follow the pattern (e.g. `LessThan`)
-// QQQ(moscow): maybe we *should* store struct-like variants instead of tuple-like variants?
 // - Since the opcode enum variants with values store numeric types, it is necessary to
 //   include a comment describing the value's meaning or intended usage
 
@@ -109,6 +108,20 @@ pub enum Opcode {
     WrapOk,
     /// Wrap operand in Err
     WrapErr,
+    /// Mark the operand as `spread`, which means:
+    /// - It must be iterable (conform to the iterator protocol)
+    /// - In an array literal, the values of this iterator are all pushed into the array
+    /// - In a map literal, the entries of this iterator are all added to the map
+    /// - In a call, the values of this iterator are pushed into an the rest argument array
+    MarkSpread,
+    /// Call the operand with `count` arguments
+    ///
+    /// The stack should look like: [<function>, <receiver>, <arg 0>, <arg 1>, <arg 2>, ..., <arg [count]>]
+    ///
+    /// The `receiver` stack slot is reserved and it's value is `none` if there is no receiver
+    Call(/* count */ u32),
+    /// Join `count` fragments on the stack into a single string
+    Interpolate(/* count */ u32),
     /// Print a single value
     Print,
     /// Print N values

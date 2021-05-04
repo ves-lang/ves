@@ -695,8 +695,11 @@ impl<'a> Emitter<'a> {
             ExprKind::If(ref info) => self.emit_if_expr(info, span, None)?,
             ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
             ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
-            ExprKind::Call(_) => unimplemented!(),
-            ExprKind::Spread(_) => unimplemented!(),
+            ExprKind::Call(ref call) => self.emit_call_expr(call, span)?,
+            ExprKind::Spread(ref expr) => {
+                self.emit_expr(expr)?;
+                self.state().builder.op(Opcode::MarkSpread, span);
+            }
             ExprKind::GetProp(ref get) => {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span)?
             }
@@ -707,7 +710,7 @@ impl<'a> Emitter<'a> {
             ExprKind::SetItem(ref set) => {
                 self.emit_set_item(&set.node, &set.key, &set.value, span)?
             }
-            ExprKind::FString(_) => unimplemented!(),
+            ExprKind::FString(ref fstr) => self.emit_fstring(fstr, span)?,
             ExprKind::Array(_) => unimplemented!(),
             ExprKind::Map(_) => unimplemented!(),
             ExprKind::Variable(ref name) => self.emit_var_expr(name)?,
@@ -907,6 +910,17 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    fn emit_call_expr(&mut self, call: &Call<'a>, span: Span) -> Result<()> {
+        self.emit_expr(&call.callee)?;
+        for expr in call.args.iter() {
+            self.emit_expr(expr)?;
+        }
+        self.state()
+            .builder
+            .op(Opcode::Call(call.args.len() as u32), span);
+        Ok(())
+    }
+
     fn emit_lit(&mut self, lit: &Lit) -> Result<()> {
         let span = lit.token.span.clone();
         match lit.value {
@@ -998,6 +1012,19 @@ impl<'a> Emitter<'a> {
         self.emit_expr(key)?;
         self.emit_expr(value)?;
         self.state().builder.op(Opcode::SetItem, span);
+        Ok(())
+    }
+
+    fn emit_fstring(&mut self, fstr: &FString<'a>, span: Span) -> Result<()> {
+        for frag in fstr.fragments.iter() {
+            match frag {
+                FStringFrag::Str(ref lit) => self.emit_lit(lit)?,
+                FStringFrag::Expr(ref expr) => self.emit_expr(expr)?,
+            }
+        }
+        self.state()
+            .builder
+            .op(Opcode::Interpolate(fstr.fragments.len() as u32), span);
         Ok(())
     }
 
@@ -1130,6 +1157,8 @@ mod tests {
     test_eq!(t43_do_block_expr_with_value);
     test_eq!(t44_simple_if_expr);
     test_eq!(t45_nested_if_expr);
+    test_eq!(t46_call_expr);
+    test_eq!(t47_string_interpolation);
 
     mod _impl {
         use super::*;
