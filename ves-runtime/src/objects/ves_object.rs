@@ -9,21 +9,21 @@ use crate::objects::{
 };
 
 /// A reference-counted pointer to a [`VesObject`].
-pub type VesRef = Cc<VesObject>;
+pub type VesRef = Gc<VesObject>;
 /// A non-null raw pointer to a refcounted [`VesObject`].
-pub type VesPtr = NonNull<CcBox<VesObject>>;
+pub type VesPtr = NonNull<GcBox<VesObject>>;
 /// A raw pointer to a refcounted [`VesObject`] that _may_ but _shouldn't_ be null.
-pub type VesRawPtr = *mut CcBox<VesObject>;
+pub type VesRawPtr = *mut GcBox<VesObject>;
 
 /// QQQ: should the contained values be Cc or just Box?
 #[derive(Debug, Clone)]
 pub enum VesObject {
     /// An immutable string.
-    Str(VesStrView),
+    Str(VesStr),
     /// A ves struct instance.
-    Instance(Cc<VesInstance>),
+    Instance(VesInstance),
     /// A struct type instance.
-    Struct(Cc<VesStruct>),
+    Struct(VesStruct),
 }
 
 impl VesObject {

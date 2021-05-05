@@ -1,7 +1,7 @@
 #![feature(allocator_api)]
 extern crate static_assertions as sa;
-extern crate ves_cc;
 
+pub mod gc;
 pub mod objects;
 pub mod runtime;
 

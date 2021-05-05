@@ -1,5 +1,5 @@
 //! Contains the implementation of the Ves [`Value`] type.
-use ves_cc::Trace;
+use crate::{gc::GcObj, VesObject};
 
 use super::{ptr_guard::PtrGuard, ves_object::VesRef};
 
@@ -13,36 +13,16 @@ pub enum Value {
     Bool(bool),
     /// A null/none value.
     None,
-    /// A reference-counted pointer to a heap-allocated Ves object.
-    Ptr(PtrGuard),
+    /// A managed pointer to a heap-allocated Ves object.
+    Ref(GcObj),
 }
 
 impl Value {
-    /// Returns the number of references used by this value. Returns `0` for the primitive types.
-    #[inline]
-    pub fn ref_count(&self) -> usize {
-        if let Value::Ptr(ptr) = self {
-            ptr.ref_count()
-        } else {
-            0
-        }
-    }
-
-    /// Returns the inner pointer as a freshly allocated Cc instance.
+    /// Returns the inner [`GcObj`].
     #[inline]
     pub fn as_ptr(&self) -> Option<VesRef> {
-        if let Value::Ptr(ptr) = self {
-            Some(ptr.clone().get())
-        } else {
-            None
-        }
-    }
-
-    /// Returns the pointer guard stored inside the value.
-    #[inline]
-    pub fn as_ptr_guard(&self) -> Option<&PtrGuard> {
-        if let Value::Ptr(ptr) = self {
-            Some(&ptr)
+        if let Value::Ref(ptr) = self {
+            Some(*ptr)
         } else {
             None
         }
@@ -50,8 +30,8 @@ impl Value {
 }
 
 impl From<VesRef> for Value {
-    fn from(cc: VesRef) -> Self {
-        Self::Ptr(PtrGuard::new(cc))
+    fn from(ptr: VesRef) -> Self {
+        Self::Ref(ptr)
     }
 }
 
@@ -64,19 +44,6 @@ impl From<f64> for Value {
 impl From<bool> for Value {
     fn from(b: bool) -> Self {
         Value::Bool(b)
-    }
-}
-
-impl Clone for Value {
-    fn clone(&self) -> Self {
-        if let Value::Ptr(guard) = self {
-            Value::Ptr(guard.clone())
-        } else {
-            unsafe {
-                // Safety: Num, Bool, and Nil are `Copy` while `self` is valid for reads, so this operation is safe.
-                std::ptr::read(self as *const _)
-            }
-        }
     }
 }
 

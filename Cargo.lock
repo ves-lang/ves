@@ -964,7 +964,6 @@ name = "ves-runtime"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "bacon_rajan_cc",
  "const-random",
  "hashbrown 0.11.2",
  "static_assertions",

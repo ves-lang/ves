@@ -1,8 +1,8 @@
-use std::vec::from_elem_in;
+use std::{ptr::NonNull, vec::from_elem_in};
 
+use crate::gc::{proxy_allocator::ProxyAllocator, GcObj, Trace};
 use ahash::RandomState;
 use hashbrown::HashMap;
-use ves_cc::{proxy_allocator::ProxyAllocator, Cc, Trace};
 
 use super::{ves_str::VesStrView, Value};
 
@@ -14,20 +14,17 @@ pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 pub struct Function {}
 
 impl Trace for Function {
-    fn trace(&self, _tracer: &mut ves_cc::Tracer) {}
+    fn trace(&self, tracer: impl FnMut(&mut GcObj)) {}
 }
 
 #[derive(Debug)]
 pub struct VesStruct {
-    methods: VesHashMap<VesStrView, Cc<Function>>,
-    fields: VesHashMap<VesStrView, u8>,
+    methods: VesHashMap<GcObj, GcObj>,
+    fields: VesHashMap<GcObj, u8>,
 }
 
 impl VesStruct {
-    pub fn new(
-        fields: VesHashMap<VesStrView, u8>,
-        methods: VesHashMap<VesStrView, Cc<Function>>,
-    ) -> Self {
+    pub fn new(fields: VesHashMap<GcObj, u8>, methods: VesHashMap<GcObj, GcObj>) -> Self {
         Self { methods, fields }
     }
 }
