@@ -31,7 +31,13 @@ impl BytecodeBuilder {
         }
     }
 
+    #[inline]
+    pub fn file_id(&self) -> FileId {
+        self.file_id
+    }
+
     /// Get the current offset
+    #[inline]
     pub fn offset(&self) -> u32 {
         self.code.len() as u32
     }

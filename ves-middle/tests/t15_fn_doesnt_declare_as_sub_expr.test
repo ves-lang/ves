@@ -1,0 +1,19 @@
+(fn f()=>1)() + (fn f()=>1) == (fn f()=>2)()
+f(); // undeclared variable
+
+if (fn condition()=>true)() {}
+condition(); // undeclared variable
+
+%output
+
+error: Undefined variable `f`
+  ┌─ <source: #987b4ea239f464c1>:2:1
+  │
+2 │ f(); // undeclared variable
+  │ ^
+
+error: Undefined variable `condition`
+  ┌─ <source: #987b4ea239f464c1>:5:1
+  │
+5 │ condition(); // undeclared variable
+  │ ^^^^^^^^^

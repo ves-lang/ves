@@ -15,6 +15,10 @@ pub enum Opcode {
     GetLocal(/* stack slot */ u32),
     /// Set a value at specified stack address
     SetLocal(/* stack slot */ u32),
+    /// Get a closure's upvalue
+    GetUpvalue(/* index */ u32),
+    /// Set a closure's upvalue
+    SetUpvalue(/* index */ u32),
     /// Get a global value
     GetGlobal(/* global slot */ u32),
     /// Set a global value
