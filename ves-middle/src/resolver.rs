@@ -390,7 +390,15 @@ impl<'a> Resolver<'a> {
             #[allow(clippy::single_match)]
             match &mut expr.kind {
                 ExprKind::Call(box Call { ref mut tco, .. }) => *tco = true,
-                ExprKind::If(ref mut r#if) => {
+                ExprKind::If(box If {
+                    ref mut then,
+                    otherwise:
+                        Some(Expr {
+                            kind: ExprKind::DoBlock(otherwise),
+                            ..
+                        }),
+                    ..
+                }) => {
                     // If both do blocks of the if end with a call, we can enable TCO on both them without rewriting the AST since
                     // the TCO call instruction automatically cleans up the stack. Thus, the following code:
                     //
@@ -399,7 +407,16 @@ impl<'a> Resolver<'a> {
                     // Becomes equivalent to:
                     //
                     // if (...) { return tco_call() } else { return tco_call() }
-                    self.try_enable_if_expr_tco(r#if)
+                    match (
+                        self.find_call_in_do_block(then),
+                        self.find_call_in_do_block(otherwise),
+                    ) {
+                        (Some(then_call), Some(else_call)) => {
+                            then_call.tco = true;
+                            else_call.tco = true;
+                        }
+                        _ => {}
+                    }
                 }
                 _ => (),
             }
@@ -408,22 +425,6 @@ impl<'a> Resolver<'a> {
         statements
             .iter_mut()
             .for_each(|stmt| self.resolve_stmt(stmt, registry, ex));
-    }
-
-    fn try_enable_if_expr_tco(&self, r#if: &mut If<'a>) {
-        if let Some(call) = self.find_call_in_do_block(&mut r#if.then) {
-            call.tco = true;
-        }
-        if let Some(ref mut otherwise) = r#if.otherwise {
-            match otherwise {
-                Else::If(ref mut r#if) => self.try_enable_if_expr_tco(r#if),
-                Else::Bare(ref mut block) => {
-                    if let Some(call) = self.find_call_in_do_block(block) {
-                        call.tco = true;
-                    }
-                }
-            }
-        }
     }
 
     fn find_call_in_do_block<'b>(&self, block: &'b mut DoBlock<'a>) -> Option<&'b mut Call<'a>> {
@@ -442,10 +443,7 @@ impl<'a> Resolver<'a> {
         self.resolve_condition(&mut r#if.condition, registry, ex);
         self.resolve_do_block(&mut r#if.then, registry, ex);
         if let Some(ref mut r#else) = r#if.otherwise {
-            match r#else {
-                Else::If(ref mut r#if) => self.resolve_if(r#if, registry, ex),
-                Else::Bare(ref mut do_block) => self.resolve_do_block(do_block, registry, ex),
-            }
+            self.resolve_expr(r#else, registry, ex);
         }
 
         self.pop(ex);

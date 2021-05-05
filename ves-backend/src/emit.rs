@@ -934,12 +934,9 @@ impl<'a> Emitter<'a> {
         }
         self.state().builder.op(Opcode::Jump(end), span.clone());
         self.state().builder.label(other);
-        self.state().builder.op(Opcode::Pop, span.clone());
+        self.state().builder.op(Opcode::Pop, span);
         if let Some(ref otherwise) = info.otherwise {
-            match otherwise {
-                Else::If(ref nested) => self.emit_if_expr(nested, span, Some(end))?,
-                Else::Bare(ref block) => self.emit_do_block_expr(block, span)?,
-            }
+            self.emit_expr(otherwise)?;
         }
         // only emit the end label once, from the initial call to emit_if_expr
         if end_label.is_none() {
