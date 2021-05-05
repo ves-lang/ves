@@ -672,12 +672,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn comma(&mut self, is_sub_expr: bool) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        // FIXME: this means that the first fn expression in a comma expression *will* declare a variable,
-        // even though it shouldn't! I have no idea how to fix this without arbitrary lookahead, to check
-        // if it's really a part of a comma expression.
-        // I don't know if this will cause any problems in regular usage, because of the places comma
-        // expressions tend to appear (such as in shorthand functions, and return expressions), where
-        // you usually don't try to use the function, but only return it.
         let mut exprs = vec![self.expr(is_sub_expr)?];
         while self.match_(&TokenKind::Comma) {
             exprs.push(self.expr(true)?);
