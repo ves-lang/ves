@@ -1,15 +1,14 @@
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
-use crate::opcode::Opcode;
 use crate::Result;
+use crate::{builder::Function, opcode::Opcode};
 use crate::{
-    builder::{BytecodeBuilder, Chunk},
+    builder::{BytecodeBuilder, Chunk, Value},
     Span,
 };
 use ves_error::FileId;
 use ves_parser::ast::*;
 use ves_parser::lexer::Token;
-use ves_runtime::Value;
 
 struct Local<'a> {
     name: Cow<'a, str>,
@@ -22,8 +21,8 @@ struct Local<'a> {
 /// The index may refer to two different places:
 /// 1. An enclosing scopes' stack slot
 /// 2. An enclosing function's upvalue index
-#[derive(PartialEq)]
-enum Upvalue {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Upvalue {
     /// Upvalue brought in from the enclosing function's locals
     Local(u32),
     /// Upvalue brought in from the enclosing function's upvalues
@@ -215,24 +214,30 @@ impl<'a> State<'a> {
     }
 
     fn add_upvalue(&mut self, upvalue: Upvalue) -> u32 {
-        for existing in self.upvalues.iter() {
+        // don't duplicate upvalues
+        for (index, existing) in self.upvalues.iter().enumerate() {
             if existing == &upvalue {
-                return existing.index();
+                return index as u32;
             }
         }
         self.upvalues.push(upvalue);
         (self.upvalues.len() - 1) as u32
     }
 
+    /// Try to resolve an upvalue from the locals in the enclosing scope,
+    /// or the upvalues of an enclosing function.
     fn resolve_upvalue(&mut self, name: &str) -> Option<u32> {
         if let Some(enclosing) = &mut self.enclosing {
             // try to resolve the upvalue as a local from the enclosing scope
+            // and if that fails, recurse
             if let Some(index) = enclosing.resolve_local(name) {
+                // When the closure is created, this upvalue will be created from a local variable
+                // in the enclosing scope
                 Some(self.add_upvalue(Upvalue::Local(index)))
             } else {
-                // if that fails, recurse
                 enclosing
                     .resolve_upvalue(name)
+                    // this upvalue will be created from an upvalue in the enclosing closure
                     .map(|index| self.add_upvalue(Upvalue::Upvalue(index)))
             }
         } else {
@@ -264,24 +269,25 @@ impl<'a> State<'a> {
         }
     }
 
-    fn define(&mut self, name: &Token<'a>) -> Result<()> {
+    fn define<S: Into<Cow<'a, str>>>(&mut self, name: S, span: Span) -> Result<()> {
+        let name = name.into();
         if self.scope_depth == 0 {
             let index = self
                 .globals
-                .get(&name.lexeme[..])
+                .get(&name[..])
                 .copied()
                 .ok_or_else(|| {
                     format!(
                         /* This shouldn't ever happen since we collect and check all globals */
                         "Attempted to define the variable `{}` as a global variable",
-                        name.lexeme
+                        name
                     )
                 })
                 .unwrap();
-            self.builder.op(Opcode::SetGlobal(index), name.span.clone());
-            self.op_pop(1, name.span.clone());
+            self.builder.op(Opcode::SetGlobal(index), span.clone());
+            self.op_pop(1, span);
         } else {
-            self.add_local(name.lexeme.clone());
+            self.add_local(name);
         }
 
         Ok(())
@@ -376,7 +382,8 @@ impl<'a> Emitter<'a> {
             } else {
                 self.state.builder.op(Opcode::PushNone, span);
             }
-            self.state.define(&var.name)?;
+            self.state
+                .define(var.name.lexeme.clone(), var.name.span.clone())?;
         }
         Ok(())
     }
@@ -597,9 +604,10 @@ impl<'a> Emitter<'a> {
             IteratorKind::Expr(ref iterable) => {
                 let iter_local = self.state.add_local("[[ITER]]");
                 self.emit_expr(iterable, true)?;
-                // FIXME: stub for heap-value
-                // this should be a string constant for accessing "iter"
-                let iter = self.state.builder.constant(Value::None, span.clone())?;
+                let iter = self
+                    .state
+                    .builder
+                    .constant(Value::String("iter".into()), span.clone())?;
                 // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
                 self.state.builder.op(Opcode::GetProp(iter), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
@@ -610,9 +618,10 @@ impl<'a> Emitter<'a> {
                 self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
-                // FIXME: stub for heap-value
-                // this should be a string constant for accessing "next"
-                let next = self.state.builder.constant(Value::None, span.clone())?;
+                let next = self
+                    .state
+                    .builder
+                    .constant(Value::String("next".into()), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(next), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
             }
@@ -649,9 +658,10 @@ impl<'a> Emitter<'a> {
                 self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
-                // FIXME: stub for heap-value
-                // this should be a string constant for accessing "done"
-                let done = self.state.builder.constant(Value::None, span.clone())?;
+                let done = self
+                    .state
+                    .builder
+                    .constant(Value::String("done".into()), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(done), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 self.state.builder.op(Opcode::Not, span.clone());
@@ -690,9 +700,10 @@ impl<'a> Emitter<'a> {
                 self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
-                // FIXME: stub for heap-value
-                // this should be a string constant for accessing "next"
-                let next = self.state.builder.constant(Value::None, span.clone())?;
+                let next = self
+                    .state
+                    .builder
+                    .constant(Value::String("next".into()), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(next), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
@@ -1153,10 +1164,11 @@ impl<'a> Emitter<'a> {
             LitValue::None => {
                 self.state.builder.op(Opcode::PushNone, span);
             }
-            LitValue::Str(ref _value) => {
-                // FIXME: stub before heap values are available
-                // the constant here should be a string
-                let offset = self.state.builder.constant(Value::None, span.clone())?;
+            LitValue::Str(ref value) => {
+                let offset = self
+                    .state
+                    .builder
+                    .constant(value.clone().into(), span.clone())?;
                 self.state.builder.op(Opcode::GetConst(offset), span);
             }
         }
@@ -1167,13 +1179,15 @@ impl<'a> Emitter<'a> {
     fn emit_get_prop(
         &mut self,
         node: &Expr<'a>,
-        _name: &Token<'a>,
+        name: &Token<'a>,
         is_optional: bool,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(node, true)?;
-        // FIXME: stub before heap values are available
-        let offset = self.state.builder.constant(Value::None, span.clone())?;
+        let offset = self
+            .state
+            .builder
+            .constant(name.lexeme.clone().into(), span.clone())?;
         self.state.builder.op(
             if is_optional {
                 Opcode::TryGetProp(offset)
@@ -1188,14 +1202,16 @@ impl<'a> Emitter<'a> {
     fn emit_set_prop(
         &mut self,
         node: &Expr<'a>,
-        _name: &Token<'a>,
+        name: &Token<'a>,
         value: &Expr<'a>,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(node, true)?;
         self.emit_expr(value, true)?;
-        // FIXME: stub before heap values are available
-        let offset = self.state.builder.constant(Value::None, span.clone())?;
+        let offset = self
+            .state
+            .builder
+            .constant(name.lexeme.clone().into(), span.clone())?;
         self.state.builder.op(Opcode::SetProp(offset), span);
         Ok(())
     }
@@ -1295,7 +1311,10 @@ impl<'a> Emitter<'a> {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 // FIXME: stub before heap values are available
                 self.state.builder.op(add_or_sub_one, span.clone());
-                let offset = self.state.builder.constant(Value::None, span.clone())?;
+                let offset = self
+                    .state
+                    .builder
+                    .constant(get.field.lexeme.clone().into(), span.clone())?;
                 self.state.builder.op(Opcode::SetProp(offset), span.clone());
             }
             ExprKind::GetItem(ref get) => {

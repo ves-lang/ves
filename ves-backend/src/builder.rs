@@ -1,23 +1,89 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
+use crate::emit::Upvalue;
 use crate::opcode::Opcode;
 use crate::Result;
 use crate::Span;
 use ves_error::{FileId, VesError};
-use ves_runtime::{NanBox, Value};
+/* use ves_runtime::{NanBox, Value}; */
 
+#[derive(Debug, Clone)]
 pub struct Chunk {
     pub code: Vec<Opcode>,
     pub spans: Vec<Span>,
-    pub constants: Vec<NanBox>,
+    pub constants: Vec<Value>,
     pub file_id: FileId,
+}
+
+// TEMP
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    /// How many positional arguments this function accepts
+    pub positionals: u32,
+    /// How many default arguments this function accepts
+    pub defaults: u32,
+    /// Whether or not this function accepts an arbitrary amount of arguments
+    pub rest: bool,
+    pub chunk: Chunk,
+}
+
+// TEMP
+#[derive(Debug, Clone)]
+pub struct Closure {
+    pub function: Function,
+    pub upvalues: Vec<Upvalue>,
+}
+
+// TEMP: replace the usage of this with the actual ves_runtime Value once GC is implemented
+#[derive(Debug, Clone)]
+pub enum Value {
+    Number(f64),
+    String(String),
+    Function(Function),
+    Closure(Closure),
+    /* Struct(Struct), */
+}
+impl Value {
+    pub fn function<S: Into<String>>(
+        name: S,
+        positionals: u32,
+        defaults: u32,
+        rest: bool,
+        upvalues: Vec<Upvalue>,
+        chunk: Chunk,
+    ) -> Self {
+        let function = Function {
+            name: name.into(),
+            positionals,
+            defaults,
+            rest,
+            chunk,
+        };
+        if upvalues.is_empty() {
+            Value::Function(function)
+        } else {
+            Value::Closure(Closure { function, upvalues })
+        }
+    }
+}
+
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
+        Value::Number(value)
+    }
+}
+impl<'a> From<Cow<'a, str>> for Value {
+    fn from(value: Cow<'a, str>) -> Self {
+        Value::String(value.to_string())
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct BytecodeBuilder {
     code: Vec<Opcode>,
     spans: Vec<Span>,
-    constants: Vec<NanBox>,
+    constants: Vec<Value>,
     file_id: FileId,
 }
 
@@ -81,7 +147,7 @@ impl BytecodeBuilder {
                 self.file_id,
             ))
         } else {
-            self.constants.push(NanBox::new(value));
+            self.constants.push(value);
             Ok(index)
         }
     }
