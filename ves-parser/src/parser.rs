@@ -1173,10 +1173,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }
                 }
                 _ => {
-                    // FIXME(moscow): this panics for `if Ok(value) = value { ... }`
-                    // it should return a proper error
-                    // TODO: do not run this twice
-                    let kind = check_assignment_target(&expr, false);
+                    let kind = check_assignment_target(&expr, true);
                     return Err(self.invalid_assignment_error(kind, expr.span));
                 }
             });
@@ -1836,7 +1833,6 @@ fn check_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> AssignmentK
                 }
             }
             ast::ExprKind::GetItem(ref get) => check_assignment_target(&get.node, false),
-            ast::ExprKind::Call(ref call) => check_assignment_target(&call.callee, false),
             _ => AssignmentKind::Valid,
         }
     } else {
@@ -1934,4 +1930,5 @@ mod tests {
     test_err!(t28_bad_export);
     test_ok!(t29_import);
     test_err!(t30_bad_import);
+    test_ok!(t31_parse_assignment);
 }
