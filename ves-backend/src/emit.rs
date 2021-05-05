@@ -103,7 +103,7 @@ impl<'a> State<'a> {
         self.scope_depth
     }
 
-    fn end_scope(&mut self, scope_span: Span) {
+    fn end_scope(&mut self, scope_span: Span) -> u32 {
         self.scope_depth -= 1;
         // pop locals from the closed scope
         let mut n_locals = 0;
@@ -116,6 +116,7 @@ impl<'a> State<'a> {
         self.locals
             .drain(self.locals.len() - n_locals..self.locals.len());
         self.op_pop(n_locals as u32, scope_span);
+        n_locals as u32
     }
 
     /// Partially closing a scope means discarding all its locals,
@@ -505,6 +506,7 @@ impl<'a> Emitter<'a> {
         let [start, exit, end] = self.state.reserve_labels::<3>();
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
+        // TODO: while loops are also wrong (in the same way as if expr)
         match &info.condition.pattern {
             ConditionPattern::Value => {
                 self.emit_expr(&info.condition.value, true)?;
@@ -827,7 +829,7 @@ impl<'a> Emitter<'a> {
             // TODO
             ExprKind::Struct(ref info) => self.emit_struct_expr(info, span, is_sub_expr)?,
             ExprKind::Fn(ref info) => self.emit_fn_expr(info, span, is_sub_expr)?,
-            ExprKind::If(ref info) => self.emit_if_expr(info, span, None)?,
+            ExprKind::If(ref info) => self.emit_if_expr(info, span)?,
             ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
             ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
             ExprKind::Call(ref call) => self.emit_call_expr(call, span)?,
@@ -977,58 +979,91 @@ impl<'a> Emitter<'a> {
     ///   pop result of condition
     /// end:
     /// ```
-    fn emit_if_expr(&mut self, info: &If<'a>, span: Span, end_label: Option<u32>) -> Result<()> {
+    fn emit_if_expr(&mut self, info: &If<'a>, span: Span) -> Result<()> {
         // reserve only a single `end` label, which is used as the exit point for all branches
-        let [other, end] = if let Some(end_label) = end_label {
-            [self.state.reserve_label(), end_label]
-        } else {
-            self.state.reserve_labels::<2>()
-        };
-        match info.condition.pattern {
-            ConditionPattern::Value => {
-                self.emit_expr(&info.condition.value, true)?;
+        let end = self.state.reserve_label();
+        // similarly to a do block, an if expression has a value
+        // this value must outlive every inner scope of the entire expression
+        self.state.begin_scope();
+        let value_slot = self.state.add_local("[[VALUE]]");
+        self.state.builder.op(Opcode::PushNone, span.clone());
+        let mut current_branch = Some(info);
+        // instead of recursively, the if expression is emitted iteratively,
+        // because it greatly simplifies handling of scope
+        while let Some(branch) = current_branch {
+            let other = self.state.reserve_label();
+            self.state.begin_scope();
+            let mut used_pattern = false;
+            match branch.condition.pattern {
+                ConditionPattern::Value => {
+                    self.emit_expr(&branch.condition.value, true)?;
+                }
+                ConditionPattern::IsOk(ref binding) => {
+                    used_pattern = true;
+                    let slot = self.state.add_local(binding.lexeme.clone());
+                    self.state
+                        .builder
+                        .op(Opcode::PushNone, binding.span.clone());
+                    self.emit_expr(&branch.condition.value, true)?;
+                    self.state
+                        .builder
+                        .op(Opcode::UnwrapOk(slot), binding.span.clone());
+                }
+                ConditionPattern::IsErr(ref binding) => {
+                    used_pattern = true;
+                    let slot = self.state.add_local(binding.lexeme.clone());
+                    self.state
+                        .builder
+                        .op(Opcode::PushNone, binding.span.clone());
+                    self.emit_expr(&branch.condition.value, true)?;
+                    self.state
+                        .builder
+                        .op(Opcode::UnwrapErr(slot), binding.span.clone());
+                }
             }
-            ConditionPattern::IsOk(ref binding) => {
-                self.state
-                    .builder
-                    .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state.add_local(binding.lexeme.clone());
-                self.state
-                    .builder
-                    .op(Opcode::UnwrapOk(slot), binding.span.clone());
+            self.state
+                .builder
+                .op(Opcode::JumpIfFalse(other), span.clone());
+            self.state.builder.op(Opcode::Pop, span.clone());
+            for stmt in branch.then.statements.iter() {
+                self.emit_stmt(stmt)?;
             }
-            ConditionPattern::IsErr(ref binding) => {
+            if let Some(ref value) = branch.then.value {
+                self.emit_expr(value, true)?;
                 self.state
                     .builder
-                    .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state.add_local(binding.lexeme.clone());
-                self.state
-                    .builder
-                    .op(Opcode::UnwrapErr(slot), binding.span.clone());
+                    .op(Opcode::SetLocal(value_slot), span.clone());
+                self.state.op_pop(1, span.clone());
+            }
+            self.state.end_scope(span.clone());
+            self.state.builder.op(Opcode::Jump(end), span.clone());
+            self.state.builder.label(other);
+            self.state.op_pop(1, span.clone());
+            if used_pattern {
+                self.state.op_pop(1, span.clone());
+            }
+            current_branch = match branch.otherwise {
+                Some(Else::Block(ref block)) => {
+                    self.state.begin_scope();
+                    for stmt in block.statements.iter() {
+                        self.emit_stmt(stmt)?;
+                    }
+                    if let Some(ref value) = block.value {
+                        self.emit_expr(value, true)?;
+                        self.state
+                            .builder
+                            .op(Opcode::SetLocal(value_slot), span.clone());
+                        self.state.op_pop(1, span.clone());
+                    }
+                    self.state.end_scope(span.clone());
+                    None
+                }
+                Some(Else::If(ref branch)) => Some(branch),
+                _ => None,
             }
         }
-        self.state
-            .builder
-            .op(Opcode::JumpIfFalse(other), span.clone());
-        self.state.builder.op(Opcode::Pop, span.clone());
-        for stmt in info.then.statements.iter() {
-            self.emit_stmt(stmt)?;
-        }
-        if let Some(ref value) = info.then.value {
-            self.emit_expr(value, true)?;
-        } else {
-            self.state.builder.op(Opcode::PushNone, span.clone());
-        }
-        self.state.builder.op(Opcode::Jump(end), span.clone());
-        self.state.builder.label(other);
-        self.state.builder.op(Opcode::Pop, span);
-        if let Some(ref otherwise) = info.otherwise {
-            self.emit_expr(otherwise, true)?;
-        }
-        // only emit the end label once, from the initial call to emit_if_expr
-        if end_label.is_none() {
-            self.state.builder.label(end);
-        }
+        self.state.builder.label(end);
+        self.state.end_scope_partial(span, 1);
         Ok(())
     }
 
@@ -1053,6 +1088,7 @@ impl<'a> Emitter<'a> {
             self.state
                 .builder
                 .op(Opcode::SetLocal(value_slot), span.clone());
+            self.state.op_pop(1, span.clone());
         }
         // preserve one local value on the stack
         self.state.end_scope_partial(span, 1);
@@ -1350,7 +1386,7 @@ mod tests {
     test_eq!(t50_defer_stmt);
     test_eq!(t51_return_stmt);
     test_eq!(t52_foreach_iterable);
-    test_eq!(t53_condition_patterns);
+    test_eq!(t53_if_condition_patterns);
 
     mod _impl {
         use super::*;

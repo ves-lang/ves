@@ -496,6 +496,12 @@ pub struct Condition<'a> {
     pub pattern: ConditionPattern<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum Else<'a> {
+    If(#[forward] Ptr<If<'a>>),
+    Block(#[forward] Ptr<DoBlock<'a>>),
+}
+
 /// An if statement.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct If<'a> {
@@ -504,7 +510,7 @@ pub struct If<'a> {
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
-    pub otherwise: Option<Expr<'a>>,
+    pub otherwise: Option<Else<'a>>,
 }
 
 /// A `do` block.

@@ -1024,15 +1024,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         let mut otherwise = None;
         if self.match_(&TokenKind::Else) {
             if self.match_(&TokenKind::If) {
-                otherwise = Some(self.if_expr()?);
+                otherwise = Some(ast::Else::If(box self.if_()?));
             } else {
-                let start = self.current.span.start;
-                let block = self.do_block()?;
-                let end = self.previous.span.end;
-                otherwise = Some(ast::Expr {
-                    kind: ast::ExprKind::DoBlock(box block),
-                    span: start..end,
-                });
+                otherwise = Some(ast::Else::Block(box self.do_block()?));
             }
         }
         Ok(ast::If {

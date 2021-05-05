@@ -8,14 +8,18 @@ v = if v is none {
 |0000| PushNone         // push none
 |0001| SetGlobal(0)     // mut v = none
 |0002| Pop              // pop none
-|0003| GetGlobal(0)     // get v
-|0004| IsNone           // v is none ; <condition>
-|0005| JumpIfFalse(9)   // jump_if_false @other
-|0006| Pop              // pop <condition> result
-|0007| PushNum32(0.0)   // push 0
-|0008| Jump(10)         // jump @end
-// @other:
-|0009| Pop              // pop <condition> result
-// @end:
-|0010| SetGlobal(0)     // set v to value of if expr
-|0011| Pop              // pop result of if expr
+// @if.start:
+|0003| PushNone         // [[VALUE]] = none
+|0004| GetGlobal(0)     // get v
+|0005| IsNone           // v is none
+|0006| JumpIfFalse(12)  // jump_if_false @if.other
+|0007| Pop              // pop v is none
+|0008| PushNum32(0.0)   // push 0
+|0009| SetLocal(0)      // [[VALUE]] = 0
+|0010| Pop              // pop 0
+|0011| Jump(13)         // jump @end
+// @if.other:
+|0012| Pop              // pop v is none
+// @if.end:
+|0013| SetGlobal(0)     // v = [[VALUE]]
+|0014| Pop              // pop [[VALUE]]

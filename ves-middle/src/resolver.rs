@@ -383,7 +383,8 @@ impl<'a> Resolver<'a> {
         registry: &ModuleRegistry<T>,
         ex: &mut ErrCtx,
     ) {
-        if let Some(StmtKind::Return(Some(ref mut expr))) =
+        // FIXME: ast change to if expressions
+        /* if let Some(StmtKind::Return(Some(ref mut expr))) =
             statements.last_mut().map(|s| &mut s.kind)
         {
             // TODO: detect more things here
@@ -420,7 +421,7 @@ impl<'a> Resolver<'a> {
                 }
                 _ => (),
             }
-        }
+        } */
 
         statements
             .iter_mut()
@@ -443,7 +444,10 @@ impl<'a> Resolver<'a> {
         self.resolve_condition(&mut r#if.condition, registry, ex);
         self.resolve_do_block(&mut r#if.then, registry, ex);
         if let Some(ref mut r#else) = r#if.otherwise {
-            self.resolve_expr(r#else, true, registry, ex);
+            match r#else {
+                Else::If(ref mut r#if) => self.resolve_if(r#if, registry, ex),
+                Else::Block(ref mut block) => self.resolve_do_block(block, registry, ex),
+            }
         }
 
         self.pop(ex);
@@ -561,6 +565,7 @@ impl<'a> Resolver<'a> {
             ExprKind::Fn(box ref mut r#fn) => {
                 self.resolve_function(r#fn, !is_sub_expr, registry, ex);
             }
+            // FIXME: ast change to if expressions
             ExprKind::If(ref mut r#if) => self.resolve_if(r#if, registry, ex),
             ExprKind::DoBlock(block) => self.resolve_do_block(block, registry, ex),
             ExprKind::Binary(_, ref mut left, ref mut right) => {
