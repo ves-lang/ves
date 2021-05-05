@@ -283,7 +283,7 @@ impl<'a> Emitter<'a> {
             Break(label) => self.emit_loop_control(label, LoopControl::Break, span)?,
             Continue(label) => self.emit_loop_control(label, LoopControl::Continue, span)?,
             Defer(ref expr) => self.emit_defer_stmt(expr, span)?,
-            _Empty => panic!("Unexpected StmtKind::_Empty"),
+            _Empty => (),
         }
 
         Ok(())
