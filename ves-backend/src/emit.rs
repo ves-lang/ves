@@ -11,10 +11,16 @@ use ves_parser::ast::*;
 use ves_parser::lexer::Token;
 use ves_runtime::Value;
 
-#[derive(Debug)]
 struct Local<'a> {
     name: Cow<'a, str>,
     depth: usize,
+}
+
+enum Upvalue {
+    /// An upvalue brought in from the enclosing scope
+    Local(u32),
+    /// An upvalue brought in from the enclosing function's upvalues
+    Upvalue(u32),
 }
 
 /// A label used in loop control flow (break/continue)
@@ -37,8 +43,10 @@ enum LoopControl {
 /// and `labels` for the "physical" LoopLabel, which holds the start/end of a loop?
 
 struct State<'a> {
+    enclosing: Option<Box<State<'a>>>,
     builder: BytecodeBuilder,
     locals: Vec<Local<'a>>,
+    upvalues: Vec<Upvalue>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
 
@@ -51,10 +59,16 @@ struct State<'a> {
 }
 
 impl<'a> State<'a> {
-    fn new(file_id: FileId, globals: Rc<HashMap<String, u32>>) -> Self {
+    fn new(
+        enclosing: Option<Box<State<'a>>>,
+        file_id: FileId,
+        globals: Rc<HashMap<String, u32>>,
+    ) -> Self {
         State {
+            enclosing,
             builder: BytecodeBuilder::new(file_id),
             locals: vec![],
+            upvalues: vec![],
             control_labels: HashMap::new(),
             labels: Vec::new(),
             globals,
@@ -239,7 +253,7 @@ fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> Hash
 }
 
 pub struct Emitter<'a> {
-    states: Vec<State<'a>>,
+    state: State<'a>,
     ast: AST<'a>,
 }
 
@@ -247,14 +261,9 @@ impl<'a> Emitter<'a> {
     pub fn new(ast: AST<'a>) -> Emitter<'a> {
         let globals = Rc::new(extract_global_slots(&ast.globals));
         Emitter {
-            states: vec![State::new(ast.file_id, globals)],
+            state: State::new(None, ast.file_id, globals),
             ast,
         }
-    }
-
-    #[inline]
-    fn state(&mut self) -> &mut State<'a> {
-        self.states.last_mut().unwrap()
     }
 
     pub fn emit(mut self) -> Result<Chunk> {
@@ -264,7 +273,7 @@ impl<'a> Emitter<'a> {
             self.emit_stmt(&stmt)?;
         }
 
-        Ok(self.state().finish())
+        Ok(self.state.finish())
     }
 
     fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
@@ -291,7 +300,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_expr_stmt(&mut self, expr: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(expr)?;
-        self.state().builder.op(Opcode::Pop, span);
+        self.state.builder.op(Opcode::Pop, span);
         Ok(())
     }
 
@@ -301,9 +310,9 @@ impl<'a> Emitter<'a> {
             if let Some(ref initializer) = var.initializer {
                 self.emit_expr(initializer)?;
             } else {
-                self.state().builder.op(Opcode::PushNone, span);
+                self.state.builder.op(Opcode::PushNone, span);
             }
-            self.state().define(&var.name)?;
+            self.state.define(&var.name)?;
         }
         Ok(())
     }
@@ -315,27 +324,27 @@ impl<'a> Emitter<'a> {
                 for expr in exprs {
                     self.emit_expr(expr)?;
                 }
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::PrintN(exprs.len() as u32), span);
             }
             _ => {
                 self.emit_expr(expr)?;
-                self.state().builder.op(Opcode::Print, span);
+                self.state.builder.op(Opcode::Print, span);
             }
         }
         Ok(())
     }
 
     fn emit_return_stmt(&mut self, value: Option<&Expr<'a>>, span: Span) -> Result<()> {
-        let n_locals = self.state().locals.len() as u32;
-        self.state().op_pop(n_locals, span.clone());
+        let n_locals = self.state.locals.len() as u32;
+        self.state.op_pop(n_locals, span.clone());
         if let Some(value) = value {
             self.emit_expr(value)?;
         } else {
-            self.state().builder.op(Opcode::PushNone, span.clone());
+            self.state.builder.op(Opcode::PushNone, span.clone());
         }
-        self.state().builder.op(Opcode::Return, span);
+        self.state.builder.op(Opcode::Return, span);
         Ok(())
     }
 
@@ -345,7 +354,7 @@ impl<'a> Emitter<'a> {
         kind: LoopControl,
         span: Span,
     ) -> Result<()> {
-        let control_label = self.state().resolve_label(label).unwrap();
+        let control_label = self.state.resolve_label(label).unwrap();
         let scope_depth = control_label.depth;
         // `break` jumps to the end of the loop, `continue` jumps to the start
         let label_id = if kind == LoopControl::Break {
@@ -354,9 +363,9 @@ impl<'a> Emitter<'a> {
             control_label.start
         };
         // Locals from the loop's inner scopes have to be popped off the stack
-        let n_locals = self.state().count_locals_in_scope(scope_depth);
-        self.state().op_pop(n_locals, span);
-        self.state()
+        let n_locals = self.state.count_locals_in_scope(scope_depth);
+        self.state.op_pop(n_locals, span);
+        self.state
             .builder
             .op(Opcode::Jump(label_id), label.span.clone());
         Ok(())
@@ -384,14 +393,14 @@ impl<'a> Emitter<'a> {
     /// end:
     /// ```
     fn emit_loop(&mut self, info: &Loop<'a>, span: Span) -> Result<()> {
-        self.state().begin_loop();
-        let [start, end] = self.state().reserve_labels::<2>();
-        self.state().add_control_label(&info.label, start, end);
-        self.state().builder.label(start);
+        self.state.begin_loop();
+        let [start, end] = self.state.reserve_labels::<2>();
+        self.state.add_control_label(&info.label, start, end);
+        self.state.builder.label(start);
         self.emit_stmt(&info.body)?;
-        self.state().builder.op(Opcode::Jump(start), span);
-        self.state().builder.label(end);
-        self.state().end_loop();
+        self.state.builder.op(Opcode::Jump(start), span);
+        self.state.builder.label(end);
+        self.state.end_loop();
         Ok(())
     }
 
@@ -429,43 +438,43 @@ impl<'a> Emitter<'a> {
     /// ```
     /// TODO: describe the layout for the loops with a binding
     fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
-        self.state().begin_loop();
-        let [start, exit, end] = self.state().reserve_labels::<3>();
-        self.state().add_control_label(&info.label, start, end);
-        self.state().builder.label(start);
+        self.state.begin_loop();
+        let [start, exit, end] = self.state.reserve_labels::<3>();
+        self.state.add_control_label(&info.label, start, end);
+        self.state.builder.label(start);
         match &info.condition.pattern {
             ConditionPattern::Value => {
                 self.emit_expr(&info.condition.value)?;
             }
             ConditionPattern::IsOk(ref binding) => {
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state().add_local(binding.lexeme.clone());
-                self.state()
+                let slot = self.state.add_local(binding.lexeme.clone());
+                self.state
                     .builder
                     .op(Opcode::UnwrapOk(slot), binding.span.clone());
             }
             ConditionPattern::IsErr(ref binding) => {
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state().add_local(binding.lexeme.clone());
-                self.state()
+                let slot = self.state.add_local(binding.lexeme.clone());
+                self.state
                     .builder
                     .op(Opcode::UnwrapErr(slot), binding.span.clone());
             }
         }
-        self.state()
+        self.state
             .builder
             .op(Opcode::JumpIfFalse(exit), span.clone());
-        self.state().builder.op(Opcode::Pop, span.clone());
+        self.state.builder.op(Opcode::Pop, span.clone());
         self.emit_stmt(&info.body)?;
-        self.state().builder.op(Opcode::Jump(start), span);
-        self.state().builder.label(exit);
-        self.state().op_pop(1, info.condition.value.span.clone());
-        self.state().builder.label(end);
-        self.state().end_loop();
+        self.state.builder.op(Opcode::Jump(start), span);
+        self.state.builder.label(exit);
+        self.state.op_pop(1, info.condition.value.span.clone());
+        self.state.builder.label(end);
+        self.state.end_loop();
         Ok(())
     }
 
@@ -482,7 +491,7 @@ impl<'a> Emitter<'a> {
     /// - `@next` is should return the next value, or none if there are no more values
     /// - `@done` is should return `true` if there are no more values, and `false` otherwise
     fn emit_foreach_loop(&mut self, info: &ForEach<'a>, span: Span) -> Result<()> {
-        self.state().begin_scope();
+        self.state.begin_scope();
         let mut comparison_op = Opcode::LessThan;
         match info.iterator {
             IteratorKind::Range(Range {
@@ -496,7 +505,7 @@ impl<'a> Emitter<'a> {
                 };
                 // emit item initializer (e.g. the `i` from `for i in 0..10, 2 { ... }`)
                 // this is equivalent to `for i = 0, ...`
-                self.state().add_local(info.variable.lexeme.clone());
+                self.state.add_local(info.variable.lexeme.clone());
                 self.emit_expr(start)?;
 
                 // the [[END]] and [[STEP]] initializers are given names which
@@ -504,132 +513,132 @@ impl<'a> Emitter<'a> {
                 // from within the loop body
 
                 // emit [[END]] initializer (the `10` from `for i in 0..10, 2 { ... }`)
-                self.state().add_local("[[END]]");
+                self.state.add_local("[[END]]");
                 self.emit_expr(end)?;
                 // emit [[STEP]] initializer (the `2` from `for i in 0..10, 2 { ... }`)
-                self.state().add_local("[[STEP]]");
+                self.state.add_local("[[STEP]]");
                 self.emit_expr(step)?;
             }
             IteratorKind::Expr(ref iterable) => {
-                let iter_local = self.state().add_local("[[ITER]]");
+                let iter_local = self.state.add_local("[[ITER]]");
                 self.emit_expr(iterable)?;
                 // FIXME: stub for heap-value
                 // this should be a string constant for accessing "iter"
-                let iter = self.state().builder.constant(Value::None, span.clone())?;
+                let iter = self.state.builder.constant(Value::None, span.clone())?;
                 // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
-                self.state().builder.op(Opcode::GetProp(iter), span.clone());
-                self.state().builder.op(Opcode::Call(0), span.clone());
+                self.state.builder.op(Opcode::GetProp(iter), span.clone());
+                self.state.builder.op(Opcode::Call(0), span.clone());
 
                 // now emit `<item>`
-                self.state().add_local(info.variable.lexeme.clone());
+                self.state.add_local(info.variable.lexeme.clone());
                 // and initialize it with `[[ITER]].next()`
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
                 // FIXME: stub for heap-value
                 // this should be a string constant for accessing "next"
-                let next = self.state().builder.constant(Value::None, span.clone())?;
-                self.state().builder.op(Opcode::GetProp(next), span.clone());
-                self.state().builder.op(Opcode::Call(0), span.clone());
+                let next = self.state.builder.constant(Value::None, span.clone())?;
+                self.state.builder.op(Opcode::GetProp(next), span.clone());
+                self.state.builder.op(Opcode::Call(0), span.clone());
             }
         }
-        self.state().begin_loop();
-        let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
-        self.state().add_control_label(&info.label, latch, end);
-        self.state().builder.label(start);
+        self.state.begin_loop();
+        let [start, latch, body, exit, end] = self.state.reserve_labels::<5>();
+        self.state.add_control_label(&info.label, latch, end);
+        self.state.builder.label(start);
         match info.iterator {
             IteratorKind::Range(..) => {
                 // emit `info.variable < [[END]]` or `info.variable <= [[END]]`
                 // these locals are guaranteed to exist, because we create them above
                 let start_local = self
-                    .state()
+                    .state
                     .resolve_local(info.variable.lexeme.as_ref())
                     .unwrap();
-                let end_local = self.state().resolve_local("[[END]]").unwrap();
-                self.state()
+                let end_local = self.state.resolve_local("[[END]]").unwrap();
+                self.state
                     .builder
                     .op(Opcode::GetLocal(start_local), span.clone());
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::GetLocal(end_local), span.clone());
-                self.state().builder.op(comparison_op, span.clone());
-                self.state()
+                self.state.builder.op(comparison_op, span.clone());
+                self.state
                     .builder
                     .op(Opcode::JumpIfFalse(exit), span.clone());
-                self.state().builder.op(Opcode::Pop, span.clone());
-                self.state().builder.op(Opcode::Jump(body), span.clone());
+                self.state.builder.op(Opcode::Pop, span.clone());
+                self.state.builder.op(Opcode::Jump(body), span.clone());
             }
             IteratorKind::Expr(..) => {
                 // emit `![[ITER]].done()`
-                let iter_local = self.state().resolve_local("[[ITER]]").unwrap();
-                self.state()
+                let iter_local = self.state.resolve_local("[[ITER]]").unwrap();
+                self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
                 // FIXME: stub for heap-value
                 // this should be a string constant for accessing "done"
-                let done = self.state().builder.constant(Value::None, span.clone())?;
-                self.state().builder.op(Opcode::GetProp(done), span.clone());
-                self.state().builder.op(Opcode::Call(0), span.clone());
-                self.state().builder.op(Opcode::Not, span.clone());
-                self.state()
+                let done = self.state.builder.constant(Value::None, span.clone())?;
+                self.state.builder.op(Opcode::GetProp(done), span.clone());
+                self.state.builder.op(Opcode::Call(0), span.clone());
+                self.state.builder.op(Opcode::Not, span.clone());
+                self.state
                     .builder
                     .op(Opcode::JumpIfFalse(exit), span.clone());
-                self.state().builder.op(Opcode::Pop, span.clone());
-                self.state().builder.op(Opcode::Jump(body), span.clone());
+                self.state.builder.op(Opcode::Pop, span.clone());
+                self.state.builder.op(Opcode::Jump(body), span.clone());
             }
         }
-        self.state().builder.label(latch);
+        self.state.builder.label(latch);
         match info.iterator {
             IteratorKind::Range(..) => {
                 // emit `info.variable += [[STEP]]`
                 let start_local = self
-                    .state()
+                    .state
                     .resolve_local(info.variable.lexeme.as_ref())
                     .unwrap();
-                let step_local = self.state().resolve_local("[[STEP]]").unwrap();
-                self.state()
+                let step_local = self.state.resolve_local("[[STEP]]").unwrap();
+                self.state
                     .builder
                     .op(Opcode::GetLocal(start_local), span.clone());
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::GetLocal(step_local), span.clone());
-                self.state().builder.op(Opcode::Add, span.clone());
-                self.state()
+                self.state.builder.op(Opcode::Add, span.clone());
+                self.state
                     .builder
                     .op(Opcode::SetLocal(start_local), span.clone());
-                self.state().op_pop(1, span.clone());
-                self.state().builder.op(Opcode::Jump(start), span.clone());
+                self.state.op_pop(1, span.clone());
+                self.state.builder.op(Opcode::Jump(start), span.clone());
             }
             IteratorKind::Expr(..) => {
                 // emit `<item> = [[ITER]].next()`
-                let iter_local = self.state().resolve_local("[[ITER]]").unwrap();
-                self.state()
+                let iter_local = self.state.resolve_local("[[ITER]]").unwrap();
+                self.state
                     .builder
                     .op(Opcode::GetLocal(iter_local), span.clone());
                 // FIXME: stub for heap-value
                 // this should be a string constant for accessing "next"
-                let next = self.state().builder.constant(Value::None, span.clone())?;
-                self.state().builder.op(Opcode::GetProp(next), span.clone());
-                self.state().builder.op(Opcode::Call(0), span.clone());
+                let next = self.state.builder.constant(Value::None, span.clone())?;
+                self.state.builder.op(Opcode::GetProp(next), span.clone());
+                self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
-                    .state()
+                    .state
                     .resolve_local(info.variable.lexeme.as_ref())
                     .unwrap();
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::SetLocal(item_local), span.clone());
-                self.state().op_pop(1, span.clone());
-                self.state().builder.op(Opcode::Jump(start), span.clone());
+                self.state.op_pop(1, span.clone());
+                self.state.builder.op(Opcode::Jump(start), span.clone());
             }
         }
-        self.state().builder.label(body);
+        self.state.builder.label(body);
         self.emit_stmt(&info.body)?;
-        self.state().builder.op(Opcode::Jump(latch), span.clone());
-        self.state().builder.label(exit);
-        self.state().op_pop(1, span.clone());
-        self.state().builder.label(end);
-        self.state().end_loop();
-        self.state().end_scope(span);
+        self.state.builder.op(Opcode::Jump(latch), span.clone());
+        self.state.builder.label(exit);
+        self.state.op_pop(1, span.clone());
+        self.state.builder.label(end);
+        self.state.end_loop();
+        self.state.end_scope(span);
 
         Ok(())
     }
@@ -681,58 +690,58 @@ impl<'a> Emitter<'a> {
     /// ```
     /// TODO: describe the layout for the loops with a binding
     fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
-        self.state().begin_scope();
+        self.state.begin_scope();
         for init in info.initializers.iter() {
             self.emit_expr(&init.value)?;
-            self.state().add_local(init.name.lexeme.clone());
+            self.state.add_local(init.name.lexeme.clone());
         }
-        self.state().begin_loop();
-        let [start, latch, body, exit, end] = self.state().reserve_labels::<5>();
+        self.state.begin_loop();
+        let [start, latch, body, exit, end] = self.state.reserve_labels::<5>();
         // Break and continue target the `latch` and `exit` labels
-        self.state().add_control_label(&info.label, latch, end);
-        self.state().builder.label(start);
+        self.state.add_control_label(&info.label, latch, end);
+        self.state.builder.label(start);
         if let Some(ref condition) = info.condition {
             self.emit_expr(condition)?;
-            self.state()
+            self.state
                 .builder
                 .op(Opcode::JumpIfFalse(exit), condition.span.clone());
-            self.state().builder.op(Opcode::Pop, condition.span.clone());
-            self.state()
+            self.state.builder.op(Opcode::Pop, condition.span.clone());
+            self.state
                 .builder
                 .op(Opcode::Jump(body), condition.span.clone());
         } else {
             // if no condition is provided, it is implicitly `true`.
             // Instead of emitting an analog of a `while true` loop, we jump directly into the loop body.
-            self.state().builder.op(Opcode::Jump(body), span.clone());
+            self.state.builder.op(Opcode::Jump(body), span.clone());
         }
-        self.state().builder.label(latch);
+        self.state.builder.label(latch);
         if let Some(ref increment) = info.increment {
             self.emit_expr(increment)?;
-            self.state().op_pop(1, increment.span.clone());
-            self.state()
+            self.state.op_pop(1, increment.span.clone());
+            self.state
                 .builder
                 .op(Opcode::Jump(start), increment.span.clone());
         }
-        self.state().builder.label(body);
+        self.state.builder.label(body);
         self.emit_stmt(&info.body)?;
-        self.state().builder.op(Opcode::Jump(latch), span.clone());
-        self.state().builder.label(exit);
+        self.state.builder.op(Opcode::Jump(latch), span.clone());
+        self.state.builder.label(exit);
         if info.condition.is_some() {
-            self.state().op_pop(1, span.clone());
+            self.state.op_pop(1, span.clone());
         }
-        self.state().builder.label(end);
-        self.state().end_loop();
-        self.state().end_scope(span);
+        self.state.builder.label(end);
+        self.state.end_loop();
+        self.state.end_scope(span);
 
         Ok(())
     }
 
     fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
-        self.state().begin_scope();
+        self.state.begin_scope();
         for stmt in body {
             self.emit_stmt(stmt)?;
         }
-        self.state().end_scope(span);
+        self.state.end_scope(span);
 
         Ok(())
     }
@@ -742,7 +751,7 @@ impl<'a> Emitter<'a> {
         for arg in call.args.iter() {
             self.emit_expr(arg)?;
         }
-        self.state().builder.op(Opcode::Defer, span);
+        self.state.builder.op(Opcode::Defer, span);
         Ok(())
     }
 
@@ -754,14 +763,14 @@ impl<'a> Emitter<'a> {
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
             // TODO
             ExprKind::Struct(_) => unimplemented!(),
-            ExprKind::Fn(_) => unimplemented!(),
+            ExprKind::Fn(ref info) => self.emit_fn_expr(info, span)?,
             ExprKind::If(ref info) => self.emit_if_expr(info, span, None)?,
             ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
             ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
             ExprKind::Call(ref call) => self.emit_call_expr(call, span)?,
             ExprKind::Spread(ref expr) => {
                 self.emit_expr(expr)?;
-                self.state().builder.op(Opcode::Spread, span);
+                self.state.builder.op(Opcode::Spread, span);
             }
             ExprKind::GetProp(ref get) => {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span)?
@@ -811,14 +820,14 @@ impl<'a> Emitter<'a> {
                 _ => None,
             };
             if let Some(inst) = isnt {
-                self.state().builder.op(inst, span);
+                self.state.builder.op(inst, span);
             } else {
                 self.emit_expr(right)?;
-                self.state().builder.op(Opcode::CompareType, span);
+                self.state.builder.op(Opcode::CompareType, span);
             }
         } else {
             self.emit_expr(right)?;
-            self.state().builder.op(
+            self.state.builder.op(
                 match op {
                     BinOpKind::In => Opcode::HasProperty,
                     BinOpKind::Add => Opcode::Add,
@@ -845,7 +854,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_unary_expr(&mut self, op: UnOpKind, operand: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(operand)?;
-        self.state().builder.op(
+        self.state.builder.op(
             match op {
                 UnOpKind::Not => Opcode::Not,
                 UnOpKind::Negate => Opcode::Negate,
@@ -855,6 +864,10 @@ impl<'a> Emitter<'a> {
             },
             span,
         );
+        Ok(())
+    }
+
+    fn emit_fn_expr(&mut self, info: &FnInfo<'a>, span: Span) -> Result<()> {
         Ok(())
     }
 
@@ -893,54 +906,54 @@ impl<'a> Emitter<'a> {
     fn emit_if_expr(&mut self, info: &If<'a>, span: Span, end_label: Option<u32>) -> Result<()> {
         // reserve only a single `end` label, which is used as the exit point for all branches
         let [other, end] = if let Some(end_label) = end_label {
-            [self.state().reserve_label(), end_label]
+            [self.state.reserve_label(), end_label]
         } else {
-            self.state().reserve_labels::<2>()
+            self.state.reserve_labels::<2>()
         };
         match info.condition.pattern {
             ConditionPattern::Value => {
                 self.emit_expr(&info.condition.value)?;
             }
             ConditionPattern::IsOk(ref binding) => {
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state().add_local(binding.lexeme.clone());
-                self.state()
+                let slot = self.state.add_local(binding.lexeme.clone());
+                self.state
                     .builder
                     .op(Opcode::UnwrapOk(slot), binding.span.clone());
             }
             ConditionPattern::IsErr(ref binding) => {
-                self.state()
+                self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state().add_local(binding.lexeme.clone());
-                self.state()
+                let slot = self.state.add_local(binding.lexeme.clone());
+                self.state
                     .builder
                     .op(Opcode::UnwrapErr(slot), binding.span.clone());
             }
         }
-        self.state()
+        self.state
             .builder
             .op(Opcode::JumpIfFalse(other), span.clone());
-        self.state().builder.op(Opcode::Pop, span.clone());
+        self.state.builder.op(Opcode::Pop, span.clone());
         for stmt in info.then.statements.iter() {
             self.emit_stmt(stmt)?;
         }
         if let Some(ref value) = info.then.value {
             self.emit_expr(value)?;
         } else {
-            self.state().builder.op(Opcode::PushNone, span.clone());
+            self.state.builder.op(Opcode::PushNone, span.clone());
         }
-        self.state().builder.op(Opcode::Jump(end), span.clone());
-        self.state().builder.label(other);
-        self.state().builder.op(Opcode::Pop, span);
+        self.state.builder.op(Opcode::Jump(end), span.clone());
+        self.state.builder.label(other);
+        self.state.builder.op(Opcode::Pop, span);
         if let Some(ref otherwise) = info.otherwise {
             self.emit_expr(otherwise)?;
         }
         // only emit the end label once, from the initial call to emit_if_expr
         if end_label.is_none() {
-            self.state().builder.label(end);
+            self.state.builder.label(end);
         }
         Ok(())
     }
@@ -954,21 +967,21 @@ impl<'a> Emitter<'a> {
     /// to the value of the entire do block. It is normally drained from the locals array, but it's value
     /// is *not* popped from the stack.
     fn emit_do_block_expr(&mut self, do_block: &DoBlock<'a>, span: Span) -> Result<()> {
-        self.state().begin_scope();
-        let value_slot = self.state().add_local("[[VALUE]]");
-        self.state().builder.op(Opcode::PushNone, span.clone());
+        self.state.begin_scope();
+        let value_slot = self.state.add_local("[[VALUE]]");
+        self.state.builder.op(Opcode::PushNone, span.clone());
 
         for stmt in do_block.statements.iter() {
             self.emit_stmt(stmt)?;
         }
         if let Some(ref value) = do_block.value {
             self.emit_expr(value)?;
-            self.state()
+            self.state
                 .builder
                 .op(Opcode::SetLocal(value_slot), span.clone());
         }
         // preserve one local value on the stack
-        self.state().end_scope_partial(span, 1);
+        self.state.end_scope_partial(span, 1);
         Ok(())
     }
 
@@ -979,7 +992,7 @@ impl<'a> Emitter<'a> {
         for i in 0..exprs.len() - 1 {
             self.emit_expr(&exprs[i])?;
         }
-        self.state().op_pop((exprs.len() - 1) as u32, span);
+        self.state.op_pop((exprs.len() - 1) as u32, span);
         self.emit_expr(exprs.last().unwrap())?;
 
         Ok(())
@@ -990,7 +1003,7 @@ impl<'a> Emitter<'a> {
         for expr in call.args.iter() {
             self.emit_expr(expr)?;
         }
-        self.state()
+        self.state
             .builder
             .op(Opcode::Call(call.args.len() as u32), span);
         Ok(())
@@ -1001,15 +1014,15 @@ impl<'a> Emitter<'a> {
         match lit.value {
             LitValue::Number(value) => match maybe_f32(value) {
                 Some(value) => {
-                    self.state().builder.op(Opcode::PushNum32(value), span);
+                    self.state.builder.op(Opcode::PushNum32(value), span);
                 }
                 None => {
-                    let offset = self.state().builder.constant(value.into(), span.clone())?;
-                    self.state().builder.op(Opcode::GetConst(offset), span);
+                    let offset = self.state.builder.constant(value.into(), span.clone())?;
+                    self.state.builder.op(Opcode::GetConst(offset), span);
                 }
             },
             LitValue::Bool(value) => {
-                self.state().builder.op(
+                self.state.builder.op(
                     match value {
                         true => Opcode::PushTrue,
                         false => Opcode::PushFalse,
@@ -1018,13 +1031,13 @@ impl<'a> Emitter<'a> {
                 );
             }
             LitValue::None => {
-                self.state().builder.op(Opcode::PushNone, span);
+                self.state.builder.op(Opcode::PushNone, span);
             }
             LitValue::Str(ref _value) => {
                 // FIXME: stub before heap values are available
                 // the constant here should be a string
-                let offset = self.state().builder.constant(Value::None, span.clone())?;
-                self.state().builder.op(Opcode::GetConst(offset), span);
+                let offset = self.state.builder.constant(Value::None, span.clone())?;
+                self.state.builder.op(Opcode::GetConst(offset), span);
             }
         }
 
@@ -1040,8 +1053,8 @@ impl<'a> Emitter<'a> {
     ) -> Result<()> {
         self.emit_expr(node)?;
         // FIXME: stub before heap values are available
-        let offset = self.state().builder.constant(Value::None, span.clone())?;
-        self.state().builder.op(
+        let offset = self.state.builder.constant(Value::None, span.clone())?;
+        self.state.builder.op(
             if is_optional {
                 Opcode::TryGetProp(offset)
             } else {
@@ -1062,15 +1075,15 @@ impl<'a> Emitter<'a> {
         self.emit_expr(node)?;
         self.emit_expr(value)?;
         // FIXME: stub before heap values are available
-        let offset = self.state().builder.constant(Value::None, span.clone())?;
-        self.state().builder.op(Opcode::SetProp(offset), span);
+        let offset = self.state.builder.constant(Value::None, span.clone())?;
+        self.state.builder.op(Opcode::SetProp(offset), span);
         Ok(())
     }
 
     fn emit_get_item(&mut self, node: &Expr<'a>, key: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(node)?;
         self.emit_expr(key)?;
-        self.state().builder.op(Opcode::GetItem, span);
+        self.state.builder.op(Opcode::GetItem, span);
         Ok(())
     }
 
@@ -1084,7 +1097,7 @@ impl<'a> Emitter<'a> {
         self.emit_expr(node)?;
         self.emit_expr(key)?;
         self.emit_expr(value)?;
-        self.state().builder.op(Opcode::SetItem, span);
+        self.state.builder.op(Opcode::SetItem, span);
         Ok(())
     }
 
@@ -1095,7 +1108,7 @@ impl<'a> Emitter<'a> {
                 FStringFrag::Expr(ref expr) => self.emit_expr(expr)?,
             }
         }
-        self.state()
+        self.state
             .builder
             .op(Opcode::Interpolate(fstr.fragments.len() as u32), span);
         Ok(())
@@ -1105,26 +1118,24 @@ impl<'a> Emitter<'a> {
         for expr in exprs {
             self.emit_expr(expr)?;
         }
-        self.state()
+        self.state
             .builder
             .op(Opcode::CreateArray(exprs.len() as u32), span);
         Ok(())
     }
 
     fn emit_map_lit(&mut self, entries: &[MapEntry<'a>], span: Span) -> Result<()> {
-        self.state()
-            .builder
-            .op(Opcode::CreateEmptyMap, span.clone());
+        self.state.builder.op(Opcode::CreateEmptyMap, span.clone());
         for entry in entries {
             match entry {
                 MapEntry::Pair(ref key, ref value) => {
                     self.emit_expr(key)?;
                     self.emit_expr(value)?;
-                    self.state().builder.op(Opcode::MapInsert, span.clone());
+                    self.state.builder.op(Opcode::MapInsert, span.clone());
                 }
                 MapEntry::Spread(ref expr) => {
                     self.emit_expr(expr)?;
-                    self.state().builder.op(Opcode::MapExtend, span.clone());
+                    self.state.builder.op(Opcode::MapExtend, span.clone());
                 }
             }
         }
@@ -1132,16 +1143,16 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_var_expr(&mut self, name: &Token<'_>) -> Result<()> {
-        let get = self.state().resolve_variable_get(name.lexeme.as_ref());
-        self.state().builder.op(get, name.span.clone());
+        let get = self.state.resolve_variable_get(name.lexeme.as_ref());
+        self.state.builder.op(get, name.span.clone());
 
         Ok(())
     }
 
     fn emit_assign_expr(&mut self, name: &str, value: &Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(&value)?;
-        let set = self.state().resolve_variable_set(name);
-        self.state().builder.op(set, span);
+        let set = self.state.resolve_variable_set(name);
+        self.state.builder.op(set, span);
         // we don't pop the right-side expression result, because
         // it's the result of the assignment expression
 
@@ -1163,31 +1174,29 @@ impl<'a> Emitter<'a> {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 // FIXME: stub before heap values are available
-                self.state().builder.op(add_or_sub_one, span.clone());
-                let offset = self.state().builder.constant(Value::None, span.clone())?;
-                self.state()
-                    .builder
-                    .op(Opcode::SetProp(offset), span.clone());
+                self.state.builder.op(add_or_sub_one, span.clone());
+                let offset = self.state.builder.constant(Value::None, span.clone())?;
+                self.state.builder.op(Opcode::SetProp(offset), span.clone());
             }
             ExprKind::GetItem(ref get) => {
                 self.emit_get_item(&get.node, &get.key, span.clone())?;
                 self.emit_expr(&get.key)?;
                 self.emit_get_item(&get.node, &get.key, span.clone())?;
-                self.state().builder.op(add_or_sub_one, span.clone());
-                self.state().builder.op(Opcode::SetItem, span.clone());
+                self.state.builder.op(add_or_sub_one, span.clone());
+                self.state.builder.op(Opcode::SetItem, span.clone());
             }
             ExprKind::Variable(ref var) => {
                 self.emit_var_expr(var)?;
-                self.state().builder.op(add_or_sub_one, span.clone());
-                let set = self.state().resolve_variable_set(var.lexeme.as_ref());
-                self.state().builder.op(set, span.clone());
+                self.state.builder.op(add_or_sub_one, span.clone());
+                let set = self.state.resolve_variable_set(var.lexeme.as_ref());
+                self.state.builder.op(set, span.clone());
             }
             _ => unreachable!(),
         }
         if is_postfix {
             match incdec.kind {
-                IncDecKind::Increment => self.state().builder.op(Opcode::SubtractOne, span),
-                IncDecKind::Decrement => self.state().builder.op(Opcode::AddOne, span),
+                IncDecKind::Increment => self.state.builder.op(Opcode::SubtractOne, span),
+                IncDecKind::Decrement => self.state.builder.op(Opcode::AddOne, span),
             };
         }
         Ok(())
