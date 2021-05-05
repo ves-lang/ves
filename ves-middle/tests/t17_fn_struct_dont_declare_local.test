@@ -1,0 +1,24 @@
+{
+    (fn f() => 1)() + (fn f() => 1)() == (fn f() => 2)();
+    f(); // undefined
+}
+
+{
+    let s = (struct A {});
+    s();
+    A(); // undefined
+}
+
+%output
+
+error: Undefined variable `f`
+  ┌─ <source: #8917cf784827562e>:3:5
+  │
+3 │     f(); // undefined
+  │     ^
+
+error: Undefined variable `A`
+  ┌─ <source: #8917cf784827562e>:9:5
+  │
+9 │     A(); // undefined
+  │     ^

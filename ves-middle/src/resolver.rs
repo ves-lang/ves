@@ -946,4 +946,5 @@ pub mod tests {
     test_err!(t10_shadowing);
     test_err!(t15_fn_doesnt_declare_as_sub_expr);
     test_err!(t16_struct_doesnt_declare_as_sub_expr);
+    test_err!(t17_fn_struct_dont_declare_local);
 }
