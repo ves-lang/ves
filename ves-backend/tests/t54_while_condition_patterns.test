@@ -1,0 +1,31 @@
+mut value
+
+while ok(thing) = value {
+    let sum = thing + 1;
+    print(sum)
+}
+
+// `err(thing) = value` is the same, the only difference is UnwrapErr instead of UnwrapOk
+
+%output
+
+|0000| PushNone         // 
+|0001| SetGlobal(0)     // mut value
+|0002| Pop              // 
+// @while.start:
+|0003| PushNone         // thing
+|0004| GetGlobal(0)     // get value
+|0005| UnwrapOk(0)      // ok(thing) = value; <condition>
+|0006| JumpIfFalse(16)  // if false jump @while.end
+|0007| Pop              // pop <condition> result
+|0008| GetLocal(0)      // get thing
+|0009| PushNum32(1.0)   // push 1
+|0010| Add              // let sum = thing + 1
+|0011| GetLocal(1)      // get sum
+|0012| Print            // print(sum)
+|0013| Pop              // pop get sum
+|0014| Pop              // pop sum
+|0015| Jump(3)          // jump @while.start
+// @while.end:
+|0016| Pop              // pop <condition> result
+|0017| Pop              // pop thing

@@ -507,24 +507,30 @@ impl<'a> Emitter<'a> {
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
         // TODO: while loops are also wrong (in the same way as if expr)
+        self.state.begin_scope();
+        let mut used_pattern = false;
         match &info.condition.pattern {
             ConditionPattern::Value => {
                 self.emit_expr(&info.condition.value, true)?;
             }
             ConditionPattern::IsOk(ref binding) => {
+                used_pattern = true;
+                let slot = self.state.add_local(binding.lexeme.clone());
                 self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state.add_local(binding.lexeme.clone());
+                self.emit_expr(&info.condition.value, true)?;
                 self.state
                     .builder
                     .op(Opcode::UnwrapOk(slot), binding.span.clone());
             }
             ConditionPattern::IsErr(ref binding) => {
+                used_pattern = true;
+                let slot = self.state.add_local(binding.lexeme.clone());
                 self.state
                     .builder
                     .op(Opcode::PushNone, binding.span.clone());
-                let slot = self.state.add_local(binding.lexeme.clone());
+                self.emit_expr(&info.condition.value, true)?;
                 self.state
                     .builder
                     .op(Opcode::UnwrapErr(slot), binding.span.clone());
@@ -535,9 +541,13 @@ impl<'a> Emitter<'a> {
             .op(Opcode::JumpIfFalse(exit), span.clone());
         self.state.builder.op(Opcode::Pop, span.clone());
         self.emit_stmt(&info.body)?;
+        self.state.end_scope(span.clone());
         self.state.builder.op(Opcode::Jump(start), span);
         self.state.builder.label(exit);
         self.state.op_pop(1, info.condition.value.span.clone());
+        if used_pattern {
+            self.state.op_pop(1, info.condition.value.span.clone());
+        }
         self.state.builder.label(end);
         self.state.end_loop();
         Ok(())
@@ -1387,6 +1397,7 @@ mod tests {
     test_eq!(t51_return_stmt);
     test_eq!(t52_foreach_iterable);
     test_eq!(t53_if_condition_patterns);
+    test_eq!(t54_while_condition_patterns);
 
     mod _impl {
         use super::*;
