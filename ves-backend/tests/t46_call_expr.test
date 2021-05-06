@@ -30,3 +30,4 @@ f(0, 0, 0, ...rest);
 |0020| Spread           // ...rest
 |0021| Call(4)          // f(0, 0, 0, ...rest)
 |0022| Pop              // pop result of f(0, 0, 0, ...rest)
+|0023| Return

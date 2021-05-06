@@ -60,3 +60,4 @@
 |0039| Pop              // pop result of condition
 |0040| PopN(3)          // pop i, first.[[END]], first.[[STEP]]
 // @second.end:
+|0041| Return

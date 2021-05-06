@@ -8,3 +8,4 @@
 |0003| SetLocal(0)
 |0004| Pop
 |0005| Pop
+|0006| Return

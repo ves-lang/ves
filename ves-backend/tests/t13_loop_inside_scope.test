@@ -28,3 +28,4 @@ mut a;
 |0012| Jump(5)         // jump to loop 1 <loop #1 end>
 |0013| Pop             // pop c
 |0014| Pop             // pop b
+|0015| Return

@@ -1,6 +1,6 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use crate::emit::Upvalue;
+use crate::emit::UpvalueInfo;
 use crate::opcode::Opcode;
 use crate::Result;
 use crate::Span;
@@ -32,7 +32,14 @@ pub struct Function {
 #[derive(Debug, Clone)]
 pub struct Closure {
     pub function: Function,
-    pub upvalues: Vec<Upvalue>,
+    pub upvalues: Vec<UpvalueInfo>,
+}
+
+// TEMP
+#[derive(Debug, Clone)]
+pub struct ClosureDescriptor {
+    pub fn_constant_index: u32,
+    pub upvalues: Vec<UpvalueInfo>,
 }
 
 // TEMP: replace the usage of this with the actual ves_runtime Value once GC is implemented
@@ -42,6 +49,7 @@ pub enum Value {
     String(String),
     Function(Function),
     Closure(Closure),
+    ClosureDescriptor(ClosureDescriptor),
     /* Struct(Struct), */
 }
 impl Value {
@@ -50,21 +58,22 @@ impl Value {
         positionals: u32,
         defaults: u32,
         rest: bool,
-        upvalues: Vec<Upvalue>,
         chunk: Chunk,
     ) -> Self {
-        let function = Function {
+        Value::Function(Function {
             name: name.into(),
             positionals,
             defaults,
             rest,
             chunk,
-        };
-        if upvalues.is_empty() {
-            Value::Function(function)
-        } else {
-            Value::Closure(Closure { function, upvalues })
-        }
+        })
+    }
+
+    pub fn closure_desc(fn_constant_index: u32, upvalues: Vec<UpvalueInfo>) -> Self {
+        Self::ClosureDescriptor(ClosureDescriptor {
+            fn_constant_index,
+            upvalues,
+        })
     }
 }
 

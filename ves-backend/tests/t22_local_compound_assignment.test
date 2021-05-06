@@ -9,3 +9,4 @@
 |0004| SetLocal(0)     // a = a + 5
 |0005| Pop             // pop a = a + 5
 |0006| Pop             // pop a
+|0007| Return

@@ -5,3 +5,4 @@ let v = do { /* none */ }
 |0000| PushNone
 |0001| SetGlobal(0)
 |0002| Pop
+|0003| Return

@@ -7,3 +7,4 @@ mut a; a
 |0002| Pop             // pop (a = none)
 |0003| GetGlobal(0)    //
 |0004| Pop             // pop GetGlobal(a)
+|0005| Return

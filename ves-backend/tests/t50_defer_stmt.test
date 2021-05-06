@@ -9,3 +9,4 @@ defer file.close()
 |0003| GetGlobal(0)     // get file
 |0004| GetProp(0)       // get prop "close"
 |0005| Defer            // defer file.close()
+|0006| Return

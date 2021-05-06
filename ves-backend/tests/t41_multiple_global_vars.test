@@ -18,3 +18,4 @@ print(a, b, c)
 |0010| GetGlobal(1)
 |0011| GetGlobal(2)
 |0012| PrintN(3)
+|0013| Return

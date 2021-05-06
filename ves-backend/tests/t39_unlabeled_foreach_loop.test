@@ -30,3 +30,4 @@ for i in 0..10, 2 {
 |0018| Pop              // pop result of condition
 |0019| PopN(3)          // pop i, [[END]], [[STEP]]
 // @loop.end:
+|0020| Return

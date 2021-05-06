@@ -12,3 +12,4 @@ loop {
 |0004| Pop               // pop 1 + 1
 |0005| Pop               // pop a
 |0006| Jump(0)           // jump to loop_start <loop_end>
+|0007| Return

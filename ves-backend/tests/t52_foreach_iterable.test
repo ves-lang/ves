@@ -38,3 +38,4 @@ for item in iterable {
 |0025| Pop              // pop <condition> result
 |0026| PopN(2)          // pop <item>, [[ITER]]
 // @loop.end:
+|0027| Return

@@ -19,3 +19,4 @@ let v = [0, 1, "test", f(), f"1 + 1 = {1 + 1}"]
 |0013| CreateArray(5)   // create [0, 1, "test", f(), f"1 + 1 = {1 + 1}"]
 |0014| SetGlobal(1)     // set v
 |0015| Pop              // pop array
+|0016| Return

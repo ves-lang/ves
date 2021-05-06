@@ -8,7 +8,7 @@ use crate::{
 };
 use ves_error::FileId;
 use ves_parser::ast::*;
-use ves_parser::lexer::Token;
+use ves_parser::lexer::{Token, TokenKind};
 
 struct Local<'a> {
     name: Cow<'a, str>,
@@ -19,24 +19,14 @@ struct Local<'a> {
 /// into a closure.
 ///
 /// The index may refer to two different places:
-/// 1. An enclosing scopes' stack slot
+/// 1. An enclosing function's stack slot
 /// 2. An enclosing function's upvalue index
-#[derive(Debug, Clone, PartialEq)]
-pub enum Upvalue {
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum UpvalueInfo {
     /// Upvalue brought in from the enclosing function's locals
     Local(u32),
     /// Upvalue brought in from the enclosing function's upvalues
     Upvalue(u32),
-}
-
-impl Upvalue {
-    #[inline]
-    fn index(&self) -> u32 {
-        match self {
-            Upvalue::Local(index) => *index,
-            Upvalue::Upvalue(index) => *index,
-        }
-    }
 }
 
 /// A label used in loop control flow (break/continue)
@@ -60,9 +50,10 @@ enum LoopControl {
 
 struct State<'a> {
     enclosing: Option<Box<State<'a>>>,
+    fn_kind: Option<FnKind>,
     builder: BytecodeBuilder,
     locals: Vec<Local<'a>>,
-    upvalues: Vec<Upvalue>,
+    upvalues: Vec<UpvalueInfo>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
 
@@ -83,6 +74,7 @@ impl<'a> State<'a> {
         State {
             enclosing,
             builder: BytecodeBuilder::new(file_id),
+            fn_kind: None,
             locals: vec![],
             upvalues: vec![],
             control_labels: HashMap::new(),
@@ -213,7 +205,7 @@ impl<'a> State<'a> {
         None
     }
 
-    fn add_upvalue(&mut self, upvalue: Upvalue) -> u32 {
+    fn add_upvalue(&mut self, upvalue: UpvalueInfo) -> u32 {
         // don't duplicate upvalues
         for (index, existing) in self.upvalues.iter().enumerate() {
             if existing == &upvalue {
@@ -233,12 +225,14 @@ impl<'a> State<'a> {
             if let Some(index) = enclosing.resolve_local(name) {
                 // When the closure is created, this upvalue will be created from a local variable
                 // in the enclosing scope
-                Some(self.add_upvalue(Upvalue::Local(index)))
+
+                Some(self.add_upvalue(UpvalueInfo::Local(index)))
             } else {
                 enclosing
                     .resolve_upvalue(name)
                     // this upvalue will be created from an upvalue in the enclosing closure
-                    .map(|index| self.add_upvalue(Upvalue::Upvalue(index)))
+                    // FIXME: panics if there are more than u16::MAX upvalues
+                    .map(|index| self.add_upvalue(UpvalueInfo::Upvalue(index)))
             }
         } else {
             None
@@ -342,6 +336,7 @@ impl<'a> Emitter<'a> {
         for stmt in body.into_iter() {
             self.emit_stmt(&stmt)?;
         }
+        self.state.builder.op(Opcode::Return, 0..0);
 
         Ok(self.state.finish())
     }
@@ -412,6 +407,12 @@ impl<'a> Emitter<'a> {
         self.state.op_pop(n_locals, span.clone());
         if let Some(value) = value {
             self.emit_expr(value, true)?;
+        } else if self.state.fn_kind == Some(FnKind::Initializer) {
+            // in case we're in an initializer, an early return should yield `self`
+            let self_index = self.state.resolve_local("self").unwrap();
+            self.state
+                .builder
+                .op(Opcode::GetLocal(self_index), span.clone());
         } else {
             self.state.builder.op(Opcode::PushNone, span.clone());
         }
@@ -892,7 +893,7 @@ impl<'a> Emitter<'a> {
     ) -> Result<()> {
         self.emit_expr(left, true)?;
         if op == BinOpKind::Is {
-            let isnt = match right.kind {
+            let inst = match right.kind {
                 ExprKind::Lit(ref lit) if lit.token.lexeme == "none" => Some(Opcode::IsNone),
                 ExprKind::Variable(ref var) => match var.lexeme.as_ref() {
                     "num" => Some(Opcode::IsNum),
@@ -905,7 +906,7 @@ impl<'a> Emitter<'a> {
                 },
                 _ => None,
             };
-            if let Some(inst) = isnt {
+            if let Some(inst) = inst {
                 self.state.builder.op(inst, span);
             } else {
                 self.emit_expr(right, true)?;
@@ -964,8 +965,113 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_fn_expr(&mut self, info: &FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
-        unimplemented!();
+        self.begin_state();
+        self.state.begin_scope();
+        self.state.fn_kind = Some(info.kind);
+        match info.kind {
+            FnKind::Method | FnKind::Initializer => self.state.add_local("self"),
+            FnKind::Function | FnKind::Static => self.state.add_local(""),
+        };
+        for param in info.params.positional.iter() {
+            self.state.add_local(param.0.lexeme.clone());
+        }
+        for param in info.params.default.iter() {
+            self.state.add_local(param.0.lexeme.clone());
+            self.emit_default_param(&param.0, &param.1, param.0.span.start..param.1.span.end)?;
+        }
+        if let Some(rest) = &info.params.rest {
+            self.state.add_local(rest.lexeme.clone());
+        }
+        for stmt in info.body.iter() {
+            self.emit_stmt(stmt)?;
+        }
+        self.state.end_scope_partial(
+            // in case we're in an initializer, don't pop `self`
+            span.clone(),
+            if info.kind == FnKind::Initializer {
+                1
+            } else {
+                0
+            },
+        );
+        self.state.builder.op(Opcode::Return, span.clone());
+        let chunk = self.end_state();
+        let fn_constant_index = self.state.builder.constant(
+            Value::function(
+                info.name.lexeme.to_string(),
+                info.params.positional.len() as u32,
+                info.params.default.len() as u32,
+                info.params.rest.is_some(),
+                chunk,
+            ),
+            span.clone(),
+        )?;
+        // if there are no upvalues, the function does not need to be a closure
+        if self.state.upvalues.is_empty() {
+            self.state
+                .builder
+                .op(Opcode::GetConst(fn_constant_index), span.clone());
+        } else {
+            let closure_desc_index = self.state.builder.constant(
+                Value::closure_desc(fn_constant_index, std::mem::take(&mut self.state.upvalues)),
+                span.clone(),
+            )?;
+            self.state
+                .builder
+                .op(Opcode::CreateClosure(closure_desc_index), span.clone());
+        }
+
+        if !is_sub_expr {
+            self.state.define(info.name.lexeme.clone(), span)?;
+        }
         Ok(())
+    }
+
+    /// Emits the conditional assignment to a default parameter
+    fn emit_default_param(&mut self, name: &Token<'a>, value: &Expr<'a>, span: Span) -> Result<()> {
+        // format:
+        // if <param> is none { <param> = <value>; }
+        self.emit_if_expr(
+            &If {
+                condition: Condition {
+                    value: Expr {
+                        // <param> is none
+                        kind: ExprKind::Binary(
+                            BinOpKind::Is,
+                            box Expr {
+                                kind: ExprKind::Variable(name.clone()),
+                                span: span.clone(),
+                            },
+                            box Expr {
+                                kind: ExprKind::Lit(box Lit {
+                                    value: LitValue::None,
+                                    token: Token::new("none", span.clone(), TokenKind::None),
+                                }),
+                                span: span.clone(),
+                            },
+                        ),
+                        span: span.clone(),
+                    },
+                    pattern: ConditionPattern::Value,
+                },
+                then: DoBlock {
+                    statements: vec![Stmt {
+                        // <param> = <value>
+                        kind: StmtKind::ExprStmt(box Expr {
+                            kind: ExprKind::Assignment(box Assignment {
+                                name: name.clone(),
+                                value: value.clone(),
+                            }),
+                            span: span.clone(),
+                        }),
+                        span: span.clone(),
+                    }],
+                    value: None,
+                },
+                otherwise: None,
+            },
+            span,
+        )
     }
 
     ///
@@ -1417,12 +1523,32 @@ mod tests {
     test_eq!(t52_foreach_iterable);
     test_eq!(t53_if_condition_patterns);
     test_eq!(t54_while_condition_patterns);
+    test_eq!(t55_simple_fn_emit);
 
     mod _impl {
         use super::*;
         use ves_error::{FileId, VesFileDatabase};
         use ves_middle::Resolver;
         use ves_parser::{Lexer, Parser};
+
+        fn chunk_concat(out: &mut String, r#fn: &Function) {
+            if &r#fn.name != "[[MAIN]]" {
+                *out += &format!("\n>>>>>> {}\n", r#fn.name);
+            }
+            *out += &r#fn
+                .chunk
+                .code
+                .iter()
+                .enumerate()
+                .map(|(i, op)| format!("|{:<04}| {:?}", i, op))
+                .collect::<Vec<_>>()
+                .join("\n");
+            for constant in r#fn.chunk.constants.iter() {
+                if let Value::Function(function) = constant {
+                    chunk_concat(out, &function);
+                }
+            }
+        }
 
         pub fn compile(src: String) -> String {
             let mut ast = Parser::new(
@@ -1433,14 +1559,18 @@ mod tests {
             .parse()
             .unwrap();
             Resolver::new().resolve(&mut ast).unwrap();
-            let chunk = Emitter::new(ast).emit().unwrap();
-            chunk
-                .code
-                .iter()
-                .enumerate()
-                .map(|(i, op)| format!("|{:<04}| {:?}", i, op))
-                .collect::<Vec<_>>()
-                .join("\n")
+            let mut out = String::new();
+            chunk_concat(
+                &mut out,
+                &Function {
+                    name: "[[MAIN]]".to_string(),
+                    positionals: 0,
+                    defaults: 0,
+                    rest: false,
+                    chunk: Emitter::new(ast).emit().unwrap(),
+                },
+            );
+            out
         }
 
         pub fn strip_comments(output: String) -> String {

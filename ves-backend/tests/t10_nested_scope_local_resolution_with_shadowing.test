@@ -18,3 +18,4 @@
 |0013| GetLocal(0)    // get a'0
 |0014| Pop            // pop get a'0
 |0015| Pop            // pop a'0
+|0016| Return

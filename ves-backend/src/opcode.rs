@@ -152,6 +152,8 @@ pub enum Opcode {
     MapInsert,
     /// Extend a map with all entries of another map
     MapExtend,
+    /// Create a closure from a closure descriptor in the constants pool
+    CreateClosure(/* descriptor constant index */ u32),
     /// Print a single value
     Print,
     /// Print N values

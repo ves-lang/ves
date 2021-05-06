@@ -8,3 +8,4 @@
 |0001| PushNum32(0.0)
 |0002| HasProperty
 |0003| Pop
+|0004| Return

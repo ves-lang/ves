@@ -7,3 +7,4 @@
 |0002| SetLocal(0)     // a = 5
 |0003| Pop             // pop a = 5
 |0004| Pop             // pop a
+|0005| Return

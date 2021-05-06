@@ -31,3 +31,4 @@ if ok(thing) = value {
 |0017| Pop              // pop thing
 // @if.end:
 |0018| Pop              // pop [[VALUE]]
+|0019| Return

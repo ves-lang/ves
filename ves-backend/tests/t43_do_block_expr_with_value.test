@@ -31,3 +31,4 @@ let v = do {
 |0020| Pop              // pop sum              [3]
 |0021| SetGlobal(0)     // v = [[VALUE]]        [3]
 |0022| Pop              // pop [[VALUE]]        []
+|0023| Return

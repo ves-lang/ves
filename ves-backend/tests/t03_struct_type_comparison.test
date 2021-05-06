@@ -10,3 +10,4 @@ mut T
 |0004| GetGlobal(0)     // T
 |0005| CompareType      // 0 is T
 |0006| Pop              // pop the expression value
+|0007| Return

@@ -7,4 +7,4 @@ while true {}
 |0002| Pop
 |0003| Jump(0)
 |0004| Pop
-
+|0005| Return

@@ -43,3 +43,4 @@ print(v)
 |0026| Pop              // pop [[VALUE]]
 |0027| GetGlobal(0)     // get v
 |0028| Print            // print(v)
+|0029| Return

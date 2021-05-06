@@ -25,3 +25,4 @@ print(a)
 |0013| Jump(3)          // [unreachable] <loop'0: end>
 |0014| GetGlobal(0)     // get a
 |0015| Print            // print a
+|0016| Return

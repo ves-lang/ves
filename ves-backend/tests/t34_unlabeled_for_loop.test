@@ -27,3 +27,4 @@ for i = 0; i < 10; ++i {
 |0015| Pop                // pop result of condition
 |0016| Pop                // pop i
 // @loop.end:
+|0017| Return

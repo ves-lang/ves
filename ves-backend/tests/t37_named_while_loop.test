@@ -84,3 +84,4 @@ mut a = 10
 // @first.exit:
 |0052| Pop              // pop (a > 0)
 // @first.end:
+|0053| Return

@@ -42,3 +42,4 @@ for i = a; i < 10; ++i {
 |0025| Pop             // Pop the condition value
 // @loop.end:
 |0026| Pop             // pop i
+|0027| Return
