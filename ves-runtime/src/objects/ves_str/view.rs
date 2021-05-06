@@ -39,7 +39,7 @@ impl VesStrView {
 
 unsafe impl Trace for VesStrView {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        tracer(&mut self._ptr);
+        self._ptr.trace(tracer);
     }
 
     fn after_forwarding(&mut self) {

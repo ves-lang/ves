@@ -59,7 +59,6 @@ impl VesStruct {
 
 unsafe impl Trace for VesStruct {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        // println!("tracing a struct at {:#p}", self);
         for (name, v) in &mut self.methods {
             Trace::trace(unsafe { &mut *name.view.get() }, tracer);
             Trace::trace(v, tracer);

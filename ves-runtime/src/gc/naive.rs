@@ -55,7 +55,7 @@ impl NaiveMarkAndSweep {
         while let Some(obj) = cursor.current() {
             if !obj.header.marked {
                 self.bytes_allocated.release(std::mem::size_of::<GcBox>());
-                // println!("[GC] dropping obj {:?}", obj);
+                // println!("[GC] dropping obj {:#?} at {:p}", obj, obj);
                 cursor.remove_current();
             } else {
                 obj.header.marked = false;
@@ -77,7 +77,7 @@ impl NaiveMarkAndSweep {
                 if !root.data().header.marked {
                     root.data().header.marked = true;
                     worklist.push(root.ptr);
-                    self.trace_list(&mut worklist);
+                    Self::trace_list(&mut worklist);
                 }
             }
         }
@@ -87,9 +87,7 @@ impl NaiveMarkAndSweep {
         }
 
         // QQQ: Should we trace the permanent space? If we don't, storing a non-permanent pointer in a permanent object would be fatal.
-        self.permanent_space
-            .iter_mut()
-            .for_each(|ptr| Self::tracer(&mut worklist, unsafe { ptr.as_mut() }));
+        worklist.extend(self.permanent_space.iter().copied());
 
         // NOTE: this may segfault
         self.shared_space
@@ -97,11 +95,11 @@ impl NaiveMarkAndSweep {
             .map(|rc| unsafe { (rc.obj.ptr.clone()).as_mut() })
             .for_each(|obj| Self::tracer(&mut worklist, obj));
 
-        self.trace_list(&mut worklist);
+        Self::trace_list(&mut worklist);
         assert!(worklist.is_empty());
     }
 
-    fn trace_list(&mut self, worklist: &mut Vec<NonNull<GcBox>>) {
+    fn trace_list(worklist: &mut Vec<NonNull<GcBox>>) {
         while !worklist.is_empty() {
             let obj = unsafe { worklist.pop().unwrap().as_mut() };
             obj.data
