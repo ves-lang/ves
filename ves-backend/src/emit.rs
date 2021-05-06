@@ -330,7 +330,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit(mut self) -> Result<Chunk> {
+    pub fn emit(mut self) -> Result<Function> {
         let body = std::mem::take(&mut self.ast.body);
 
         for stmt in body.into_iter() {
@@ -338,7 +338,13 @@ impl<'a> Emitter<'a> {
         }
         self.state.builder.op(Opcode::Return, 0..0);
 
-        Ok(self.state.finish())
+        Ok(Function {
+            name: "[[MAIN]]".to_string(),
+            positionals: 0,
+            defaults: 0,
+            rest: false,
+            chunk: self.state.finish(),
+        })
     }
 
     fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
@@ -1560,16 +1566,7 @@ mod tests {
             .unwrap();
             Resolver::new().resolve(&mut ast).unwrap();
             let mut out = String::new();
-            chunk_concat(
-                &mut out,
-                &Function {
-                    name: "[[MAIN]]".to_string(),
-                    positionals: 0,
-                    defaults: 0,
-                    rest: false,
-                    chunk: Emitter::new(ast).emit().unwrap(),
-                },
-            );
+            chunk_concat(&mut out, &Emitter::new(ast).emit().unwrap());
             out
         }
 
