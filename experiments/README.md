@@ -6,12 +6,19 @@ All benchmarks currently listed were run on a 6-core i7-8700K (max clock 4.7GHz)
 1. `enum` opcodes vs byte opcodes. See the `fibonacci` benchmark.
     It appears that enum opcodes are similar to or slightly faster than byte opcodes, while byte opcodes are more memory-efficient. Although, larger benchmarks are required to determine this confidently.
 
-    | Benchmark (unchecked accesses)         | Lo        | Md        | Hi        |
+    | Benchmark (GC: Rc, unchecked)          | Lo        | Md        | Hi        |
     |----------------------------------------|-----------|-----------|-----------|
     | Byte opcodes: fib-iterative(200)       | 77.876 us | 78.332 us | 78.855 us |
     | Enum Opcodes: fib-iterative(200)       | 75.002 us | 75.833 us | 76.941 us |
     | Enum Opcodes w/ IC: fib-iterative(200) | 52.626 us | 53.014 us | 53.555 us |
     | rust baseline: fib-iterative(200)      | 0.2151 us | 0.2164 us | 0.2178 us |
+
+    | Benchmark (GC: Naive Mark-Sweep)       | Lo        | Md        | Hi        |
+    |----------------------------------------|-----------|-----------|-----------|
+    | Byte opcodes: fib-iterative(200)       | 26.914 us | 27.024 us | 27.153 us |
+    | Enum Opcodes: fib-iterative(200)       | 23.906 us | 24.121 us | 24.427 us |
+    | Enum Opcodes w/ IC: fib-iterative(200) | 11.327 us | 11.387 us | 11.462 us |
+    | rust baseline: fib-iterative(200)      | 212.06 ns | 213.48 ns | 214.91 ns |
 
     ### TODOs
     1. Check if this holds for bigger opcode sizes (e.g. 4 bytes).

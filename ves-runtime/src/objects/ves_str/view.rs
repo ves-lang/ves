@@ -1,26 +1,52 @@
 use std::{
     borrow::Cow,
     hash::{BuildHasher, Hasher},
+    ptr::NonNull,
 };
 
 use ahash::RandomState;
-use ves_cc::{Cc, Trace};
+
+use crate::gc::{GcObj, Trace};
 
 use super::VesStr;
 
-#[derive(Debug, Clone)]
-pub struct VesStrView(pub(super) Cc<VesStr>);
+#[derive(Debug, Clone, Copy)]
+pub struct VesStrView {
+    _ptr: GcObj,
+    raw: NonNull<VesStr>,
+}
 
 impl VesStrView {
+    pub fn new(ptr: GcObj) -> Self {
+        Self {
+            _ptr: ptr,
+            raw: Self::get_raw(ptr),
+        }
+    }
+
     #[inline]
     pub fn str(&self) -> &Cow<'static, str> {
-        self.0.inner()
+        self.inner()
+    }
+
+    fn get_raw(mut ptr: GcObj) -> NonNull<VesStr> {
+        match &mut *ptr {
+            crate::VesObject::Str(s) => unsafe { NonNull::new_unchecked(s as *mut _) },
+            _ => unreachable!(),
+        }
     }
 }
 
-impl Trace for VesStrView {
-    fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        Trace::trace(&self.0, tracer)
+unsafe impl Trace for VesStrView {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj))
+    where
+        Self: Sized,
+    {
+        tracer(&mut self._ptr);
+    }
+
+    fn after_forwarding(&mut self) {
+        self.raw = Self::get_raw(self._ptr);
     }
 }
 
@@ -37,7 +63,7 @@ impl std::ops::Deref for VesStrView {
     type Target = VesStr;
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        unsafe { self.raw.as_ref() }
     }
 }
 

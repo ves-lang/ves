@@ -1,4 +1,4 @@
-#![feature(allocator_api)]
+#![feature(allocator_api, linked_list_cursors)]
 extern crate static_assertions as sa;
 
 pub mod gc;

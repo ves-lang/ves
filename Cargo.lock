@@ -336,7 +336,6 @@ name = "experiments"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "bacon_rajan_cc",
  "criterion",
  "fnv",
  "rand",

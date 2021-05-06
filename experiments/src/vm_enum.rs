@@ -1,14 +1,14 @@
-use ves_cc::{Cc, CcContext};
 use ves_runtime::{
+    gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
     objects::{
-        ves_str::{StrCcExt, VesStr},
-        ves_struct::{VesHashMap, VesInstance, VesStruct},
+        ves_str::view::VesStrView,
+        ves_struct::{VesHashMap, VesInstance, VesStruct, ViewKey},
     },
     Value, VesObject,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Inst {
     Const(u8),
     Pop,
@@ -29,31 +29,30 @@ pub enum Inst {
 }
 
 #[derive(Debug, Clone)]
-pub struct VmEnum {
+pub struct VmEnum<T: VesGc> {
     ip: usize,
     stack: Vec<NanBox>,
     constants: Vec<NanBox>,
-    heap: CcContext,
+    gc: GcHandle<T>,
     instructions: Vec<Inst>,
     /// The type used by the Alloc instruction
-    ty: Cc<VesStruct>,
+    ty: GcObj,
     err: Option<String>,
 }
 
-impl VmEnum {
-    pub fn new(heap: CcContext, constants: Vec<NanBox>, instructions: Vec<Inst>) -> Self {
-        let mut fields = VesHashMap::new_in(heap.proxy_allocator());
-        fields.insert(VesStr::on_heap(&heap, "n").view(), 0);
-        fields.insert(VesStr::on_heap(&heap, "a").view(), 1);
-        fields.insert(VesStr::on_heap(&heap, "b").view(), 2);
-        let ty = heap.cc(VesStruct::new(
-            fields,
-            VesHashMap::new_in(heap.proxy_allocator()),
-        ));
+impl<T: VesGc> VmEnum<T> {
+    pub fn new(mut gc: GcHandle<T>, constants: Vec<NanBox>, instructions: Vec<Inst>) -> Self {
+        let mut fields = VesHashMap::new_in(gc.proxy());
+        fields.insert(ViewKey::from(gc.alloc_permanent("n")), 0);
+        fields.insert(ViewKey::from(gc.alloc_permanent("a")), 1);
+        fields.insert(ViewKey::from(gc.alloc_permanent("b")), 2);
+        let ty = VesStruct::new(fields, VesHashMap::new_in(gc.proxy()));
+        let ty = gc.alloc_permanent(ty);
+
         Self {
             ip: 0,
             stack: Vec::with_capacity(256),
-            heap,
+            gc,
             constants,
             instructions,
             ty,
@@ -70,10 +69,10 @@ impl VmEnum {
     pub fn run(&mut self) -> Result<NanBox, String> {
         while self.ip < self.instructions.len() {
             self.ip += 1;
-            let inst = self.instructions[self.ip - 1].clone();
+            let inst = self.instructions[self.ip - 1];
             // println!("ip={:03} {:#?} {:#?}", self.ip - 1, inst, self.stack);
             match inst {
-                Inst::Const(c) => self.push(self.constants[c as usize].clone()),
+                Inst::Const(c) => self.push(self.constants[c as usize]),
                 Inst::Pop => {
                     self.pop();
                 }
@@ -81,17 +80,17 @@ impl VmEnum {
                     self.stack[s as usize] = self.pop();
                 }
                 Inst::GetLocal(s) => {
-                    self.push(self.stack[s as usize].clone());
+                    self.push(self.stack[s as usize]);
                 }
-                Inst::SetField(c) => self.set_field(self.constants[c as usize].clone()),
-                Inst::GetField(c) => self.get_field(self.constants[c as usize].clone()),
+                Inst::SetField(c) => self.set_field(self.constants[c as usize]),
+                Inst::GetField(c) => self.get_field(self.constants[c as usize]),
                 Inst::Add => self.add(),
                 Inst::Sub => self.sub(),
                 Inst::Mul => self.mul(),
                 Inst::Div => self.div(),
                 Inst::Eq => self.eq(),
                 Inst::Neq => self.neq(),
-                Inst::Alloc => self.alloc(),
+                Inst::Alloc => self.alloc_instance(),
                 Inst::Jz(offset) => self.jz(offset),
                 Inst::Jmp(offset) => self.jmp(offset),
                 Inst::Return => return Ok(self.pop()),
@@ -117,10 +116,24 @@ impl VmEnum {
         )));
     }
 
-    fn alloc(&mut self) {
-        self.push(NanBox::new(Value::from(self.heap.cc(VesObject::Instance(
-            self.heap.cc(VesInstance::new(self.ty.clone())),
-        )))));
+    fn alloc_instance(&mut self) {
+        let instance = VesInstance::new(self.ty, self.gc.proxy());
+
+        let ptr = self.alloc(instance);
+
+        self.push(NanBox::new(Value::from(ptr)));
+    }
+
+    fn alloc(&mut self, o: impl Into<VesObject>) -> GcObj {
+        self.gc
+            .alloc(
+                o,
+                Roots {
+                    stack: &mut self.stack,
+                    data: std::iter::once(&mut self.ty as &mut dyn Trace),
+                },
+            )
+            .unwrap()
     }
 
     fn jz(&mut self, offset: i16) {
@@ -128,11 +141,11 @@ impl VmEnum {
         if val.is_ptr() {
             return;
         }
-        let jmp = match val.clone().unbox() {
+        let jmp = match val.unbox() {
             Value::Num(n) => n != 0.0,
             Value::Bool(b) => b,
             Value::None => false,
-            Value::Ptr(_) => unreachable!(),
+            Value::Ref(_) => unreachable!(),
         };
         if !jmp {
             self.jmp(offset)
@@ -155,17 +168,13 @@ impl VmEnum {
         }
 
         match (left.unbox(), right.unbox()) {
-            (Value::Ptr(l), Value::Ptr(r)) => l.with(|left| {
-                r.with(|right| match (&**left, &**right) {
-                    (VesObject::Str(l), VesObject::Str(r)) => self.push(NanBox::new(Value::from(
-                        self.heap.cc(VesObject::Str(
-                            VesStr::on_heap(&self.heap, l.clone_inner().into_owned() + &r[..])
-                                .view(),
-                        )),
-                    ))),
-                    _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
-                })
-            }),
+            (Value::Ref(l), Value::Ref(r)) => match (&*l, &*r) {
+                (VesObject::Str(l), VesObject::Str(r)) => {
+                    let ptr = self.alloc(l.clone_inner().into_owned() + r);
+                    self.push(NanBox::new(Value::from(ptr)));
+                }
+                _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
+            },
             (left, right) => {
                 self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right))
             }
@@ -237,16 +246,11 @@ impl VmEnum {
             return;
         }
         let name = n.unbox().as_ptr().unwrap();
-        let name = match *name {
-            VesObject::Str(ref s) => s,
-            VesObject::Instance(_) => unreachable!(),
-            VesObject::Struct(_) => unreachable!(),
-        };
-        let mut obj = unsafe { obj.unbox_pointer() }.0.get();
-        match unsafe { obj.deref_mut() } {
-            VesObject::Instance(obj) => unsafe {
-                *obj.deref_mut().get_property_mut(name).unwrap() = self.pop().unbox();
-            },
+        let name = VesStrView::new(name);
+        let mut obj = unsafe { obj.unbox_pointer() }.0;
+        match &mut *obj {
+            VesObject::Instance(obj) => *obj.get_property_mut(&name).unwrap() = self.pop().unbox(),
+
             VesObject::Struct(_) => {
                 self.error("Structs do not support field assignment".to_string());
             }
@@ -264,14 +268,14 @@ impl VmEnum {
         }
         let name = n.unbox().as_ptr().unwrap();
         let name = match *name {
-            VesObject::Str(ref s) => s,
+            VesObject::Str(_) => VesStrView::new(name),
             VesObject::Instance(_) => unreachable!(),
             VesObject::Struct(_) => unreachable!(),
         };
-        let obj = unsafe { obj.unbox_pointer() }.0.get();
+        let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
-            VesObject::Instance(instance) => match instance.get_property(name) {
-                Some(r#ref) => self.push(NanBox::new(r#ref.clone())),
+            VesObject::Instance(instance) => match instance.get_property(&name) {
+                Some(r#ref) => self.push(NanBox::new(*r#ref)),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },
             VesObject::Struct(_) => {
@@ -329,22 +333,17 @@ mod tests {
 
     #[test]
     fn test_vm_enum_opcodes() {
-        let heap = CcContext::new();
+        let gc = ves_runtime::gc::DefaultGc::default();
+        let mut handle = GcHandle::new(gc);
         let mut vm = VmEnum::new(
-            heap.clone(),
+            handle.clone(),
             vec![
                 NanBox::num(100.0),
                 NanBox::num(0.0),
                 NanBox::num(1.0),
-                NanBox::new(ves_runtime::Value::from(
-                    heap.cc(VesObject::Str(VesStr::on_heap(&heap, "a").view())),
-                )),
-                NanBox::new(ves_runtime::Value::from(
-                    heap.cc(VesObject::Str(VesStr::on_heap(&heap, "b").view())),
-                )),
-                NanBox::new(ves_runtime::Value::from(
-                    heap.cc(VesObject::Str(VesStr::on_heap(&heap, "n").view())),
-                )),
+                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
+                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
+                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
             ],
             vec![
                 Inst::Alloc, // 0 = obj
@@ -390,9 +389,5 @@ mod tests {
 
         let res = vm.run().unwrap().unbox();
         assert_eq!(res, Value::Num(354224848179262000000.0));
-
-        std::mem::drop(res);
-        std::mem::drop(vm);
-        heap.collect_cycles();
     }
 }
