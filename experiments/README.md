@@ -13,12 +13,13 @@ All benchmarks currently listed were run on a 6-core i7-8700K (max clock 4.7GHz)
     | Enum Opcodes w/ IC: fib-iterative(200) | 52.626 us | 53.014 us | 53.555 us |
     | rust baseline: fib-iterative(200)      | 0.2151 us | 0.2164 us | 0.2178 us |
 
-    | Benchmark (GC: Naive Mark-Sweep)       | Lo        | Md        | Hi        |
-    |----------------------------------------|-----------|-----------|-----------|
-    | Byte opcodes: fib-iterative(200)       | 26.914 us | 27.024 us | 27.153 us |
-    | Enum Opcodes: fib-iterative(200)       | 23.906 us | 24.121 us | 24.427 us |
-    | Enum Opcodes w/ IC: fib-iterative(200) | 11.327 us | 11.387 us | 11.462 us |
-    | rust baseline: fib-iterative(200)      | 212.06 ns | 213.48 ns | 214.91 ns |
+    | Benchmark (GC: Naive Mark-Sweep)            | Lo        | Md        | Hi        |
+    |---------------------------------------------|-----------|-----------|-----------|
+    | Byte opcodes: fib-iterative(200)            | 26.914 us | 27.024 us | 27.153 us |
+    | Enum Opcodes: fib-iterative(200)            | 23.906 us | 24.121 us | 24.427 us |
+    | Enum Opcodes w/ IC: fib-iterative(200)      | 11.327 us | 11.387 us | 11.462 us |
+    | Enum Opcodes w/ Inst IC: fib-iterative(200) | 9.8167 us | 9.8869 us | 9.9837 us |
+    | rust baseline: fib-iterative(200)           | 212.06 ns | 213.48 ns | 214.91 ns |
 
     ### TODOs
     1. Check if this holds for bigger opcode sizes (e.g. 4 bytes).

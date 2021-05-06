@@ -18,6 +18,7 @@ pub enum Inst {
     GetLocal(u8),
     SetField(u8),
     GetField(u8),
+    ICData(u32),
     Add,
     Sub,
     Mul,
@@ -28,6 +29,8 @@ pub enum Inst {
     Jmp(i16),
     Return,
 }
+
+static_assertions::assert_eq_size!(Inst, u64);
 
 #[derive(Debug, Clone)]
 pub struct VmEnum<T: VesGc> {
@@ -89,8 +92,16 @@ impl<T: VesGc> VmEnum<T> {
                 Inst::GetLocal(s) => {
                     self.push(self.stack[s as usize]);
                 }
-                Inst::SetField(c) => self.set_field(self.constants[c as usize]),
-                Inst::GetField(c) => self.get_field(self.constants[c as usize]),
+                Inst::SetField(c) => {
+                    let ptr = self.read_ic_ptr();
+                    let slot = self.read_ic_slot();
+                    self.set_field(self.constants[c as usize], ptr, slot);
+                }
+                Inst::GetField(c) => {
+                    let ptr = self.read_ic_ptr();
+                    let slot = self.read_ic_slot();
+                    self.get_field(self.constants[c as usize], ptr, slot);
+                }
                 Inst::Add => self.add(),
                 Inst::Sub => self.sub(),
                 Inst::Mul => self.mul(),
@@ -101,10 +112,58 @@ impl<T: VesGc> VmEnum<T> {
                 Inst::Jz(offset) => self.jz(offset),
                 Inst::Jmp(offset) => self.jmp(offset),
                 Inst::Return => return Ok(self.pop()),
+                Inst::ICData(_) => {
+                    #[cfg(not(feature = "unsafe"))]
+                    unreachable!();
+                    #[cfg(feature = "unsafe")]
+                    unsafe {
+                        std::intrinsics::unreachable()
+                    };
+                }
             }
         }
 
         Err(self.err.take().unwrap())
+    }
+
+    #[inline]
+    fn update_inst_ic_cache(&mut self, ptr: u64, slot: u32) {
+        self.instructions[self.ip - 1] = Inst::ICData(slot as u32);
+        self.instructions[self.ip - 2] = Inst::ICData((ptr & u32::MAX as u64) as u32);
+        self.instructions[self.ip - 3] = Inst::ICData((ptr >> 32) as u32);
+    }
+
+    fn read_ic_ptr(&mut self) -> u64 {
+        self.ip += 2;
+        let hi = self.instructions[self.ip - 2];
+        let lo = self.instructions[self.ip - 1];
+
+        match (hi, lo) {
+            (Inst::ICData(hi), Inst::ICData(lo)) => ((hi as u64) << 32) | lo as u64,
+            _ => {
+                #[cfg(not(feature = "unsafe"))]
+                unreachable!();
+                #[cfg(feature = "unsafe")]
+                unsafe {
+                    std::intrinsics::unreachable()
+                };
+            }
+        }
+    }
+
+    fn read_ic_slot(&mut self) -> u32 {
+        self.ip += 1;
+        match self.instructions[self.ip - 1] {
+            Inst::ICData(slot) => slot,
+            _ => {
+                #[cfg(not(feature = "unsafe"))]
+                unreachable!();
+                #[cfg(feature = "unsafe")]
+                unsafe {
+                    std::intrinsics::unreachable()
+                };
+            }
+        }
     }
 
     fn eq(&mut self) {
@@ -137,7 +196,8 @@ impl<T: VesGc> VmEnum<T> {
                 o,
                 Roots {
                     stack: &mut self.stack,
-                    data: std::iter::once(&mut self.ty as &mut dyn Trace), // .chain(std::iter::once(&mut self.ic as &mut dyn Trace)),
+                    data: std::iter::once(&mut self.ty as &mut dyn Trace)
+                        .chain(std::iter::once(&mut self.ic as &mut dyn Trace)),
                 },
             )
             .unwrap()
@@ -246,7 +306,7 @@ impl<T: VesGc> VmEnum<T> {
         ))
     }
 
-    fn set_field(&mut self, n: NanBox) {
+    fn set_field(&mut self, n: NanBox, ptr: u64, slot: u32) {
         let obj = self.pop();
         if !obj.is_ptr() {
             self.error(format!("{:?} is not an object", obj.unbox()));
@@ -255,8 +315,9 @@ impl<T: VesGc> VmEnum<T> {
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         if let VesObject::Instance(instance) = &mut *obj {
             // Fast path
-            if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty_ptr()) {
-                *instance.get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+            if struct_ptr == ptr {
+                *instance.get_by_slot_index_unchecked_mut(slot as usize) = self.pop().unbox();
                 return;
             }
 
@@ -271,8 +332,7 @@ impl<T: VesGc> VmEnum<T> {
             } as usize;
 
             *instance.get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
-            self.ic
-                .update_property_cache(self.ip - 1, slot, *instance.ty_ptr());
+            self.update_inst_ic_cache(struct_ptr, slot as u32);
             return;
         }
         self.error(format!(
@@ -281,7 +341,7 @@ impl<T: VesGc> VmEnum<T> {
         ));
     }
 
-    fn get_field(&mut self, n: NanBox) {
+    fn get_field(&mut self, n: NanBox, ptr: u64, slot: u32) {
         let obj = self.pop();
         if !obj.is_ptr() {
             self.error(format!("{:?} is not an object", obj.unbox()));
@@ -289,9 +349,12 @@ impl<T: VesGc> VmEnum<T> {
         }
         let obj = unsafe { obj.unbox_pointer() }.0;
         if let VesObject::Instance(instance) = &*obj {
-            // Fast path
-            if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty_ptr()) {
-                self.push(NanBox::new(*instance.get_by_slot_index_unchecked(slot)));
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+
+            if struct_ptr == ptr {
+                self.push(NanBox::new(
+                    *instance.get_by_slot_index_unchecked(slot as usize),
+                ));
                 return;
             }
 
@@ -306,8 +369,7 @@ impl<T: VesGc> VmEnum<T> {
             } as usize;
 
             let value = NanBox::new(*instance.get_by_slot_index_unchecked(slot));
-            self.ic
-                .update_property_cache(self.ip - 1, slot, *instance.ty_ptr());
+            self.update_inst_ic_cache(struct_ptr, slot as u32);
             self.push(value);
             return;
         }
@@ -358,12 +420,89 @@ impl<T: VesGc> VmEnum<T> {
     }
 }
 
+pub static FIB_INSTS: &[Inst] = &[
+    Inst::Alloc, // 0 = obj
+    Inst::Const(0),
+    Inst::GetLocal(0),
+    Inst::SetField(5), // n = 100
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Const(1),
+    Inst::GetLocal(0),
+    Inst::SetField(3), // a = 0
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Const(2),
+    Inst::GetLocal(0),
+    Inst::SetField(4), // b = 1
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::GetLocal(0),
+    Inst::GetField(5),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Const(1),
+    Inst::Neq,
+    Inst::Jz(40),
+    Inst::Pop,
+    Inst::GetLocal(0),
+    Inst::GetField(4), // tmp = b
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::GetLocal(0),
+    Inst::GetField(4),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::GetLocal(0),
+    Inst::GetField(3),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Add,
+    Inst::GetLocal(0),
+    Inst::SetField(4), // b = a + b
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::GetLocal(0),
+    Inst::SetField(3), // a = tmp
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::GetLocal(0),
+    Inst::GetField(5), // n - 1
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Const(2),
+    Inst::Sub,
+    Inst::GetLocal(0),
+    Inst::SetField(5),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Jmp(-48),
+    Inst::Pop,
+    Inst::GetLocal(0),
+    Inst::GetField(3),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::ICData(0),
+    Inst::Return,
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_vm_enum_opcodes_inline_caching() {
+    fn test_vm_enum_opcodes_inst_inline_caching() {
         let gc = ves_runtime::gc::DefaultGc::default();
         let mut handle = GcHandle::new(gc);
         let mut vm = VmEnum::new(
@@ -376,48 +515,7 @@ mod tests {
                 NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
                 NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
             ],
-            {
-                vec![
-                    Inst::Alloc, // 0 = obj
-                    Inst::Const(0),
-                    Inst::GetLocal(0),
-                    Inst::SetField(5), // n = 100
-                    Inst::Const(1),
-                    Inst::GetLocal(0),
-                    Inst::SetField(3), // a = 0
-                    Inst::Const(2),
-                    Inst::GetLocal(0),
-                    Inst::SetField(4), // b = 1
-                    Inst::GetLocal(0),
-                    Inst::GetField(5),
-                    Inst::Const(1),
-                    Inst::Neq,
-                    Inst::Jz(19),
-                    Inst::Pop,
-                    Inst::GetLocal(0),
-                    Inst::GetField(4), // tmp = b
-                    Inst::GetLocal(0),
-                    Inst::GetField(4),
-                    Inst::GetLocal(0),
-                    Inst::GetField(3),
-                    Inst::Add,
-                    Inst::GetLocal(0),
-                    Inst::SetField(4), // b = a + b
-                    Inst::GetLocal(0),
-                    Inst::SetField(3), // a = tmp
-                    Inst::GetLocal(0),
-                    Inst::GetField(5), // n - 1
-                    Inst::Const(2),
-                    Inst::Sub,
-                    Inst::GetLocal(0),
-                    Inst::SetField(5),
-                    Inst::Jmp(-24),
-                    Inst::Pop,
-                    Inst::GetLocal(0),
-                    Inst::GetField(3),
-                    Inst::Return,
-                ]
-            },
+            Vec::from(FIB_INSTS),
         );
 
         vm.reset();

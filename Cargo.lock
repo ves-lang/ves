@@ -339,6 +339,7 @@ dependencies = [
  "criterion",
  "fnv",
  "rand",
+ "static_assertions",
  "ves-runtime",
 ]
 

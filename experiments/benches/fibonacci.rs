@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching};
+use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching, vm_enum_instruction_inline_caching};
 use ves_runtime::{
     gc::{self, GcHandle, VesGc},
     nanbox::NanBox,
@@ -124,6 +124,23 @@ fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum<gc::DefaultGc> {
     )
 }
 
+fn get_enum_inst_ic_vm() -> vm_enum_instruction_inline_caching::VmEnum<gc::DefaultGc> {
+    let gc = ves_runtime::gc::DefaultGc::default();
+    let mut handle = GcHandle::new(gc);
+    vm_enum_instruction_inline_caching::VmEnum::new(
+        handle.clone(),
+        vec![
+            NanBox::num(100.0),
+            NanBox::num(0.0),
+            NanBox::num(1.0),
+            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+        ],
+        Vec::from(vm_enum_instruction_inline_caching::FIB_INSTS),
+    )
+}
+
 fn get_byte_vm() -> vm_bytes::VmBytes<gc::DefaultGc> {
     use vm_bytes::Inst;
     let gc = gc::DefaultGc::default();
@@ -232,6 +249,13 @@ fn bench_fibonacci(c: &mut Criterion) {
     });
     group.bench_function("<enum opcodes + IC: fib-iterative(200)>", move |b| {
         let mut vm = get_enum_ic_vm();
+        b.iter(|| {
+            vm.reset();
+            black_box(vm.run().unwrap())
+        })
+    });
+    group.bench_function("<enum opcodes + Inst IC: fib-iterative(200)>", move |b| {
+        let mut vm = get_enum_inst_ic_vm();
         b.iter(|| {
             vm.reset();
             black_box(vm.run().unwrap())
