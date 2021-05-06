@@ -29,12 +29,16 @@ pub struct Global<'a> {
     pub name: Token<'a>,
     /// The kind of the global.
     pub kind: VarKind,
+    /// The global index of this global.
+    pub index: Option<usize>,
 }
+
 impl<'a> PartialOrd<Global<'a>> for Global<'a> {
     fn partial_cmp(&self, other: &Global<'a>) -> Option<std::cmp::Ordering> {
         self.name.span.start.partial_cmp(&other.name.span.start)
     }
 }
+
 impl<'a> Ord for Global<'a> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.name.span.start.cmp(&other.name.span.start)

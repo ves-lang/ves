@@ -69,8 +69,13 @@ impl<'a> Resolver<'a> {
 
         let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
         sorted_globals.sort_by_key(|e| e.name.span.start);
-        for global in &sorted_globals {
+
+        for mut global in sorted_globals.into_iter() {
             self.declare_global(&global.name, NameKind::from(global.kind));
+
+            ast.globals.remove(&global);
+            global.index = Some(registry.get_global_index(&global.name.lexeme[..], self.file_id));
+            ast.globals.insert(global);
         }
 
         for stmt in &mut ast.body {
