@@ -127,7 +127,7 @@ macro_rules! make_test_macros {
         $crate::with_dollar_sign! {
             ($d:tt) => {
                 macro_rules! test_eq {
-                    ($test_name:ident $d( $d attr:ident ),*) => {
+                    ($test_name:ident $d( $attr:ident ),*) => {
                         $d(#[$d attr])*
                         #[test]
                         fn $test_name() {

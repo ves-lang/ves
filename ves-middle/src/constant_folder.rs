@@ -317,7 +317,11 @@ impl<'a> ConstantFolder<'a> {
             }
             ExprKind::Fn(box r#fn) => self.fold_function(r#fn),
             // FIXME: ast change to if expressions
-            ExprKind::If(_) => (), /* self.fold_if_expr(expr) */
+            ExprKind::If(r#if) => {
+                if let Some(kind) = self.fold_if_expr(r#if, expr.span.clone()) {
+                    expr.kind = kind;
+                }
+            }
             ExprKind::DoBlock(box b) => self.fold_do_block(b),
             ExprKind::Comma(list) => list.iter_mut().for_each(|e| self.fold_expr(e)),
             ExprKind::Call(box Call { callee, args, .. }) => {
@@ -386,54 +390,55 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
-    fn fold_if_expr(&mut self, expr: &mut Expr<'a>) {
-        /* match &mut expr.kind {
-            ExprKind::If(box If {
-                condition,
-                then,
-                otherwise,
-            }) => {
-                // TODO: propagate the value into the pattern binding
-                self.fold_expr(&mut condition.value);
-                self.fold_do_block(then);
+    fn fold_if_expr(&mut self, r#if: &mut If<'a>, span: ves_parser::Span) -> Option<ExprKind<'a>> {
+        // TODO: propagate the value into the pattern binding
+        self.fold_expr(&mut r#if.condition.value);
+        self.fold_do_block(&mut r#if.then);
 
-                if let Some(r#else) = otherwise.as_mut() {
-                    self.fold_expr(r#else);
+        if let Some(r#else) = r#if.otherwise.as_mut() {
+            match r#else {
+                Else::If(r#if) => {
+                    if let Some(ExprKind::DoBlock(block)) = self.fold_if_expr(r#if, span.clone()) {
+                        *r#else = Else::Block(block);
+                    }
                 }
+                Else::Block(block) => self.fold_do_block(block),
+            }
+        }
 
-                match self.is_truthy_condition(&condition) {
-                    // Condition is truthy, we can replace the node with the value of `then`
-                    Some(true) => {
-                        let then = std::mem::replace(
-                            then,
-                            DoBlock {
-                                statements: vec![],
-                                value: None,
-                            },
-                        );
-                        expr.kind = ExprKind::DoBlock(box then);
-                    }
-                    Some(false) => {
-                        // Condition is false, we can replace the node with the value of `else`
-                        if let Some(r#else) = otherwise.take() {
-                            *expr = r#else
-                        } else {
-                            // There's no else, so we can replace the node with `none`.
-                            expr.kind = ExprKind::Lit(box Lit {
-                                value: LitValue::None,
-                                token: ves_parser::lexer::Token::new(
-                                    "none",
-                                    expr.span.clone(),
-                                    ves_parser::lexer::TokenKind::None,
-                                ),
-                            });
-                        }
-                    }
-                    None => (),
+        match self.is_truthy_condition(&r#if.condition) {
+            // Condition is truthy, we can replace the node with the value of `then`
+            Some(true) => {
+                let then = std::mem::replace(
+                    &mut r#if.then,
+                    DoBlock {
+                        statements: vec![],
+                        value: None,
+                    },
+                );
+                Some(ExprKind::DoBlock(box then))
+            }
+            Some(false) => {
+                // Condition is false, we can replace the node with the value of `else`
+                if let Some(r#else) = r#if.otherwise.take() {
+                    Some(match r#else {
+                        Else::If(r#if) => ExprKind::If(r#if),
+                        Else::Block(block) => ExprKind::DoBlock(block),
+                    })
+                } else {
+                    // There's no else, so we can replace the node with `none`.
+                    Some(ExprKind::Lit(box Lit {
+                        value: LitValue::None,
+                        token: ves_parser::lexer::Token::new(
+                            "none",
+                            span,
+                            ves_parser::lexer::TokenKind::None,
+                        ),
+                    }))
                 }
             }
-            _ => unreachable!(),
-        } */
+            None => None,
+        }
     }
 
     fn is_truthy_condition(&mut self, cond: &Condition<'a>) -> Option<bool> {
@@ -491,5 +496,5 @@ mod tests {
 
     test_ok!(fold1_test_constant_folding);
     test_ok!(fold2_test_let_variable_propagation);
-    /* test_ok!(fold3_test_control_flow_is_folded); */
+    test_ok!(fold3_test_control_flow_is_folded);
 }

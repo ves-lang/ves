@@ -384,7 +384,7 @@ impl<'a> Resolver<'a> {
         ex: &mut ErrCtx,
     ) {
         // FIXME: ast change to if expressions
-        /* if let Some(StmtKind::Return(Some(ref mut expr))) =
+        if let Some(StmtKind::Return(Some(ref mut expr))) =
             statements.last_mut().map(|s| &mut s.kind)
         {
             // TODO: detect more things here
@@ -393,11 +393,7 @@ impl<'a> Resolver<'a> {
                 ExprKind::Call(box Call { ref mut tco, .. }) => *tco = true,
                 ExprKind::If(box If {
                     ref mut then,
-                    otherwise:
-                        Some(Expr {
-                            kind: ExprKind::DoBlock(otherwise),
-                            ..
-                        }),
+                    otherwise: Some(Else::Block(otherwise)),
                     ..
                 }) => {
                     // If both do blocks of the if end with a call, we can enable TCO on both them without rewriting the AST since
@@ -421,7 +417,7 @@ impl<'a> Resolver<'a> {
                 }
                 _ => (),
             }
-        } */
+        }
 
         statements
             .iter_mut()
