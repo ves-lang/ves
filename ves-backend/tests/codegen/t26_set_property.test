@@ -6,6 +6,9 @@
 |0001| GetLocal(0)
 |0002| PushNum32(5.0)
 |0003| SetProp(0)
-|0004| Pop
-|0005| Pop
-|0006| Return
+|0004| Data(0)
+|0005| Data(0)
+|0006| Data(0)
+|0007| Pop
+|0008| Pop
+|0009| Return

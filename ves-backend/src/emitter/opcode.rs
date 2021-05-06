@@ -168,6 +168,10 @@ pub enum Opcode {
     JumpIfFalse(/* address */ u32),
     /// Return from a call
     Return,
+    /// An data-only instruction emitted after other instruction to supply additional data.
+    /// For example, the [`GetProp`] and [`SetProp`] use [`Data`] to store the values for their inline cache.
+    /// This instruction is never executed by itself.
+    Data(u32),
     /// A compile-time label for one or more jumps.
     Label(/* label id */ u32),
 }

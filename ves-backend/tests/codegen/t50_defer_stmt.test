@@ -8,5 +8,8 @@ defer file.close()
 |0002| Pop              // 
 |0003| GetGlobal(0)     // get file
 |0004| GetProp(0)       // get prop "close"
-|0005| Defer            // defer file.close()
-|0006| Return
+|0005| Data(0)
+|0006| Data(0)
+|0007| Data(0)
+|0008| Defer            // defer file.close()
+|0009| Return

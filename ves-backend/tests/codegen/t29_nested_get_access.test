@@ -7,9 +7,15 @@
 |0002| PushNum32(0.0)  // push 0
 |0003| GetItem         // a[0]
 |0004| GetProp(0)      // .b
-|0005| GetProp(1)      // .c
-|0006| PushNum32(1.0)  // push 1
-|0007| GetItem         // .c[1]
-|0008| Pop             // pop <above>
-|0009| Pop             // pop a
-|0010| Return
+|0005| Data(0)
+|0006| Data(0)
+|0007| Data(0)
+|0008| GetProp(1)
+|0009| Data(0)
+|0010| Data(0)
+|0011| Data(0)
+|0012| PushNum32(1.0)
+|0013| GetItem
+|0014| Pop
+|0015| Pop
+|0016| Return

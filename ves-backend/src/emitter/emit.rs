@@ -1305,8 +1305,12 @@ impl<'a> Emitter<'a> {
             } else {
                 Opcode::GetProp(offset)
             },
-            span,
+            span.clone(),
         );
+        // TODO: try to speculatively populate the cache
+        self.state.builder.op(Opcode::Data(0), span.clone());
+        self.state.builder.op(Opcode::Data(0), span.clone());
+        self.state.builder.op(Opcode::Data(0), span);
         Ok(())
     }
 
@@ -1323,7 +1327,11 @@ impl<'a> Emitter<'a> {
             .state
             .builder
             .constant(name.lexeme.clone().into(), span.clone())?;
-        self.state.builder.op(Opcode::SetProp(offset), span);
+        self.state.builder.op(Opcode::SetProp(offset), span.clone());
+        // TODO: try to speculatively populate the cache
+        self.state.builder.op(Opcode::Data(0), span.clone());
+        self.state.builder.op(Opcode::Data(0), span.clone());
+        self.state.builder.op(Opcode::Data(0), span);
         Ok(())
     }
 
