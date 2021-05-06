@@ -1523,7 +1523,7 @@ mod tests {
     test_eq!(t52_foreach_iterable);
     test_eq!(t53_if_condition_patterns);
     test_eq!(t54_while_condition_patterns);
-    test_eq!(t55_simple_fn_emit);
+    test_eq!(t55_fn_emit);
 
     mod _impl {
         use super::*;
