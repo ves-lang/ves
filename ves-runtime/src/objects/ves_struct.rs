@@ -1,45 +1,70 @@
-use std::vec::from_elem_in;
+use std::{cell::UnsafeCell, ptr::NonNull, vec::from_elem_in};
 
+use crate::gc::{proxy_allocator::ProxyAllocator, GcObj, Trace};
 use ahash::RandomState;
 use hashbrown::HashMap;
-use ves_cc::{proxy_allocator::ProxyAllocator, Cc, Trace};
 
-use super::{ves_str::VesStrView, Value};
+use super::{ves_str::view::VesStrView, Value};
 
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
-// NOTE: A stub until we implement the compiler
-#[derive(Debug)]
-pub struct Function {}
-
-impl Trace for Function {
-    fn trace(&self, _tracer: &mut ves_cc::Tracer) {}
+pub struct ViewKey {
+    view: UnsafeCell<VesStrView>,
 }
+
+impl std::fmt::Debug for ViewKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ViewKey({:?})", unsafe { &*self.view.get() })
+    }
+}
+
+impl From<GcObj> for ViewKey {
+    fn from(obj: GcObj) -> Self {
+        match &*obj {
+            crate::VesObject::Str(_) => ViewKey {
+                view: UnsafeCell::new(VesStrView::new(obj)),
+            },
+            crate::VesObject::Instance(_) => panic!("Unexpected object type: instance"),
+            crate::VesObject::Struct(_) => panic!("Unexpected object type: struct"),
+        }
+    }
+}
+
+impl PartialEq for ViewKey {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { (&*self.view.get()).eq(&*other.view.get()) }
+    }
+}
+
+impl std::hash::Hash for ViewKey {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        unsafe { (&*self.view.get()).hash(state) }
+    }
+}
+
+impl Eq for ViewKey {}
 
 #[derive(Debug)]
 pub struct VesStruct {
-    methods: VesHashMap<VesStrView, Cc<Function>>,
-    fields: VesHashMap<VesStrView, u8>,
+    methods: VesHashMap<ViewKey, GcObj>,
+    fields: VesHashMap<ViewKey, u8>,
 }
 
 impl VesStruct {
-    pub fn new(
-        fields: VesHashMap<VesStrView, u8>,
-        methods: VesHashMap<VesStrView, Cc<Function>>,
-    ) -> Self {
+    pub fn new(fields: VesHashMap<ViewKey, u8>, methods: VesHashMap<ViewKey, GcObj>) -> Self {
         Self { methods, fields }
     }
 }
 
-impl Trace for VesStruct {
-    fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        for (k, v) in &self.methods {
-            k.trace(tracer);
+unsafe impl Trace for VesStruct {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        for (name, v) in &mut self.methods {
+            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
             Trace::trace(v, tracer);
         }
-        for name in self.fields.keys() {
-            name.trace(tracer);
+        for (name, _) in &mut self.fields {
+            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
         }
     }
 }
@@ -48,27 +73,38 @@ impl Trace for VesStruct {
 pub struct VesInstance {
     // Should also include bound methods (lazily copied by default).
     fields: Vec<Value, ProxyAllocator>,
-    ty: Cc<VesStruct>,
+    ty: GcObj,
+    raw: NonNull<VesStruct>,
 }
 
 impl VesInstance {
-    pub fn new(ty: Cc<VesStruct>) -> Self {
-        let fields = from_elem_in(
-            Value::None,
-            ty.fields.len(),
-            ty.get_context().proxy_allocator(),
-        );
-        Self { fields, ty }
+    pub fn new(mut ty: GcObj, proxy: ProxyAllocator) -> Self {
+        let raw = match &mut *ty {
+            crate::VesObject::Struct(s) => NonNull::new(s as *mut _).unwrap(),
+            rest => unreachable!("{:?}", rest),
+        };
+        let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
+        Self { fields, ty, raw }
     }
 
     #[inline]
-    pub fn ty(&self) -> &Cc<VesStruct> {
+    pub fn ty(&self) -> &VesStruct {
+        unsafe { self.raw.as_ref() }
+    }
+
+    #[inline]
+    pub fn ty_ptr(&self) -> &GcObj {
         &self.ty
     }
 
     #[inline]
     pub fn get_property_slot(&self, name: &VesStrView) -> Option<u8> {
-        self.ty.fields.get(name).copied()
+        self.ty()
+            .fields
+            .get(&ViewKey {
+                view: UnsafeCell::new(*name),
+            })
+            .copied()
     }
 
     #[inline]
@@ -110,10 +146,10 @@ impl VesInstance {
     }
 }
 
-impl Trace for VesInstance {
-    fn trace(&self, tracer: &mut ves_cc::Tracer) {
-        Trace::trace(&self.ty, tracer);
-        for v in &self.fields {
+unsafe impl Trace for VesInstance {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.ty, tracer);
+        for v in &mut self.fields {
             v.trace(tracer);
         }
     }

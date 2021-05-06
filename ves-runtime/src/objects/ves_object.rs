@@ -1,44 +1,96 @@
 //! Contains the implementation of the [`VesObject`] type.
-use std::{borrow::Cow, ptr::NonNull};
+use std::borrow::Cow;
 
-use ves_cc::{Cc, CcBox, CcContext, Trace};
-
-use crate::objects::{
-    ves_str::{StrCcExt, VesStr, VesStrView},
-    ves_struct::{VesInstance, VesStruct},
+use crate::{
+    gc::{GcObj, Trace},
+    objects::{
+        ves_str::VesStr,
+        ves_struct::{VesInstance, VesStruct},
+    },
 };
 
-/// A reference-counted pointer to a [`VesObject`].
-pub type VesRef = Cc<VesObject>;
-/// A non-null raw pointer to a refcounted [`VesObject`].
-pub type VesPtr = NonNull<CcBox<VesObject>>;
-/// A raw pointer to a refcounted [`VesObject`] that _may_ but _shouldn't_ be null.
-pub type VesRawPtr = *mut CcBox<VesObject>;
-
 /// QQQ: should the contained values be Cc or just Box?
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum VesObject {
     /// An immutable string.
-    Str(VesStrView),
+    Str(VesStr),
     /// A ves struct instance.
-    Instance(Cc<VesInstance>),
+    Instance(VesInstance),
     /// A struct type instance.
-    Struct(Cc<VesStruct>),
+    Struct(VesStruct),
 }
 
+// TODO: unsafe unchecked getters
 impl VesObject {
-    /// Creates a new [`VesObject`] containing a [`VesStrView`] referencing the given string.
-    pub fn new_str<S: Into<Cow<'static, str>>>(ctx: &CcContext, s: S) -> Self {
-        VesObject::Str(VesStr::on_heap(ctx, s).view())
+    pub fn as_instance(&self) -> Option<&VesInstance> {
+        if let Self::Instance(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_struct(&self) -> Option<&VesStruct> {
+        if let Self::Struct(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str(&self) -> Option<&VesStr> {
+        if let Self::Str(v) = self {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
-impl Trace for VesObject {
-    fn trace(&self, tracer: &mut ves_cc::Tracer) {
+impl From<VesStr> for VesObject {
+    fn from(s: VesStr) -> Self {
+        Self::Str(s)
+    }
+}
+
+impl From<VesStruct> for VesObject {
+    fn from(v: VesStruct) -> Self {
+        Self::Struct(v)
+    }
+}
+
+impl From<VesInstance> for VesObject {
+    fn from(v: VesInstance) -> Self {
+        Self::Instance(v)
+    }
+}
+
+impl From<String> for VesObject {
+    fn from(s: String) -> Self {
+        Self::from(VesStr::new(Cow::Owned(s)))
+    }
+}
+
+impl From<&'static str> for VesObject {
+    fn from(s: &'static str) -> Self {
+        Self::from(VesStr::new(Cow::Borrowed(s)))
+    }
+}
+
+unsafe impl Trace for VesObject {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         match self {
             VesObject::Str(s) => s.trace(tracer),
             VesObject::Instance(i) => Trace::trace(i, tracer),
             VesObject::Struct(s) => Trace::trace(s, tracer),
+        }
+    }
+
+    fn after_forwarding(&mut self) {
+        match self {
+            VesObject::Str(s) => s.after_forwarding(),
+            VesObject::Instance(i) => i.after_forwarding(),
+            VesObject::Struct(s) => s.after_forwarding(),
         }
     }
 }

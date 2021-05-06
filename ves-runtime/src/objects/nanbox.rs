@@ -98,7 +98,9 @@
 
 use std::ptr::NonNull;
 
-use super::{ptr_guard::PtrGuard, value::Value, ves_object::*};
+use crate::gc::{VesPtr, VesRawPtr, VesRef};
+
+use super::value::Value;
 
 // The size of a pointer on 64-bit systems.
 const TAG_SHIFT: u64 = 48;
@@ -122,7 +124,7 @@ pub enum NanBoxVariant {
     Err,
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct NanBox(u64);
 
 impl NanBox {
@@ -133,14 +135,14 @@ impl NanBox {
             Value::Bool(b) => NanBox(b as u64 | BOOL_TAG),
             Value::None => Self::none(),
             // Safety: The nanbox's drop makes sure to decrement the refcount.
-            Value::Ptr(ptr) => Self::box_ptr(unsafe { ptr.get_unchecked() }),
+            Value::Ref(obj) => Self::box_ptr(obj.ptr()),
         }
     }
 
     pub fn with_variant(ptr: Value, variant: NanBoxVariant) -> Self {
         match ptr {
-            Value::Ptr(ptr) => {
-                let raw = unsafe { ptr.get_unchecked() }.as_ptr() as u64;
+            Value::Ref(ptr) => {
+                let raw = ptr.ptr().as_ptr() as u64;
                 let masked = raw & PTR_MASK;
                 let tag = match variant {
                     NanBoxVariant::Value => PTR_TAG,
@@ -223,25 +225,6 @@ impl NanBox {
         masked == PTR_OK_TAG || masked == PTR_ERR_TAG
     }
 
-    pub fn try_access_pointer<T, F>(&self, f: F) -> Option<T>
-    where
-        F: Fn(&VesRef) -> T,
-    {
-        if !self.is_ptr() {
-            return None;
-        }
-        let ptr = (self.0 & PTR_MASK) as VesRawPtr;
-        debug_assert!(!ptr.is_null());
-
-        // Safety: We make sure to construct and leak the pointer without incrementing or decrementing the ref count.
-        //         Additionally, no Ves reference can be null, so the unchecked call is safe.
-        let cc = unsafe { VesRef::from_raw(NonNull::new_unchecked(ptr)) };
-        let result = f(&cc);
-        let _ = unsafe { VesRef::leak(cc) };
-
-        Some(result)
-    }
-
     /// Unboxes the boxed value into a raw f64.
     ///
     /// # Safety
@@ -288,7 +271,7 @@ impl NanBox {
             (Value::Bool(self.0 & 1 == 1), NanBoxVariant::Value)
         } else {
             let res = unsafe { self.unbox_pointer() };
-            (Value::Ptr(res.0), res.1)
+            (Value::Ref(res.0), res.1)
         }
     }
 
@@ -299,16 +282,14 @@ impl NanBox {
     /// The caller must ensure that the nanbox contains a pointer. Failure to do so will result into executing
     /// operations such on completely random memory.
     #[allow(unused_unsafe)]
-    pub unsafe fn unbox_pointer(self) -> (PtrGuard, NanBoxVariant) {
+    pub unsafe fn unbox_pointer(self) -> (VesRef, NanBoxVariant) {
         debug_assert!(self.is_ptr());
 
         let masked = self.masked();
-        let this = std::mem::ManuallyDrop::new(self);
-        let ptr = (this.0 & PTR_MASK) as VesRawPtr;
+        let ptr = (self.0 & PTR_MASK) as VesRawPtr;
         debug_assert!(!ptr.is_null());
-        // Safety: We make sure to avoid calling the drop impl for this nanbox, thus avoiding decrementing the refcount,
-        //         while transferring the ownership of the CC to the guard (which correctly handles the refcount semantics).
-        let ptr = unsafe { PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)) };
+
+        let ptr = unsafe { VesRef::new(NonNull::new_unchecked(ptr)) };
         let variant = match masked {
             PTR_TAG => NanBoxVariant::Value,
             PTR_OK_TAG => NanBoxVariant::Ok,
@@ -321,30 +302,9 @@ impl NanBox {
     }
 }
 
-impl Clone for NanBox {
-    fn clone(&self) -> Self {
-        self.try_access_pointer(|cc| Self::box_ptr(unsafe { VesRef::clone(&cc).leak() }))
-            .unwrap_or_else(|| Self(self.0))
-    }
-}
-
-impl Drop for NanBox {
-    fn drop(&mut self) {
-        if self.is_ptr() {
-            let ptr = (self.0 & PTR_MASK) as VesRawPtr;
-            debug_assert!(!ptr.is_null());
-            // Safety: Ves references cannot be null, and PtrGuard correctly handles refcounts for us.
-            unsafe {
-                std::mem::drop(PtrGuard::new_unchecked(NonNull::new_unchecked(ptr)));
-            }
-        }
-    }
-}
-
-impl From<NanBox> for Value {
-    #[inline]
-    fn from(b: NanBox) -> Self {
-        b.unbox()
+impl<V: Into<Value>> From<V> for NanBox {
+    fn from(value: V) -> Self {
+        NanBox::new(value.into())
     }
 }
 
@@ -390,9 +350,9 @@ impl std::fmt::Debug for NanBox {
                 f,
                 "    value   = {}",
                 if self.is_ptr() {
-                    format!("{:#?}", self.clone().unbox())
+                    format!("{:#?}", self.unbox())
                 } else {
-                    format!("{:?}", self.clone().unbox())
+                    format!("{:?}", self.unbox())
                 }
             )?;
             write!(f, "}}")
@@ -402,7 +362,7 @@ impl std::fmt::Debug for NanBox {
 
 #[cfg(test)]
 mod tests {
-    use ves_cc::CcContext;
+    use crate::gc::{Roots, VesGc};
 
     use super::*;
 
@@ -474,8 +434,22 @@ mod tests {
             assert_eq!(boolean.unbox(), Value::Bool(*value));
         }
 
-        let ctx = CcContext::new();
-        let ptr = ctx.cc(VesObject::new_str(&ctx, "a string"));
+        macro_rules! alloc {
+            ($gc:ident, $obj:expr) => {
+                $gc.alloc(
+                    $obj,
+                    Roots {
+                        stack: &mut vec![],
+                        data: std::iter::empty(),
+                    },
+                )
+                .unwrap()
+            };
+        }
+
+        let mut gc = crate::gc::naive::NaiveMarkAndSweep::default();
+        let ptr = alloc!(gc, "a string");
+
         let val = Value::from(ptr);
         let val = NanBox::new(val);
         assert!(!val.is_num());
@@ -485,19 +459,13 @@ mod tests {
         assert!(!val.is_ok());
         assert!(!val.is_err());
 
-        val.try_access_pointer(|cc| {
-            assert_eq!(cc.strong_count(), 1);
-        });
+        assert!(matches!(
+            &**val.unbox().as_ptr().unwrap().as_str().unwrap().inner(),
+            "a string"
+        ));
 
-        let clone = val.clone();
-        assert!(clone.is_ptr());
+        let clone = val;
         assert_eq!(val.0, clone.0);
-
-        val.try_access_pointer(|cc| assert_eq!(cc.strong_count(), 2));
-        clone.try_access_pointer(|cc| assert_eq!(cc.strong_count(), 2));
-
-        std::mem::drop(val);
-        clone.try_access_pointer(|cc| assert_eq!(cc.strong_count(), 1));
 
         let unboxed = clone.unbox();
         let ok = NanBox::with_variant(unboxed, NanBoxVariant::Ok);
@@ -511,7 +479,5 @@ mod tests {
         assert!(err.is_ptr());
         assert!(!err.is_ok());
         assert!(err.is_err());
-
-        ctx.collect_cycles();
     }
 }

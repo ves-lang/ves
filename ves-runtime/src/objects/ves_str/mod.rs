@@ -2,24 +2,12 @@ pub mod view;
 
 use std::{borrow::Cow, cell::Cell};
 
-use ves_cc::{Cc, CcContext, Trace};
-
-pub use self::view::VesStrView;
+use crate::gc::Trace;
 
 #[derive(Debug)]
 pub struct VesStr {
     s: Cow<'static, str>,
     hash: Cell<Option<u64>>,
-}
-
-pub trait StrCcExt<T> {
-    fn view(&self) -> T;
-}
-
-impl StrCcExt<VesStrView> for Cc<VesStr> {
-    fn view(&self) -> VesStrView {
-        VesStrView(Cc::clone(self))
-    }
 }
 
 impl VesStr {
@@ -28,11 +16,6 @@ impl VesStr {
             s,
             hash: Cell::new(None),
         }
-    }
-
-    #[inline]
-    pub fn on_heap<S: Into<Cow<'static, str>>>(ctx: &CcContext, s: S) -> Cc<Self> {
-        ctx.cc(Self::new(s.into()))
     }
 
     #[inline]
@@ -66,6 +49,6 @@ impl std::ops::Deref for VesStr {
     }
 }
 
-impl Trace for VesStr {
-    fn trace(&self, _tracer: &mut ves_cc::Tracer) {}
+unsafe impl Trace for VesStr {
+    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut crate::gc::GcObj)) {}
 }

@@ -1,13 +1,14 @@
 //! Inspired by https://github.com/Laythe-lang/Laythe/blob/master/laythe_vm/src/cache.rs.
-use ves_cc::Cc;
 
-use crate::objects::ves_struct::{Function, VesStruct};
+use std::ptr::NonNull;
+
+use crate::gc::{GcObj, Trace};
 
 /// The cache entry for a field index ("slot") of a property on a struct.
 #[derive(Debug, Clone)]
 struct PropertyEntry {
     /// The type of the struct.
-    ty: Cc<VesStruct>,
+    ty: GcObj,
     /// The index of the cached field.
     slot: usize,
 }
@@ -17,9 +18,9 @@ struct PropertyEntry {
 #[derive(Debug, Clone)]
 struct MethodEntry {
     /// The type of the struct.
-    ty: Cc<VesStruct>,
+    ty: GcObj,
     /// The cached method (unbound).
-    method: Cc<Function>,
+    method: NonNull<()>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,12 +46,12 @@ impl InlineCache {
 
     /// Attempts to retrieve the cached field slot corresponding to the given instruction.
     /// Returns `None` if the cache slot is empty, stores a method, or has a different struct type.
-    pub fn get_property_cache(&self, instruction: usize, ty: &Cc<VesStruct>) -> Option<usize> {
+    pub fn get_property_cache(&self, instruction: usize, ty: &GcObj) -> Option<usize> {
         debug_assert!(instruction < self.cache.len());
         match unsafe { self.cache.get_unchecked(instruction) } {
             CacheEntry::Property(prop) => {
                 // NOTE: this is a pointer comparison. VesStruct isn't clone, so it should always hold true for the same struct.
-                if prop.ty.same_allocation(ty) {
+                if prop.ty.ptr_eq(ty) {
                     Some(prop.slot)
                 } else {
                     None
@@ -60,12 +61,7 @@ impl InlineCache {
         }
     }
 
-    pub fn update_property_cache(
-        &mut self,
-        instruction: usize,
-        property_slot: usize,
-        ty: Cc<VesStruct>,
-    ) {
+    pub fn update_property_cache(&mut self, instruction: usize, property_slot: usize, ty: GcObj) {
         debug_assert!(instruction < self.cache.len());
         unsafe {
             *self.cache.get_unchecked_mut(instruction) = CacheEntry::Property(PropertyEntry {
@@ -73,5 +69,17 @@ impl InlineCache {
                 ty,
             })
         }
+    }
+}
+
+// XXX: should this be traced? Hypothetically, if we never dereference any pointer in the cache
+// before comparing it with the given pointer, it is safe to have invalid pointers in the cache.
+unsafe impl Trace for InlineCache {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        self.cache.iter_mut().for_each(|entry| match entry {
+            CacheEntry::Property(prop) => tracer(&mut prop.ty),
+            CacheEntry::Method(_) => unimplemented!(),
+            CacheEntry::Empty => (),
+        })
     }
 }

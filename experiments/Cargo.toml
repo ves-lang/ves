@@ -8,7 +8,6 @@ edition = "2018"
 
 [dependencies]
 ves_runtime = { package = "ves-runtime", path = "../ves-runtime" }
-ves_cc = { package = "bacon_rajan_cc", git = "https://github.com/ves-lang/bacon-rajan-cc" }
 
 [dev-dependencies]
 criterion = "0.3.4"
