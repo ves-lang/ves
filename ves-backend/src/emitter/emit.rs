@@ -1,11 +1,10 @@
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
-use crate::Result;
-use crate::{builder::Function, opcode::Opcode};
-use crate::{
-    builder::{BytecodeBuilder, Chunk, Value},
-    Span,
-};
+use crate::Span;
+
+use super::builder::{BytecodeBuilder, Chunk, Value};
+use super::Result;
+use super::{builder::Function, opcode::Opcode};
 use ves_error::FileId;
 use ves_parser::ast::*;
 use ves_parser::lexer::{Token, TokenKind};
@@ -1470,7 +1469,7 @@ mod tests {
     use super::*;
 
     static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-    static TESTS_DIR: &str = "tests";
+    static TESTS_DIR: &str = "tests/codegen";
     ves_testing::make_test_macros!(eq => CRATE_ROOT, TESTS_DIR, _impl::compile, _impl::strip_comments);
 
     test_eq!(t01_simple_arithmetic_expr);

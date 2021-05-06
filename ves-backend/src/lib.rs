@@ -1,12 +1,24 @@
-#![feature(box_syntax, box_patterns)]
+#![feature(box_syntax, box_patterns, allocator_api, linked_list_cursors)]
 #![allow(
     clippy::new_without_default,
     clippy::comparison_chain,
     clippy::needless_range_loop
 )]
-pub mod builder;
-pub mod emit;
-pub mod opcode;
+extern crate static_assertions as sa;
 
 pub type Span = core::ops::Range<usize>;
-type Result<T> = std::result::Result<T, ves_error::VesError>;
+
+pub mod emitter;
+pub mod gc;
+pub mod objects;
+pub mod runtime;
+
+pub use self::objects::nanbox;
+pub use self::objects::value;
+pub use self::objects::ves_object;
+
+pub use nanbox::NanBox;
+pub use value::Value;
+pub use ves_object::VesObject;
+
+sa::assert_eq_size!(Value, u128);

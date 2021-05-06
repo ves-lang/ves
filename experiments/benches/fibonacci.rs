@@ -1,7 +1,7 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching, vm_enum_instruction_inline_caching};
-use ves_runtime::{
+use ves_backend::{
     gc::{self, GcHandle, VesGc},
     nanbox::NanBox,
 };
@@ -16,9 +16,9 @@ fn get_enum_vm() -> vm_enum::VmEnum<gc::DefaultGc> {
             NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         {
             vec![
@@ -75,9 +75,9 @@ fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum<gc::DefaultGc> {
             NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         {
             vec![
@@ -125,7 +125,7 @@ fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum<gc::DefaultGc> {
 }
 
 fn get_enum_inst_ic_vm() -> vm_enum_instruction_inline_caching::VmEnum<gc::DefaultGc> {
-    let gc = ves_runtime::gc::DefaultGc::default();
+    let gc = ves_backend::gc::DefaultGc::default();
     let mut handle = GcHandle::new(gc);
     vm_enum_instruction_inline_caching::VmEnum::new(
         handle.clone(),
@@ -133,9 +133,9 @@ fn get_enum_inst_ic_vm() -> vm_enum_instruction_inline_caching::VmEnum<gc::Defau
             NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         Vec::from(vm_enum_instruction_inline_caching::FIB_INSTS),
     )
@@ -151,9 +151,9 @@ fn get_byte_vm() -> vm_bytes::VmBytes<gc::DefaultGc> {
             NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         vec![
             Inst::Alloc as _,

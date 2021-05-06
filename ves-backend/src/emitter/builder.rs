@@ -1,11 +1,11 @@
 use std::{borrow::Cow, collections::HashMap};
 
-use crate::emit::UpvalueInfo;
-use crate::opcode::Opcode;
-use crate::Result;
+use super::emit::UpvalueInfo;
+use super::opcode::Opcode;
+use super::Result;
 use crate::Span;
 use ves_error::{FileId, VesError};
-/* use ves_runtime::{NanBox, Value}; */
+/* use ves_backend::{NanBox, Value}; */
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
@@ -42,7 +42,7 @@ pub struct ClosureDescriptor {
     pub upvalues: Vec<UpvalueInfo>,
 }
 
-// TEMP: replace the usage of this with the actual ves_runtime Value once GC is implemented
+// TEMP: replace the usage of this with the actual ves_backend Value once GC is implemented
 #[derive(Debug, Clone)]
 pub enum Value {
     Number(f64),

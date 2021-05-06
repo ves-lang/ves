@@ -1,4 +1,4 @@
-use ves_runtime::{
+use ves_backend::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
     objects::{
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn test_vm_enum_opcodes() {
-        let gc = ves_runtime::gc::DefaultGc::default();
+        let gc = ves_backend::gc::DefaultGc::default();
         let mut handle = GcHandle::new(gc);
         let mut vm = VmEnum::new(
             handle.clone(),
@@ -341,9 +341,9 @@ mod tests {
                 NanBox::num(100.0),
                 NanBox::num(0.0),
                 NanBox::num(1.0),
-                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("a"))),
-                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("b"))),
-                NanBox::new(ves_runtime::Value::from(handle.alloc_permanent("n"))),
+                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
             ],
             vec![
                 Inst::Alloc, // 0 = obj

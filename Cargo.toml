@@ -4,7 +4,6 @@ members = [
     "ves-parser",
     "ves-middle",
     "ves-backend",
-    "ves-runtime",
     "ves-testing",
     "experiments"
 ]

@@ -121,7 +121,7 @@ macro_rules! make_test_macros {
     (eq => $crate_root:ident, $tests_dir:ident, $f:expr, $output_preprocessor:expr) => {
         $crate::lazy_static! {
             static ref __TESTS_DIR: std::path::PathBuf
-                = std::path::PathBuf::from($crate_root).join($tests_dir);
+                = std::path::PathBuf::from($crate_root).join($tests_dir.replace('/', &std::path::MAIN_SEPARATOR.to_string()[..]));
         }
 
         $crate::with_dollar_sign! {
