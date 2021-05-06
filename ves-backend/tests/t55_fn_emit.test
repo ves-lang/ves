@@ -65,9 +65,9 @@ test3(1, 2, 3);
 |0000| Pop
 |0001| Return
 >>>>>> test1
-|0000| GetLocal(1)  // get a
-|0001| Print        // print
-|0002| PopN(2)      // pop none, receiver
+|0000| GetLocal(1)      // 
+|0001| Print            // print(a)
+|0002| PopN(2)          // pop none, receiver
 |0003| Return       
 >>>>>> test2
 |0000| PushNone         //
@@ -104,5 +104,5 @@ test3(1, 2, 3);
 |0011| GetLocal(2)      //
 |0012| GetLocal(3)      //
 |0013| PrintN(3)        // print(a, b, c)
-|0014| PopN(4)          //
+|0014| PopN(4)          // pop c, b, a, receiver
 |0015| Return           //
