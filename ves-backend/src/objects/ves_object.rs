@@ -53,6 +53,14 @@ impl VesObject {
             None
         }
     }
+
+    pub fn as_fn(&self) -> Option<&VesFn> {
+        if let Self::Fn(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl From<VesStr> for VesObject {
@@ -82,6 +90,24 @@ impl From<String> for VesObject {
 impl From<&'static str> for VesObject {
     fn from(s: &'static str) -> Self {
         Self::from(VesStr::new(Cow::Borrowed(s)))
+    }
+}
+
+impl From<ClosureDescriptor> for VesObject {
+    fn from(v: ClosureDescriptor) -> Self {
+        Self::ClosureDescriptor(v)
+    }
+}
+
+impl From<VesClosure> for VesObject {
+    fn from(v: VesClosure) -> Self {
+        Self::Closure(v)
+    }
+}
+
+impl From<VesFn> for VesObject {
+    fn from(v: VesFn) -> Self {
+        Self::Fn(v)
     }
 }
 

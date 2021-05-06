@@ -20,11 +20,11 @@
 |0015| GetLocal(0)
 |0016| PushNum32(0.0)
 |0017| GetItem
-|0018| GetProp(2)
+|0018| GetProp(0)
 |0019| Data(0)
 |0020| Data(0)
 |0021| Data(0)
-|0022| GetProp(3)
+|0022| GetProp(1)
 |0023| Data(0)
 |0024| Data(0)
 |0025| Data(0)

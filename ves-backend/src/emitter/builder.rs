@@ -1,9 +1,8 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::collections::HashMap;
 
-use super::emit::UpvalueInfo;
 use super::opcode::Opcode;
 use super::Result;
-use crate::Span;
+use crate::{Span, Value};
 use ves_error::{FileId, VesError};
 /* use ves_backend::{NanBox, Value}; */
 
@@ -15,84 +14,11 @@ pub struct Chunk {
     pub file_id: FileId,
 }
 
-// TEMP
-#[derive(Debug, Clone)]
-pub struct Function {
-    pub name: String,
-    /// How many positional arguments this function accepts
-    pub positionals: u32,
-    /// How many default arguments this function accepts
-    pub defaults: u32,
-    /// Whether or not this function accepts an arbitrary amount of arguments
-    pub rest: bool,
-    pub chunk: Chunk,
-}
-
-// TEMP
-#[derive(Debug, Clone)]
-pub struct Closure {
-    pub function: Function,
-    pub upvalues: Vec<UpvalueInfo>,
-}
-
-// TEMP
-#[derive(Debug, Clone)]
-pub struct ClosureDescriptor {
-    pub fn_constant_index: u32,
-    pub upvalues: Vec<UpvalueInfo>,
-}
-
-// TEMP: replace the usage of this with the actual ves_backend Value once GC is implemented
-#[derive(Debug, Clone)]
-pub enum Value {
-    Number(f64),
-    String(String),
-    Function(Function),
-    Closure(Closure),
-    ClosureDescriptor(ClosureDescriptor),
-    /* Struct(Struct), */
-}
-impl Value {
-    pub fn function<S: Into<String>>(
-        name: S,
-        positionals: u32,
-        defaults: u32,
-        rest: bool,
-        chunk: Chunk,
-    ) -> Self {
-        Value::Function(Function {
-            name: name.into(),
-            positionals,
-            defaults,
-            rest,
-            chunk,
-        })
-    }
-
-    pub fn closure_desc(fn_constant_index: u32, upvalues: Vec<UpvalueInfo>) -> Self {
-        Self::ClosureDescriptor(ClosureDescriptor {
-            fn_constant_index,
-            upvalues,
-        })
-    }
-}
-
-impl From<f64> for Value {
-    fn from(value: f64) -> Self {
-        Value::Number(value)
-    }
-}
-impl<'a> From<Cow<'a, str>> for Value {
-    fn from(value: Cow<'a, str>) -> Self {
-        Value::String(value.to_string())
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct BytecodeBuilder {
     code: Vec<Opcode>,
     spans: Vec<Span>,
-    constants: Vec<Value>,
+    constants: HashMap<Value, u32>,
     file_id: FileId,
 }
 
@@ -101,7 +27,7 @@ impl BytecodeBuilder {
         Self {
             code: vec![],
             spans: vec![],
-            constants: vec![],
+            constants: HashMap::new(),
             file_id: fid,
         }
     }
@@ -148,15 +74,23 @@ impl BytecodeBuilder {
     }
 
     pub fn constant(&mut self, value: Value, span: Span) -> Result<u32> {
-        let index = self.constants.len() as u32;
+        let index = if let Some(index) = self.constants.get(&value) {
+            *index
+        } else {
+            let index = self.constants.len() as _;
+            self.constants.insert(value, index);
+            index
+        };
         if index == u32::MAX {
             Err(VesError::emit(
-                "Exceeded maximum number of constants in one bytecode chunk",
+                format!(
+                    "Exceeded maximum number of constants in one bytecode chunk ({})",
+                    u32::MAX
+                ),
                 span,
                 self.file_id,
             ))
         } else {
-            self.constants.push(value);
             Ok(index)
         }
     }
@@ -226,7 +160,11 @@ impl BytecodeBuilder {
         Chunk {
             code: take(&mut self.code),
             spans: take(&mut self.spans),
-            constants: take(&mut self.constants),
+            constants: {
+                let mut constants = take(&mut self.constants).into_iter().collect::<Vec<_>>();
+                constants.sort_by_key(|(_, idx)| *idx);
+                constants.into_iter().map(|(v, _)| v).collect()
+            },
             file_id: self.file_id,
         }
     }

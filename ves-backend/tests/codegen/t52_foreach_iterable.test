@@ -25,7 +25,7 @@ for item in iterable {
 |0015| Jump(22)         // jump @loop.body
 // @loop.latch:
 |0016| GetLocal(0)      // get [[ITER]]
-|0017| GetProp(3)       // get prop "next"
+|0017| GetProp(1)       // get prop "next"
 |0018| Call(0)          // call [[ITER]].next
 |0019| SetLocal(1)      // <item> = [[ITER]].next()
 |0020| Pop              // pop (call [[ITER]].next)

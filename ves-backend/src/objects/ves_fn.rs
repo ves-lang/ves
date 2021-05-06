@@ -53,16 +53,16 @@ pub struct ClosureDescriptor {
 
 #[derive(Debug)]
 pub struct VesFn {
-    name: VesStr,
+    pub name: GcObj,
     /// How many positional arguments this function accepts
     pub positionals: u32,
     /// How many default arguments this function accepts
     pub defaults: u32,
     /// Whether or not this function accepts rest arguments
     pub rest: bool,
-    chunk: Chunk,
+    pub chunk: Chunk,
     /// This function's source file ID
-    file_id: FileId,
+    pub file_id: FileId,
 }
 
 unsafe impl Trace for VesFn {

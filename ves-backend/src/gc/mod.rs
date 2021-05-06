@@ -164,7 +164,7 @@ pub struct GcBox {
 }
 
 // TODO: figure out a way to make this safer using lifetimes.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GcObj {
     ptr: NonNull<GcBox>,
 }

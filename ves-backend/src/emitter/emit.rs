@@ -1,10 +1,14 @@
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
-use crate::Span;
+use crate::{
+    gc::{GcHandle, GcObj, VesGc},
+    objects::ves_fn::{ClosureDescriptor, VesFn},
+    Span, Value, VesObject,
+};
 
-use super::builder::{BytecodeBuilder, Chunk, Value};
+use super::builder::{BytecodeBuilder, Chunk};
+use super::opcode::Opcode;
 use super::Result;
-use super::{builder::Function, opcode::Opcode};
 use ves_error::FileId;
 use ves_parser::ast::*;
 use ves_parser::lexer::{Token, TokenKind};
@@ -288,26 +292,53 @@ impl<'a> State<'a> {
 }
 
 fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> HashMap<String, u32> {
-    let mut globals = globals.iter().collect::<Vec<_>>();
-    globals.sort();
     globals
-        .into_iter()
-        .enumerate()
-        .map(|(idx, global)| (global.name.lexeme.clone().into_owned(), idx as u32))
+        .iter()
+        .map(|global| {
+            (
+                global.name.lexeme.clone().into_owned(),
+                global.index.unwrap() as u32,
+            )
+        })
         .collect()
 }
 
-pub struct Emitter<'a> {
-    state: State<'a>,
-    ast: AST<'a>,
+// temp
+pub struct CompilationContext<'a, T: VesGc> {
+    pub gc: GcHandle<T>,
+    pub strings: HashMap<Cow<'a, str>, GcObj>,
 }
 
-impl<'a> Emitter<'a> {
-    pub fn new(ast: AST<'a>) -> Emitter<'a> {
+impl<'a, T: VesGc> CompilationContext<'a, T> {
+    pub fn alloc_or_intern(&mut self, s: impl Into<Cow<'a, str>>) -> GcObj {
+        let s = s.into();
+        if let Some(ptr) = self.strings.get(&s) {
+            *ptr
+        } else {
+            let ptr = self.gc.alloc_permanent(s.to_string());
+            self.strings.insert(s, ptr);
+            ptr
+        }
+    }
+
+    pub fn alloc_value(&mut self, v: impl Into<VesObject>) -> Value {
+        Value::Ref(self.gc.alloc_permanent(v))
+    }
+}
+
+pub struct Emitter<'a, 'b, T: VesGc> {
+    state: State<'a>,
+    ast: &'b AST<'a>,
+    ctx: CompilationContext<'a, T>,
+}
+
+impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
+    pub fn new(ast: &'b AST<'a>, ctx: CompilationContext<'a, T>) -> Self {
         let globals = Rc::new(extract_global_slots(&ast.globals));
         Emitter {
             state: State::new(None, ast.file_id, globals),
             ast,
+            ctx,
         }
     }
 
@@ -329,24 +360,25 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub fn emit(mut self) -> Result<Function> {
-        let body = std::mem::take(&mut self.ast.body);
-
-        for stmt in body.into_iter() {
-            self.emit_stmt(&stmt)?;
+    pub fn emit(mut self) -> Result<GcObj> {
+        for stmt in self.ast.body.iter() {
+            self.emit_stmt(stmt)?;
         }
         self.state.builder.op(Opcode::Return, 0..0);
 
-        Ok(Function {
-            name: "[[MAIN]]".to_string(),
+        let f = VesFn {
+            name: self.ctx.alloc_or_intern("<main>"), // TODO: use module name
             positionals: 0,
             defaults: 0,
             rest: false,
             chunk: self.state.finish(),
-        })
+            file_id: self.ast.file_id,
+        };
+        let ptr = self.ctx.gc.alloc_permanent(VesObject::Fn(f));
+        Ok(ptr)
     }
 
-    fn emit_stmt(&mut self, stmt: &Stmt<'a>) -> Result<()> {
+    fn emit_stmt(&mut self, stmt: &'b Stmt<'a>) -> Result<()> {
         let span = stmt.span.clone();
         use StmtKind::*;
         match &stmt.kind {
@@ -368,13 +400,13 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_expr_stmt(&mut self, expr: &Expr<'a>, span: Span) -> Result<()> {
+    fn emit_expr_stmt(&mut self, expr: &'b Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(expr, false)?;
         self.state.builder.op(Opcode::Pop, span);
         Ok(())
     }
 
-    fn emit_var_stmt(&mut self, vars: &[Var<'a>]) -> Result<()> {
+    fn emit_var_stmt(&mut self, vars: &'b [Var<'a>]) -> Result<()> {
         for var in vars {
             let span = var.name.span.clone();
             if let Some(ref initializer) = var.initializer {
@@ -388,7 +420,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_print_stmt(&mut self, expr: &Expr<'a>) -> Result<()> {
+    fn emit_print_stmt(&mut self, expr: &'b Expr<'a>) -> Result<()> {
         let span = expr.span.clone();
         match &expr.kind {
             ExprKind::Comma(ref exprs) => {
@@ -407,7 +439,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_return_stmt(&mut self, value: Option<&Expr<'a>>, span: Span) -> Result<()> {
+    fn emit_return_stmt(&mut self, value: Option<&'b Expr<'a>>, span: Span) -> Result<()> {
         let n_locals = self.state.locals.len() as u32;
         self.state.op_pop(n_locals, span.clone());
         if let Some(value) = value {
@@ -469,7 +501,7 @@ impl<'a> Emitter<'a> {
     ///   jump @start    ; default loop jump
     /// end:
     /// ```
-    fn emit_loop(&mut self, info: &Loop<'a>, span: Span) -> Result<()> {
+    fn emit_loop(&mut self, info: &'b Loop<'a>, span: Span) -> Result<()> {
         self.state.begin_loop();
         let [start, end] = self.state.reserve_labels::<2>();
         self.state.add_control_label(&info.label, start, end);
@@ -514,7 +546,7 @@ impl<'a> Emitter<'a> {
     ///
     /// ```
     /// TODO: describe the layout for the loops with a binding
-    fn emit_while_loop(&mut self, info: &While<'a>, span: Span) -> Result<()> {
+    fn emit_while_loop(&mut self, info: &'b While<'a>, span: Span) -> Result<()> {
         self.state.begin_loop();
         let [start, exit, end] = self.state.reserve_labels::<3>();
         self.state.add_control_label(&info.label, start, end);
@@ -578,7 +610,7 @@ impl<'a> Emitter<'a> {
     /// - `@iter` is should return a value which has the `@next` and `@done` methods
     /// - `@next` is should return the next value, or none if there are no more values
     /// - `@done` is should return `true` if there are no more values, and `false` otherwise
-    fn emit_foreach_loop(&mut self, info: &ForEach<'a>, span: Span) -> Result<()> {
+    fn emit_foreach_loop(&mut self, info: &'b ForEach<'a>, span: Span) -> Result<()> {
         self.state.begin_scope();
         let mut comparison_op = Opcode::LessThan;
         match info.iterator {
@@ -613,7 +645,7 @@ impl<'a> Emitter<'a> {
                 let iter = self
                     .state
                     .builder
-                    .constant(Value::String("iter".into()), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("iter").into(), span.clone())?;
                 // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
                 self.state.builder.op(Opcode::GetProp(iter), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
@@ -627,7 +659,7 @@ impl<'a> Emitter<'a> {
                 let next = self
                     .state
                     .builder
-                    .constant(Value::String("next".into()), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(next), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
             }
@@ -667,7 +699,7 @@ impl<'a> Emitter<'a> {
                 let done = self
                     .state
                     .builder
-                    .constant(Value::String("done".into()), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("done").into(), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(done), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 self.state.builder.op(Opcode::Not, span.clone());
@@ -709,7 +741,7 @@ impl<'a> Emitter<'a> {
                 let next = self
                     .state
                     .builder
-                    .constant(Value::String("next".into()), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
                 self.state.builder.op(Opcode::GetProp(next), span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
@@ -781,7 +813,7 @@ impl<'a> Emitter<'a> {
     /// end:
     /// ```
     /// TODO: describe the layout for the loops with a binding
-    fn emit_for_loop(&mut self, info: &For<'a>, span: Span) -> Result<()> {
+    fn emit_for_loop(&mut self, info: &'b For<'a>, span: Span) -> Result<()> {
         self.state.begin_scope();
         for init in info.initializers.iter() {
             self.emit_expr(&init.value, true)?;
@@ -828,7 +860,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_block(&mut self, body: &[Stmt<'a>], span: Span) -> Result<()> {
+    fn emit_block(&mut self, body: &'b [Stmt<'a>], span: Span) -> Result<()> {
         self.state.begin_scope();
         for stmt in body {
             self.emit_stmt(stmt)?;
@@ -838,7 +870,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_defer_stmt(&mut self, call: &Call<'a>, span: Span) -> Result<()> {
+    fn emit_defer_stmt(&mut self, call: &'b Call<'a>, span: Span) -> Result<()> {
         self.emit_expr(&call.callee, true)?;
         for arg in call.args.iter() {
             self.emit_expr(arg, true)?;
@@ -847,7 +879,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_expr(&mut self, expr: &Expr<'a>, is_sub_expr: bool) -> Result<()> {
+    fn emit_expr(&mut self, expr: &'b Expr<'a>, is_sub_expr: bool) -> Result<()> {
         let span = expr.span.clone();
         match expr.kind {
             ExprKind::Lit(ref literal) => self.emit_lit(literal)?,
@@ -892,8 +924,8 @@ impl<'a> Emitter<'a> {
     fn emit_binary_expr(
         &mut self,
         op: BinOpKind,
-        left: &Expr<'a>,
-        right: &Expr<'a>,
+        left: &'b Expr<'a>,
+        right: &'b Expr<'a>,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(left, true)?;
@@ -944,7 +976,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_unary_expr(&mut self, op: UnOpKind, operand: &Expr<'a>, span: Span) -> Result<()> {
+    fn emit_unary_expr(&mut self, op: UnOpKind, operand: &'b Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(operand, true)?;
         self.state.builder.op(
             match op {
@@ -969,7 +1001,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_fn_expr(&mut self, info: &FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
+    fn emit_fn_expr(&mut self, info: &'b FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
         self.begin_state();
         self.state.begin_scope();
         self.state.fn_kind = Some(info.kind);
@@ -1001,14 +1033,16 @@ impl<'a> Emitter<'a> {
         );
         self.state.builder.op(Opcode::Return, span.clone());
         let chunk = self.end_state();
+        let name = self.ctx.alloc_or_intern(info.name.lexeme.clone());
         let fn_constant_index = self.state.builder.constant(
-            Value::function(
-                info.name.lexeme.to_string(),
-                info.params.positional.len() as u32,
-                info.params.default.len() as u32,
-                info.params.rest.is_some(),
+            self.ctx.alloc_value(VesFn {
+                name,
+                positionals: info.params.positional.len() as u32,
+                defaults: info.params.default.len() as u32,
+                rest: info.params.rest.is_some(),
                 chunk,
-            ),
+                file_id: self.ast.file_id,
+            }),
             span.clone(),
         )?;
         // if there are no upvalues, the function does not need to be a closure
@@ -1018,7 +1052,10 @@ impl<'a> Emitter<'a> {
                 .op(Opcode::GetConst(fn_constant_index), span.clone());
         } else {
             let closure_desc_index = self.state.builder.constant(
-                Value::closure_desc(fn_constant_index, std::mem::take(&mut self.state.upvalues)),
+                self.ctx.alloc_value(ClosureDescriptor {
+                    fn_constant_index,
+                    upvalues: std::mem::take(&mut self.state.upvalues),
+                }),
                 span.clone(),
             )?;
             self.state
@@ -1036,45 +1073,47 @@ impl<'a> Emitter<'a> {
     fn emit_default_param(&mut self, name: &Token<'a>, value: &Expr<'a>, span: Span) -> Result<()> {
         // format:
         // if <param> is none { <param> = <value>; }
-        self.emit_if_expr(
-            &If {
-                condition: Condition {
-                    value: Expr {
-                        // <param> is none
-                        kind: ExprKind::Binary(
-                            BinOpKind::Is,
-                            box Expr {
-                                kind: ExprKind::Variable(name.clone()),
-                                span: span.clone(),
-                            },
-                            box Expr {
-                                kind: ExprKind::Lit(box Lit {
-                                    value: LitValue::None,
-                                    token: Token::new("none", span.clone(), TokenKind::None),
-                                }),
-                                span: span.clone(),
-                            },
-                        ),
-                        span: span.clone(),
-                    },
-                    pattern: ConditionPattern::Value,
-                },
-                then: DoBlock {
-                    statements: vec![Stmt {
-                        // <param> = <value>
-                        kind: StmtKind::ExprStmt(box Expr {
-                            kind: ExprKind::Assignment(box Assignment {
-                                name: name.clone(),
-                                value: value.clone(),
+        let r#if = If {
+            condition: Condition {
+                value: Expr {
+                    // <param> is none
+                    kind: ExprKind::Binary(
+                        BinOpKind::Is,
+                        box Expr {
+                            kind: ExprKind::Variable(name.clone()),
+                            span: span.clone(),
+                        },
+                        box Expr {
+                            kind: ExprKind::Lit(box Lit {
+                                value: LitValue::None,
+                                token: Token::new("none", span.clone(), TokenKind::None),
                             }),
                             span: span.clone(),
+                        },
+                    ),
+                    span: span.clone(),
+                },
+                pattern: ConditionPattern::Value,
+            },
+            then: DoBlock {
+                statements: vec![Stmt {
+                    // <param> = <value>
+                    kind: StmtKind::ExprStmt(box Expr {
+                        kind: ExprKind::Assignment(box Assignment {
+                            name: name.clone(),
+                            value: value.clone(),
                         }),
                         span: span.clone(),
-                    }],
-                    value: None,
-                },
-                otherwise: None,
+                    }),
+                    span: span.clone(),
+                }],
+                value: None,
             },
+            otherwise: None,
+        };
+        self.emit_if_expr(
+            // Dumb lifetime problem
+            unsafe { std::mem::transmute(&r#if) },
             span,
         )
     }
@@ -1111,7 +1150,7 @@ impl<'a> Emitter<'a> {
     ///   pop result of condition
     /// end:
     /// ```
-    fn emit_if_expr(&mut self, info: &If<'a>, span: Span) -> Result<()> {
+    fn emit_if_expr(&mut self, info: &'b If<'a>, span: Span) -> Result<()> {
         // reserve only a single `end` label, which is used as the exit point for all branches
         let end = self.state.reserve_label();
         // similarly to a do block, an if expression has a value
@@ -1207,7 +1246,7 @@ impl<'a> Emitter<'a> {
     /// At the start of the block, we push a hidden local variable `[[VALUE]]`, whose value will be set
     /// to the value of the entire do block. It is normally drained from the locals array, but it's value
     /// is *not* popped from the stack.
-    fn emit_do_block_expr(&mut self, do_block: &DoBlock<'a>, span: Span) -> Result<()> {
+    fn emit_do_block_expr(&mut self, do_block: &'b DoBlock<'a>, span: Span) -> Result<()> {
         self.state.begin_scope();
         let value_slot = self.state.add_local("[[VALUE]]");
         self.state.builder.op(Opcode::PushNone, span.clone());
@@ -1227,7 +1266,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_comma_expr(&mut self, exprs: &[Expr<'a>], span: Span) -> Result<()> {
+    fn emit_comma_expr(&mut self, exprs: &'b [Expr<'a>], span: Span) -> Result<()> {
         // a comma expression is guaranteed to have at least 2 sub expressions,
         // so this will never panic due to underflow
         // we want to pop every expr except the last one (which is the result of the expression)
@@ -1240,7 +1279,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_call_expr(&mut self, call: &Call<'a>, span: Span) -> Result<()> {
+    fn emit_call_expr(&mut self, call: &'b Call<'a>, span: Span) -> Result<()> {
         self.emit_expr(&call.callee, true)?;
         for expr in call.args.iter() {
             self.emit_expr(expr, true)?;
@@ -1251,7 +1290,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_lit(&mut self, lit: &Lit) -> Result<()> {
+    fn emit_lit(&mut self, lit: &'b Lit<'a>) -> Result<()> {
         let span = lit.token.span.clone();
         match lit.value {
             LitValue::Number(value) => match maybe_f32(value) {
@@ -1276,10 +1315,8 @@ impl<'a> Emitter<'a> {
                 self.state.builder.op(Opcode::PushNone, span);
             }
             LitValue::Str(ref value) => {
-                let offset = self
-                    .state
-                    .builder
-                    .constant(value.clone().into(), span.clone())?;
+                let ptr = self.ctx.alloc_or_intern(value.clone());
+                let offset = self.state.builder.constant(Value::Ref(ptr), span.clone())?;
                 self.state.builder.op(Opcode::GetConst(offset), span);
             }
         }
@@ -1289,16 +1326,16 @@ impl<'a> Emitter<'a> {
 
     fn emit_get_prop(
         &mut self,
-        node: &Expr<'a>,
+        node: &'b Expr<'a>,
         name: &Token<'a>,
         is_optional: bool,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(node, true)?;
-        let offset = self
-            .state
-            .builder
-            .constant(name.lexeme.clone().into(), span.clone())?;
+        let offset = self.state.builder.constant(
+            self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
+            span.clone(),
+        )?;
         self.state.builder.op(
             if is_optional {
                 Opcode::TryGetProp(offset)
@@ -1316,17 +1353,17 @@ impl<'a> Emitter<'a> {
 
     fn emit_set_prop(
         &mut self,
-        node: &Expr<'a>,
+        node: &'b Expr<'a>,
         name: &Token<'a>,
-        value: &Expr<'a>,
+        value: &'b Expr<'a>,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(node, true)?;
         self.emit_expr(value, true)?;
-        let offset = self
-            .state
-            .builder
-            .constant(name.lexeme.clone().into(), span.clone())?;
+        let offset = self.state.builder.constant(
+            self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
+            span.clone(),
+        )?;
         self.state.builder.op(Opcode::SetProp(offset), span.clone());
         // TODO: try to speculatively populate the cache
         self.state.builder.op(Opcode::Data(0), span.clone());
@@ -1335,7 +1372,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_get_item(&mut self, node: &Expr<'a>, key: &Expr<'a>, span: Span) -> Result<()> {
+    fn emit_get_item(&mut self, node: &'b Expr<'a>, key: &'b Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(node, true)?;
         self.emit_expr(key, true)?;
         self.state.builder.op(Opcode::GetItem, span);
@@ -1344,9 +1381,9 @@ impl<'a> Emitter<'a> {
 
     fn emit_set_item(
         &mut self,
-        node: &Expr<'a>,
-        key: &Expr<'a>,
-        value: &Expr<'a>,
+        node: &'b Expr<'a>,
+        key: &'b Expr<'a>,
+        value: &'b Expr<'a>,
         span: Span,
     ) -> Result<()> {
         self.emit_expr(node, true)?;
@@ -1356,7 +1393,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_fstring(&mut self, fstr: &FString<'a>, span: Span) -> Result<()> {
+    fn emit_fstring(&mut self, fstr: &'b FString<'a>, span: Span) -> Result<()> {
         for frag in fstr.fragments.iter() {
             match frag {
                 FStringFrag::Str(ref lit) => self.emit_lit(lit)?,
@@ -1369,7 +1406,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_array_lit(&mut self, exprs: &[Expr<'a>], span: Span) -> Result<()> {
+    fn emit_array_lit(&mut self, exprs: &'b [Expr<'a>], span: Span) -> Result<()> {
         for expr in exprs {
             self.emit_expr(expr, true)?;
         }
@@ -1379,7 +1416,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_map_lit(&mut self, entries: &[MapEntry<'a>], span: Span) -> Result<()> {
+    fn emit_map_lit(&mut self, entries: &'b [MapEntry<'a>], span: Span) -> Result<()> {
         self.state.builder.op(Opcode::CreateEmptyMap, span.clone());
         for entry in entries {
             match entry {
@@ -1404,7 +1441,7 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
-    fn emit_assign_expr(&mut self, name: &str, value: &Expr<'a>, span: Span) -> Result<()> {
+    fn emit_assign_expr(&mut self, name: &str, value: &'b Expr<'a>, span: Span) -> Result<()> {
         self.emit_expr(&value, true)?;
         let set = self.state.resolve_variable_set(name);
         self.state.builder.op(set, span);
@@ -1416,7 +1453,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_incdec_expr(
         &mut self,
-        incdec: &IncDec<'a>,
+        incdec: &'b IncDec<'a>,
         is_postfix: bool,
         span: Span,
     ) -> Result<()> {
@@ -1430,10 +1467,10 @@ impl<'a> Emitter<'a> {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 // FIXME: stub before heap values are available
                 self.state.builder.op(add_or_sub_one, span.clone());
-                let offset = self
-                    .state
-                    .builder
-                    .constant(get.field.lexeme.clone().into(), span.clone())?;
+                let offset = self.state.builder.constant(
+                    self.ctx.alloc_or_intern(get.field.lexeme.clone()).into(),
+                    span.clone(),
+                )?;
                 self.state.builder.op(Opcode::SetProp(offset), span.clone());
             }
             ExprKind::GetItem(ref get) => {
@@ -1539,14 +1576,16 @@ mod tests {
     test_eq!(t55_fn_emit);
 
     mod _impl {
+        use crate::gc::DefaultGc;
+
         use super::*;
         use ves_error::{FileId, VesFileDatabase};
         use ves_middle::Resolver;
         use ves_parser::{Lexer, Parser};
 
-        fn chunk_concat(out: &mut String, r#fn: &Function) {
-            if &r#fn.name != "[[MAIN]]" {
-                *out += &format!("\n>>>>>> {}\n", r#fn.name);
+        fn chunk_concat(out: &mut String, r#fn: &VesFn) {
+            if &**r#fn.name.as_str().unwrap() != "<main>" {
+                *out += &format!("\n>>>>>> {}\n", &**r#fn.name.as_str().unwrap());
             }
             *out += &r#fn
                 .chunk
@@ -1557,8 +1596,10 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n");
             for constant in r#fn.chunk.constants.iter() {
-                if let Value::Function(function) = constant {
-                    chunk_concat(out, &function);
+                if let Some(ptr) = constant.as_ptr() {
+                    if let Some(r#fn) = ptr.as_fn() {
+                        chunk_concat(out, &r#fn);
+                    }
                 }
             }
         }
@@ -1572,8 +1613,24 @@ mod tests {
             .parse()
             .unwrap();
             Resolver::new().resolve(&mut ast).unwrap();
+            let gc = GcHandle::new(DefaultGc::default());
             let mut out = String::new();
-            chunk_concat(&mut out, &Emitter::new(ast).emit().unwrap());
+            chunk_concat(
+                &mut out,
+                &Emitter::new(
+                    &ast,
+                    CompilationContext {
+                        // we mustn't move the Gc into here since it may get dropped
+                        gc: gc.clone(),
+                        strings: HashMap::new(),
+                    },
+                )
+                .emit()
+                .unwrap()
+                .as_fn()
+                .unwrap(),
+            );
+            std::mem::drop(gc);
             out
         }
 
