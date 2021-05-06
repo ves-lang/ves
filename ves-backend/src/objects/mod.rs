@@ -1,5 +1,6 @@
 pub mod nanbox;
 pub mod value;
+pub mod ves_fn;
 pub mod ves_object;
 pub mod ves_str;
 pub mod ves_struct;

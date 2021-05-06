@@ -250,12 +250,8 @@ impl<T: VesGc> VmEnum<T> {
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         match &mut *obj {
             VesObject::Instance(obj) => *obj.get_property_mut(&name).unwrap() = self.pop().unbox(),
-
-            VesObject::Struct(_) => {
-                self.error("Structs do not support field assignment".to_string());
-            }
-            VesObject::Str(_) => {
-                self.error("Strings do not support field assignment".to_string());
+            _ => {
+                self.error("Only struct instances support field assignment".to_string());
             }
         }
     }
@@ -269,8 +265,7 @@ impl<T: VesGc> VmEnum<T> {
         let name = n.unbox().as_ptr().unwrap();
         let name = match *name {
             VesObject::Str(_) => VesStrView::new(name),
-            VesObject::Instance(_) => unreachable!(),
-            VesObject::Struct(_) => unreachable!(),
+            _ => unreachable!(),
         };
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
@@ -278,12 +273,7 @@ impl<T: VesGc> VmEnum<T> {
                 Some(r#ref) => self.push(NanBox::new(*r#ref)),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },
-            VesObject::Struct(_) => {
-                self.error("Structs do not support field access (?)".to_string());
-            }
-            VesObject::Str(_) => {
-                self.error("Strings do not support field access".to_string());
-            }
+            _ => self.error("Only struct instances support field access".to_string()),
         }
     }
 

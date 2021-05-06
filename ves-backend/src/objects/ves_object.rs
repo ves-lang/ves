@@ -9,6 +9,8 @@ use crate::{
     },
 };
 
+use super::ves_fn::{ClosureDescriptor, VesClosure, VesFn};
+
 /// QQQ: should the contained values be Cc or just Box?
 #[derive(Debug)]
 pub enum VesObject {
@@ -18,6 +20,12 @@ pub enum VesObject {
     Instance(VesInstance),
     /// A struct type instance.
     Struct(VesStruct),
+    /// A plain function with no upvalues.
+    Fn(VesFn),
+    /// A function with upvalues
+    Closure(VesClosure),
+    /// An object which describes how a closure should be created
+    ClosureDescriptor(ClosureDescriptor),
 }
 
 // TODO: unsafe unchecked getters
@@ -83,6 +91,10 @@ unsafe impl Trace for VesObject {
             VesObject::Str(s) => s.trace(tracer),
             VesObject::Instance(i) => Trace::trace(i, tracer),
             VesObject::Struct(s) => Trace::trace(s, tracer),
+            VesObject::Fn(f) => f.trace(tracer),
+            VesObject::Closure(c) => c.trace(tracer),
+            // not traceable, only used as a constant
+            VesObject::ClosureDescriptor(_) => (),
         }
     }
 
@@ -91,6 +103,10 @@ unsafe impl Trace for VesObject {
             VesObject::Str(s) => s.after_forwarding(),
             VesObject::Instance(i) => i.after_forwarding(),
             VesObject::Struct(s) => s.after_forwarding(),
+            VesObject::Fn(f) => f.after_forwarding(),
+            VesObject::Closure(c) => c.after_forwarding(),
+            // not traceable, only used as a constant
+            VesObject::ClosureDescriptor(_) => (),
         }
     }
 }
