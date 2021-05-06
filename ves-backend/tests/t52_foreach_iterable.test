@@ -1,0 +1,41 @@
+mut iterable;
+for item in iterable {
+    print(item)
+}
+
+%output
+
+// @loop.pre_start:
+|0000| PushNone         // 
+|0001| SetGlobal(0)     // mut iterable
+|0002| Pop              // 
+|0003| GetGlobal(0)     // get iterable
+|0004| GetProp(0)       // get prop "iter"
+|0005| Call(0)          // [[ITER]] = iterable.iter()
+|0006| GetLocal(0)      // get [[ITER]]
+|0007| GetProp(1)       // get prop "next"
+|0008| Call(0)          // <item> = [[ITER]].next()
+// @loop.start:
+|0009| GetLocal(0)      // get [[ITER]]
+|0010| GetProp(2)       // get prop "done"
+|0011| Call(0)          // call [[ITER]].done
+|0012| Not              // ![[ITER]].done()
+|0013| JumpIfFalse(25)  // jump_if_false @loop.exit
+|0014| Pop              // pop <condition> result
+|0015| Jump(22)         // jump @loop.body
+// @loop.latch:
+|0016| GetLocal(0)      // get [[ITER]]
+|0017| GetProp(3)       // get prop "next"
+|0018| Call(0)          // call [[ITER]].next
+|0019| SetLocal(1)      // <item> = [[ITER]].next()
+|0020| Pop              // pop (call [[ITER]].next)
+|0021| Jump(9)          // jump @loop.start
+// @loop.body:
+|0022| GetLocal(1)      // get <item>
+|0023| Print            // print(item)
+|0024| Jump(16)         // jump @loop.latch
+// @loop.exit:
+|0025| Pop              // pop <condition> result
+|0026| PopN(2)          // pop <item>, [[ITER]]
+// @loop.end:
+|0027| Return

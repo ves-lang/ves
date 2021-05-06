@@ -1,0 +1,32 @@
+{
+    mut a, b, c, d, e;
+    return
+}
+
+{
+    mut a, b, c, d, e;
+    return "test"
+}
+
+%output
+
+|0000| PushNone     // mut a
+|0001| PushNone     // mut b
+|0002| PushNone     // mut c
+|0003| PushNone     // mut d
+|0004| PushNone     // mut e
+|0005| PopN(5)      // pop a, b, c, d, e
+|0006| PushNone     // push none
+|0007| Return       // return <none>
+|0008| PopN(5)      // (unreachable) pop a, b, c, d, e
+// everything beyond this point is technically also unreachable, just pretend that it isnt
+|0009| PushNone     // mut a
+|0010| PushNone     // mut b
+|0011| PushNone     // mut c
+|0012| PushNone     // mut d
+|0013| PushNone     // mut e
+|0014| PopN(5)      // pop a, b, c, d, e
+|0015| GetConst(0)  // push "test"
+|0016| Return       // return "test"
+|0017| PopN(5)      // (unreachable) pop a, b, c, d, e
+|0018| Return

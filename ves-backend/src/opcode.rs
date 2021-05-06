@@ -3,7 +3,6 @@
 //   - Try to name with a verb (e.g. `Add`) or a verb+noun (e.g. `PushTrue`)
 //   - If there is an unambigous, shorter name, then it can be used, even if it does
 //     not follow the pattern (e.g. `LessThan`)
-// QQQ(moscow): maybe we *should* store struct-like variants instead of tuple-like variants?
 // - Since the opcode enum variants with values store numeric types, it is necessary to
 //   include a comment describing the value's meaning or intended usage
 
@@ -16,6 +15,10 @@ pub enum Opcode {
     GetLocal(/* stack slot */ u32),
     /// Set a value at specified stack address
     SetLocal(/* stack slot */ u32),
+    /// Get a closure's upvalue
+    GetUpvalue(/* index */ u32),
+    /// Set a closure's upvalue
+    SetUpvalue(/* index */ u32),
     /// Get a global value
     GetGlobal(/* global slot */ u32),
     /// Set a global value
@@ -109,6 +112,48 @@ pub enum Opcode {
     WrapOk,
     /// Wrap operand in Err
     WrapErr,
+    /// Unwrap an Ok
+    ///
+    /// If the operand is `Ok`, this should evaluate to `true`
+    /// and set the local at `stack slot` to the inner value.
+    /// If the operand is not `Ok`, this should only evaluate to `false`
+    UnwrapOk(/* stack slot */ u32),
+    /// Unwrap an Err
+    ///
+    /// If the operand is `Err`, this should evaluate to `true`
+    /// and set the local at `stack slot` to the inner value.
+    /// If the operand is not `Err`, this should only evaluate to `false`
+    UnwrapErr(/* stack slot */ u32),
+    /// Mark the operand as `spread`, which means:
+    /// - It must be iterable (conform to the iterator protocol)
+    /// - In an array literal, the values of this iterator are all pushed into the array
+    /// - In a call, the values of this iterator are pushed into an the rest argument array
+    Spread,
+    /// Call the operand with `count` arguments
+    ///
+    /// The stack should look like: [<function>, <receiver>, <arg 0>, <arg 1>, <arg 2>, ..., <arg [count]>]
+    ///
+    /// The `receiver` stack slot is reserved and it's value is `none` if there is no receiver
+    Call(/* count */ u32),
+    /// Defer a call
+    ///
+    /// This checks if the call is valid, and pushes it onto the current call's defer stack.
+    ///
+    /// When the call stack is unwound or the function returns, any deferred calls from
+    /// the defer stack are executed.
+    Defer,
+    /// Join `count` fragments on the stack into a single string
+    Interpolate(/* count */ u32),
+    /// Create an array from `count` items on the stack
+    CreateArray(/* count */ u32),
+    /// Create an empty map
+    CreateEmptyMap,
+    /// Insert a key/value pair into the map
+    MapInsert,
+    /// Extend a map with all entries of another map
+    MapExtend,
+    /// Create a closure from a closure descriptor in the constants pool
+    CreateClosure(/* descriptor constant index */ u32),
     /// Print a single value
     Print,
     /// Print N values

@@ -28,3 +28,4 @@ print(a)
 // end:
 |0014| GetGlobal(0)       // get a
 |0015| Print              // print a
+|0016| Return

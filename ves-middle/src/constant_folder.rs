@@ -130,7 +130,18 @@ impl<'a> ConstantFolder<'a> {
                 variable,
                 ..
             }) => {
-                self.fold_expr(iterator);
+                match iterator {
+                    IteratorKind::Range(Range {
+                        start, end, step, ..
+                    }) => {
+                        self.fold_expr(start);
+                        self.fold_expr(end);
+                        self.fold_expr(step);
+                    }
+                    IteratorKind::Expr(expr) => {
+                        self.fold_expr(expr);
+                    }
+                }
                 self.push();
                 self.propagated_variables.add(variable.lexeme.clone(), None);
                 self.fold_stmt(body);
@@ -159,7 +170,12 @@ impl<'a> ConstantFolder<'a> {
                     self.fold_expr(expr)
                 }
             }
-            StmtKind::Defer(box ref mut call) => self.fold_expr(call),
+            StmtKind::Defer(ref mut call) => {
+                self.fold_expr(&mut call.callee);
+                for arg in call.args.iter_mut() {
+                    self.fold_expr(arg)
+                }
+            }
             StmtKind::Break(_) => {}
             StmtKind::Continue(_) => {}
             StmtKind::_Empty => {}
@@ -300,48 +316,10 @@ impl<'a> ConstantFolder<'a> {
                     .for_each(|f| self.fold_function(f));
             }
             ExprKind::Fn(box r#fn) => self.fold_function(r#fn),
-            ExprKind::If(box If {
-                ref mut condition,
-                ref mut then,
-                ref mut otherwise,
-            }) => {
-                // TODO: propagate the value into the pattern binding
-                self.fold_expr(&mut condition.value);
-                self.fold_do_block(then);
-
-                if let Some(r#else) = otherwise.as_mut() {
-                    self.fold_do_block(r#else);
-                }
-
-                match self.is_truthy_condition(condition) {
-                    // Condition is truthy, we can replace the node with the value of `then`
-                    Some(true) => {
-                        let then = std::mem::replace(
-                            then,
-                            DoBlock {
-                                statements: vec![],
-                                value: None,
-                            },
-                        );
-                        expr.kind = ExprKind::DoBlock(box then);
-                    }
-                    Some(false) => {
-                        // Condition is false, we can replace the node with the value of `else`
-                        if let Some(r#else) = otherwise.take() {
-                            expr.kind = ExprKind::DoBlock(box r#else);
-                        } else {
-                            // There's no else, so we can replace the node with `none`.
-                            expr.kind = ExprKind::Lit(box Lit {
-                                value: LitValue::None,
-                                token: ves_parser::lexer::Token::new(
-                                    "none",
-                                    expr.span.clone(),
-                                    ves_parser::lexer::TokenKind::None,
-                                ),
-                            });
-                        }
-                    }
-                    None => (),
+            // FIXME: ast change to if expressions
+            ExprKind::If(r#if) => {
+                if let Some(kind) = self.fold_if_expr(r#if, expr.span.clone()) {
+                    expr.kind = kind;
                 }
             }
             ExprKind::DoBlock(box b) => self.fold_do_block(b),
@@ -395,13 +373,6 @@ impl<'a> ConstantFolder<'a> {
                     };
                 }
             }
-            ExprKind::Range(box Range {
-                start, end, step, ..
-            }) => {
-                self.fold_expr(start);
-                self.fold_expr(end);
-                self.fold_expr(step);
-            }
             ExprKind::PrefixIncDec(box inc) | ExprKind::PostfixIncDec(box inc) => {
                 self.fold_expr(&mut inc.expr)
             }
@@ -416,6 +387,57 @@ impl<'a> ConstantFolder<'a> {
                 *expr = std::mem::replace(data, new);
             }
             ExprKind::Lit(_) => {}
+        }
+    }
+
+    fn fold_if_expr(&mut self, r#if: &mut If<'a>, span: ves_parser::Span) -> Option<ExprKind<'a>> {
+        // TODO: propagate the value into the pattern binding
+        self.fold_expr(&mut r#if.condition.value);
+        self.fold_do_block(&mut r#if.then);
+
+        if let Some(r#else) = r#if.otherwise.as_mut() {
+            match r#else {
+                Else::If(r#if) => {
+                    if let Some(ExprKind::DoBlock(block)) = self.fold_if_expr(r#if, span.clone()) {
+                        *r#else = Else::Block(block);
+                    }
+                }
+                Else::Block(block) => self.fold_do_block(block),
+            }
+        }
+
+        match self.is_truthy_condition(&r#if.condition) {
+            // Condition is truthy, we can replace the node with the value of `then`
+            Some(true) => {
+                let then = std::mem::replace(
+                    &mut r#if.then,
+                    DoBlock {
+                        statements: vec![],
+                        value: None,
+                    },
+                );
+                Some(ExprKind::DoBlock(box then))
+            }
+            Some(false) => {
+                // Condition is false, we can replace the node with the value of `else`
+                if let Some(r#else) = r#if.otherwise.take() {
+                    Some(match r#else {
+                        Else::If(r#if) => ExprKind::If(r#if),
+                        Else::Block(block) => ExprKind::DoBlock(block),
+                    })
+                } else {
+                    // There's no else, so we can replace the node with `none`.
+                    Some(ExprKind::Lit(box Lit {
+                        value: LitValue::None,
+                        token: ves_parser::lexer::Token::new(
+                            "none",
+                            span,
+                            ves_parser::lexer::TokenKind::None,
+                        ),
+                    }))
+                }
+            }
+            None => None,
         }
     }
 

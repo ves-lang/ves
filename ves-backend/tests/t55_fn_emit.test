@@ -1,0 +1,108 @@
+fn test0() {}
+fn test1(a) { print(a) }
+fn test2(a, b = 0) { print(a, b) }
+fn test3(a, b = 0, ...c) { print(a, b, c) }
+
+test0();
+test1(1);
+test2(1);
+test2(1, 2);
+test3(1);
+test3(1, 2);
+test3(1, 2, 3);
+
+%output
+
+|0000| GetConst(0)
+|0001| SetGlobal(0)     // fn test0
+|0002| Pop
+|0003| Pop
+|0004| GetConst(1)
+|0005| SetGlobal(1)     // fn test1
+|0006| Pop
+|0007| Pop
+|0008| GetConst(2)
+|0009| SetGlobal(2)     // fn test2
+|0010| Pop
+|0011| Pop
+|0012| GetConst(3)
+|0013| SetGlobal(3)     // fn test3
+|0014| Pop
+|0015| Pop
+|0016| GetGlobal(0) 
+|0017| Call(0)          // test0()
+|0018| Pop
+|0019| GetGlobal(1)
+|0020| PushNum32(1.0) 
+|0021| Call(1)          // test1(1)
+|0022| Pop
+|0023| GetGlobal(2)
+|0024| PushNum32(1.0) 
+|0025| Call(1)          // test2(1)
+|0026| Pop
+|0027| GetGlobal(2)
+|0028| PushNum32(1.0)
+|0029| PushNum32(2.0) 
+|0030| Call(2)          // test2(1, 2)
+|0031| Pop
+|0032| GetGlobal(3)
+|0033| PushNum32(1.0) 
+|0034| Call(1)          // test3(1)
+|0035| Pop
+|0036| GetGlobal(3)
+|0037| PushNum32(1.0)
+|0038| PushNum32(2.0) 
+|0039| Call(2)          // test3(1, 2)
+|0040| Pop
+|0041| GetGlobal(3)
+|0042| PushNum32(1.0)
+|0043| PushNum32(2.0)
+|0044| PushNum32(3.0) 
+|0045| Call(3)          // test3(1, 2, 3)
+|0046| Pop
+|0047| Return
+>>>>>> test0
+|0000| Pop
+|0001| Return
+>>>>>> test1
+|0000| GetLocal(1)      // 
+|0001| Print            // print(a)
+|0002| PopN(2)          // pop none, receiver
+|0003| Return       
+>>>>>> test2
+|0000| PushNone         //
+|0001| GetLocal(2)      // 
+|0002| IsNone           // 
+|0003| JumpIfFalse(9)   // if b is none jump @other
+|0004| Pop              // 
+|0005| PushNum32(0.0)   // 
+|0006| SetLocal(2)      // b = 0
+|0007| Pop              //
+|0008| Jump(10)         // jump @end
+// @other:
+|0009| Pop              // 
+// @end:
+|0010| GetLocal(1)      // 
+|0011| GetLocal(2)      // 
+|0012| PrintN(2)        // print(a, b)
+|0013| PopN(3)          // pop b, a, receiver
+|0014| Return           //
+>>>>>> test3
+|0000| PushNone         //
+|0001| GetLocal(2)      //
+|0002| IsNone           //
+|0003| JumpIfFalse(9)   // if b is none jump @other
+|0004| Pop              //
+|0005| PushNum32(0.0)   //
+|0006| SetLocal(2)      // b = 0
+|0007| Pop              //
+|0008| Jump(10)         // jump @end
+// @other:
+|0009| Pop              //
+// @end:
+|0010| GetLocal(1)      //
+|0011| GetLocal(2)      //
+|0012| GetLocal(3)      //
+|0013| PrintN(3)        // print(a, b, c)
+|0014| PopN(4)          // pop c, b, a, receiver
+|0015| Return           //

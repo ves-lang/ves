@@ -30,6 +30,16 @@ pub struct Global<'a> {
     /// The kind of the global.
     pub kind: VarKind,
 }
+impl<'a> PartialOrd<Global<'a>> for Global<'a> {
+    fn partial_cmp(&self, other: &Global<'a>) -> Option<std::cmp::Ordering> {
+        self.name.span.start.partial_cmp(&other.name.span.start)
+    }
+}
+impl<'a> Ord for Global<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.span.start.cmp(&other.name.span.start)
+    }
+}
 
 /// An imported or exported symbol.
 #[derive(Clone, Debug, PartialEq, AstToStr)]
@@ -486,6 +496,12 @@ pub struct Condition<'a> {
     pub pattern: ConditionPattern<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum Else<'a> {
+    If(#[forward] Ptr<If<'a>>),
+    Block(#[forward] Ptr<DoBlock<'a>>),
+}
+
 /// An if statement.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct If<'a> {
@@ -494,7 +510,7 @@ pub struct If<'a> {
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
-    pub otherwise: Option<DoBlock<'a>>,
+    pub otherwise: Option<Else<'a>>,
 }
 
 /// A `do` block.
@@ -591,8 +607,6 @@ pub enum ExprKind<'a> {
     Map(#[rename = "values"] Vec<MapEntry<'a>>),
     /// A variable access expression (includes self).
     Variable(#[rename = "name"] Token<'a>),
-    /// A range specified, e.g. `0..10` or `start..end, -2`.
-    Range(#[forward] Ptr<Range<'a>>),
     /// A prefix increment or decrement
     PrefixIncDec(#[rename = "inner"] Ptr<IncDec<'a>>),
     /// A postfix increment or decrement
@@ -665,13 +679,19 @@ pub struct For<'a> {
     pub label: Token<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum IteratorKind<'a> {
+    Range(#[forward] Range<'a>),
+    Expr(#[rename = "iterable"] Expr<'a>),
+}
+
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct ForEach<'a> {
     /// The variable to bind the elements to.
     pub variable: Token<'a>,
     /// The iterator to iterate over.
-    pub iterator: Expr<'a>,
+    pub iterator: IteratorKind<'a>,
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
@@ -716,7 +736,7 @@ pub enum StmtKind<'a> {
     /// A continue statement.
     Continue(#[rename = "label"] Token<'a>),
     /// A `defer` statement. Must store only `Call` expressions.
-    Defer(#[rename = "call"] Ptr<Expr<'a>>),
+    Defer(#[rename = "call"] Ptr<Call<'a>>),
     /// An empty node that compiles to nothing.
     /// Used by the constant folder to remove dead code.
     _Empty,

@@ -18,3 +18,4 @@ for ;; { }
 |0005| Jump(5)         // jump @second.start
 // @second.exit:
 // @second.end:
+|0006| Return

@@ -233,7 +233,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }))
                 }
                 TokenKind::Fn => {
-                    let decl = self.fn_decl(true)?;
+                    let decl = self.fn_decl(true, false)?;
                     self.exports.push(ast::Symbol::Bare(decl.name.clone()));
                     let stmt_end = self.previous.span.end;
                     Ok(Some(ast::Stmt {
@@ -245,7 +245,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }))
                 }
                 TokenKind::Struct => {
-                    let decl = self.struct_decl(true)?;
+                    let decl = self.struct_decl(true, false)?;
                     self.exports.push(ast::Symbol::Bare(decl.name.clone()));
                     let stmt_end = self.previous.span.end;
                     Ok(Some(ast::Stmt {
@@ -397,7 +397,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             &TokenKind::LeftParen,
             "Expected a '(' after the print keyword",
         )?;
-        let args = self.comma()?;
+        let args = self.comma(true)?;
         self.consume(
             &TokenKind::RightParen,
             "Expected a ')' after the arguments to print",
@@ -441,13 +441,12 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             let variable = binding
                 .ok_or_else(|| VesError::parse("Expected identifier", binding_span, self.fid))?;
             // for-each
-            let iter_start = self.current.span.start;
-            let start = self.expr()?;
+            let start = self.expr(true)?;
             let iterator = if self.match_(&TokenKind::Range) {
                 let inclusive = self.previous.lexeme == "..=";
-                let end = self.expr()?;
+                let end = self.expr(true)?;
                 let step = if self.match_(&TokenKind::Comma) {
-                    self.expr()?
+                    self.expr(true)?
                 } else {
                     literal!(
                         self,
@@ -455,18 +454,14 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         Token::new("1", self.previous.span.clone(), TokenKind::Number)
                     )
                 };
-                let iter_end = self.previous.span.end;
-                ast::Expr {
-                    kind: ast::ExprKind::Range(box ast::Range {
-                        start,
-                        end,
-                        step,
-                        inclusive,
-                    }),
-                    span: iter_start..iter_end,
-                }
+                ast::IteratorKind::Range(ast::Range {
+                    start,
+                    end,
+                    step,
+                    inclusive,
+                })
             } else {
-                start
+                ast::IteratorKind::Expr(start)
             };
             self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
             let body = self.block_stmt()?;
@@ -488,7 +483,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             if let Some(binding) = binding {
                 if self.match_(&TokenKind::Equal) {
                     let name = binding;
-                    let value = self.expr()?;
+                    let value = self.expr(true)?;
                     initializers.push(ast::Assignment { name, value });
                 }
                 while self.match_(&TokenKind::Comma) {
@@ -497,19 +492,19 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         &TokenKind::Equal,
                         "Expected a '=' in an initializer binding",
                     )?;
-                    let value = self.expr()?;
+                    let value = self.expr(true)?;
                     initializers.push(ast::Assignment { name, value });
                 }
             }
             self.consume(&TokenKind::Semi, "Expected a ';' after the initializers")?;
             let condition = if !self.check(&TokenKind::Semi) {
-                Some(self.expr()?)
+                Some(self.expr(true)?)
             } else {
                 None
             };
             self.consume(&TokenKind::Semi, "Expected a ';' after the condition ")?;
             let increment = if !self.check(&TokenKind::LeftBrace) {
-                Some(self.expr()?)
+                Some(self.expr(true)?)
             } else {
                 None
             };
@@ -567,7 +562,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn defer_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
-        let expr = if self.match_(&TokenKind::LeftBrace) {
+        let call = if self.match_(&TokenKind::LeftBrace) {
             let body_start = self.previous.span.start;
             let body = self.block()?;
             let body_end = self.previous.span.end;
@@ -578,29 +573,32 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 self.previous.span.clone(),
                 TokenKind::Identifier,
             );
-            ast::Expr {
-                kind: ast::ExprKind::Call(box ast::Call {
-                    callee: ast::Expr {
-                        kind: ast::ExprKind::Fn(box ast::FnInfo {
-                            name,
-                            params: ast::Params::default(),
-                            body,
-                            kind: ast::FnKind::Function,
-                        }),
-                        span: body_span.clone(),
-                    },
-                    args: vec![],
-                    tco: false,
-                    rest: false,
-                }),
-                span: body_span,
+            ast::Call {
+                callee: ast::Expr {
+                    kind: ast::ExprKind::Fn(box ast::FnInfo {
+                        name,
+                        params: ast::Params::default(),
+                        body,
+                        kind: ast::FnKind::Function,
+                    }),
+                    span: body_span,
+                },
+                args: vec![],
+                tco: false,
+                rest: false,
             }
+        } else if let ast::ExprKind::Call(call) = self.call()?.kind {
+            *call
         } else {
-            self.call()?
+            return Err(VesError::parse(
+                "Only calls and blocks may be deferred",
+                span_start..self.previous.span.end,
+                self.fid,
+            ));
         };
         let span_end = self.previous.span.end;
         Ok(ast::Stmt {
-            kind: ast::StmtKind::Defer(box expr),
+            kind: ast::StmtKind::Defer(box call),
             span: span_start..span_end,
         })
     }
@@ -608,7 +606,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     fn return_stmt(&mut self) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
         let expr = if !self.match_(&TokenKind::Semi) && !self.check(&TokenKind::RightBrace) {
-            Some(box self.expr()?)
+            Some(box self.expr(true)?)
         } else {
             None
         };
@@ -627,7 +625,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
         let init = if self.match_(&TokenKind::Equal) {
             let ident = ident.clone();
-            Some(self.expr().map_err(|e| {
+            Some(self.expr(true).map_err(|e| {
                 let _ = ident.map_err(|e| self.ex.record(e));
                 e
             })?)
@@ -659,7 +657,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn expr_stmt(&mut self, consume_semi: bool) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
-        let expr = self.comma()?;
+        let expr = self.comma(false)?;
         let span_end = self.current.span.end;
 
         if consume_semi {
@@ -672,11 +670,11 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn comma(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn comma(&mut self, is_sub_expr: bool) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let mut exprs = vec![self.expr()?];
+        let mut exprs = vec![self.expr(is_sub_expr)?];
         while self.match_(&TokenKind::Comma) {
-            exprs.push(self.expr()?);
+            exprs.push(self.expr(true)?);
         }
         let span_end = self.current.span.end;
 
@@ -694,15 +692,15 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         if self.match_(&TokenKind::Ellipsis) {
             let span_start = self.previous.span.start;
             Ok(ast::Expr {
-                kind: ast::ExprKind::Spread(box self.expr()?),
+                kind: ast::ExprKind::Spread(box self.expr(true)?),
                 span: span_start..self.previous.span.start,
             })
         } else {
-            self.expr()
+            self.expr(true)
         }
     }
 
-    fn expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn expr(&mut self, is_sub_expr: bool) -> ParseResult<ast::Expr<'a>> {
         if self.match_any(&[
             TokenKind::Struct,
             TokenKind::Fn,
@@ -710,8 +708,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             TokenKind::Do,
         ]) {
             match self.previous.kind {
-                TokenKind::Struct => self.struct_decl_expr(),
-                TokenKind::Fn => self.fn_decl_expr(),
+                TokenKind::Struct => self.struct_decl_expr(is_sub_expr),
+                TokenKind::Fn => self.fn_decl_expr(is_sub_expr),
                 TokenKind::If => self.if_expr(),
                 TokenKind::Do => self.do_block_expr(),
                 _ => unreachable!(),
@@ -721,9 +719,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
     }
 
-    fn struct_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn struct_decl_expr(&mut self, is_sub_expr: bool) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let decl = self.struct_decl(false)?;
+        let decl = self.struct_decl(false, is_sub_expr)?;
         let span_end = self.previous.span.end;
         Ok(ast::Expr {
             kind: ast::ExprKind::Struct(box decl),
@@ -731,10 +729,16 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn struct_decl(&mut self, require_name: bool) -> ParseResult<ast::StructInfo<'a>> {
+    fn struct_decl(
+        &mut self,
+        require_name: bool,
+        is_sub_expr: bool,
+    ) -> ParseResult<ast::StructInfo<'a>> {
         // parse struct name, or generate it
         let struct_name = if self.match_(&TokenKind::Identifier) {
-            remember_if_global!(self, self.previous, ast::VarKind::Struct);
+            if !is_sub_expr {
+                remember_if_global!(self, self.previous, ast::VarKind::Struct);
+            }
             self.previous.clone()
         } else {
             if require_name {
@@ -825,7 +829,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 } else {
                     // this is a static field
                     let value = if self.match_(&TokenKind::Equal) {
-                        Some(self.expr()?)
+                        Some(self.expr(true)?)
                     } else {
                         None
                     };
@@ -842,9 +846,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn fn_decl_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
+    fn fn_decl_expr(&mut self, is_sub_expr: bool) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
-        let decl = self.fn_decl(false)?;
+        let decl = self.fn_decl(false, is_sub_expr)?;
         let span_end = self.previous.span.end;
         Ok(ast::Expr {
             kind: ast::ExprKind::Fn(box decl),
@@ -852,9 +856,11 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         })
     }
 
-    fn fn_decl(&mut self, require_name: bool) -> ParseResult<ast::FnInfo<'a>> {
+    fn fn_decl(&mut self, require_name: bool, is_sub_expr: bool) -> ParseResult<ast::FnInfo<'a>> {
         let name = if self.match_(&TokenKind::Identifier) {
-            remember_if_global!(self, self.previous, ast::VarKind::Fn);
+            if !is_sub_expr {
+                remember_if_global!(self, self.previous, ast::VarKind::Fn);
+            }
             self.previous.clone()
         } else {
             if require_name {
@@ -890,7 +896,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     fn fn_decl_body(&mut self) -> ParseResult<Vec<ast::Stmt<'a>>> {
         if self.match_(&TokenKind::Arrow) {
             let body_span_start = self.previous.span.start;
-            let expr = self.expr()?;
+            let expr = self.expr(true)?;
             Ok(vec![ast::Stmt {
                 span: body_span_start..expr.span.end,
                 kind: ast::StmtKind::Return(Some(box expr)),
@@ -958,7 +964,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                             self.fid,
                         ));
                     }
-                    Some(self.expr()?)
+                    Some(self.expr(true)?)
                 } else {
                     None
                 };
@@ -1004,30 +1010,29 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn if_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
         let span_start = self.previous.span.start;
+        let if_ = self.if_()?;
+        let span_end = self.previous.span.end;
+        Ok(ast::Expr {
+            span: span_start..span_end,
+            kind: ast::ExprKind::If(box if_),
+        })
+    }
+
+    fn if_(&mut self) -> ParseResult<ast::If<'a>> {
         let condition = self.condition()?;
         let then = self.do_block()?;
         let mut otherwise = None;
         if self.match_(&TokenKind::Else) {
             if self.match_(&TokenKind::If) {
-                // `else if`
-                let nested = self.if_expr()?;
-                otherwise = Some(ast::DoBlock {
-                    statements: vec![],
-                    value: Some(nested),
-                });
+                otherwise = Some(ast::Else::If(box self.if_()?));
             } else {
-                // `else`
-                otherwise = Some(self.do_block()?);
+                otherwise = Some(ast::Else::Block(box self.do_block()?));
             }
         }
-        let span_end = self.previous.span.end;
-        Ok(ast::Expr {
-            span: span_start..span_end,
-            kind: ast::ExprKind::If(box ast::If {
-                condition,
-                then,
-                otherwise,
-            }),
+        Ok(ast::If {
+            condition,
+            then,
+            otherwise,
         })
     }
 
@@ -1038,7 +1043,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             let ident = self.consume(&TokenKind::Identifier, "Expected identifier")?;
             self.consume(&TokenKind::RightParen, "Expected ')'")?;
             self.consume(&TokenKind::Equal, "Expected assignment")?;
-            let value = self.expr()?;
+            let value = self.expr(true)?;
             Ok(ast::Condition {
                 value,
                 pattern: match which.kind {
@@ -1049,7 +1054,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             })
             // destructuring
         } else {
-            let value = self.expr()?;
+            let value = self.expr(true)?;
             Ok(ast::Condition {
                 value,
                 pattern: ast::ConditionPattern::Value,
@@ -1138,7 +1143,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 ast::ExprKind::Variable(ref token) => ast::Expr {
                     kind: ast::ExprKind::Assignment(box ast::Assignment {
                         name: token.clone(),
-                        value: desugar_assignment(operator, expr.clone(), self.expr()?),
+                        value: desugar_assignment(operator, expr.clone(), self.expr(true)?),
                     }),
                     span: span_start..self.current.span.end,
                 },
@@ -1150,7 +1155,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         kind: ast::ExprKind::SetItem(box ast::SetItem {
                             node: get.node.clone(),
                             key: get.key.clone(),
-                            value: desugar_assignment(operator, expr.clone(), self.expr()?),
+                            value: desugar_assignment(operator, expr.clone(), self.expr(true)?),
                         }),
                         span: span_start..self.current.span.end,
                     }
@@ -1164,16 +1169,13 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         kind: ast::ExprKind::SetProp(box ast::SetProp {
                             node: get.node.clone(),
                             field: get.field.clone(),
-                            value: desugar_assignment(operator, expr.clone(), self.expr()?),
+                            value: desugar_assignment(operator, expr.clone(), self.expr(true)?),
                         }),
                         span: span_start..self.current.span.end,
                     }
                 }
                 _ => {
-                    // TODO: do not run this twice
-                    // NOTE(moscow): I don't think checking it multiple times is a problem,
-                    // because a really deep property/item access is only like 3-4 nodes
-                    let kind = check_assignment_target(&expr, false);
+                    let kind = check_assignment_target(&expr, true);
                     return Err(self.invalid_assignment_error(kind, expr.span));
                 }
             });
@@ -1356,7 +1358,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         ]) {
             expr = match self.previous.kind {
                 TokenKind::LeftParen => {
-                    // TODO: tail call
                     let args = self.arg_list()?;
                     self.consume(&TokenKind::RightParen, "Expected ')'")?;
                     ast::Expr {
@@ -1392,7 +1393,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     }
                 }
                 TokenKind::LeftBracket => {
-                    let key = self.expr()?;
+                    let key = self.expr(true)?;
                     self.consume(&TokenKind::RightBracket, "Expected ']'")?;
                     ast::Expr {
                         span: expr.span.start..self.previous.span.end,
@@ -1509,7 +1510,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         lexer::Frag::Sublexer(sublexer) => {
                             let mut subparser = Parser::new(sublexer, self.fid, self.db);
                             subparser.advance();
-                            fragments.push(ast::FStringFrag::Expr(subparser.expr()?));
+                            fragments.push(ast::FStringFrag::Expr(subparser.expr(true)?));
                         }
                     }
                 }
@@ -1551,7 +1552,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // grouping expr
         if self.match_(&TokenKind::LeftParen) {
             let span_start = self.previous.span.start;
-            let expr = self.comma()?;
+            let expr = self.comma(true)?;
             self.consume(&TokenKind::RightParen, "Expected ')'")?;
             let span_end = self.previous.span.end;
             return Ok(ast::Expr {
@@ -1583,7 +1584,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn parse_map_entry(&mut self) -> ParseResult<ast::MapEntry<'a>> {
         if self.match_(&TokenKind::Ellipsis) {
-            Ok(ast::MapEntry::Spread(self.expr()?))
+            Ok(ast::MapEntry::Spread(self.expr(true)?))
         } else {
             let mut identifier = None;
             let key = if self.match_(&TokenKind::Identifier) {
@@ -1597,7 +1598,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     &TokenKind::LeftBracket,
                     "Expected '[' before key expression",
                 )?;
-                let key = self.expr()?;
+                let key = self.expr(true)?;
                 self.consume(
                     &TokenKind::RightBracket,
                     "Expected ']' after key expression",
@@ -1606,7 +1607,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             };
 
             let value = if self.match_(&TokenKind::Colon) {
-                self.expr()?
+                self.expr(true)?
             } else if let Some(identifier) = identifier {
                 // if ':' is omitted, the value is the value bound to the identifier key
                 // which means the key must be a simple identifier
@@ -1834,7 +1835,6 @@ fn check_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> AssignmentK
                 }
             }
             ast::ExprKind::GetItem(ref get) => check_assignment_target(&get.node, false),
-            ast::ExprKind::Call(ref call) => check_assignment_target(&call.callee, false),
             _ => AssignmentKind::Valid,
         }
     } else {
@@ -1932,4 +1932,5 @@ mod tests {
     test_err!(t28_bad_export);
     test_ok!(t29_import);
     test_err!(t30_bad_import);
+    test_ok!(t31_parse_assignment);
 }

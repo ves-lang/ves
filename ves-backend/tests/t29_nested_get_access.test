@@ -12,3 +12,4 @@
 |0007| GetItem         // .c[1]
 |0008| Pop             // pop <above>
 |0009| Pop             // pop a
+|0010| Return

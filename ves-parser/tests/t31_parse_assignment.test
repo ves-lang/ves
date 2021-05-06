@@ -1,0 +1,113 @@
+a = 5
+a[x] = 5
+a.x = 5
+a[x].y = 5
+a.y[x] = 5;
+(a.b.c.d())[x].z[k] = 5
+a.b.c.d()[x].z[k] = 5
+
+%output
+
+StmtKind::ExprStmt
+  expr: Assignment
+    name: "a"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetItem
+    node: ExprKind::Variable
+      name: "a"
+    key: ExprKind::Variable
+      name: "x"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetProp
+    node: ExprKind::Variable
+      name: "a"
+    field: "x"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetProp
+    node: GetItem
+      node: ExprKind::Variable
+        name: "a"
+      key: ExprKind::Variable
+        name: "x"
+    field: "y"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetItem
+    node: GetProp
+      node: ExprKind::Variable
+        name: "a"
+      field: "y"
+      is_optional: false
+    key: ExprKind::Variable
+      name: "x"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetItem
+    node: GetProp
+      node: GetItem
+        node: ExprKind::Grouping
+          inner: Call
+            callee: GetProp
+              node: GetProp
+                node: GetProp
+                  node: ExprKind::Variable
+                    name: "a"
+                  field: "b"
+                  is_optional: false
+                field: "c"
+                is_optional: false
+              field: "d"
+              is_optional: false
+            args=
+            tco: false
+            rest: false
+        key: ExprKind::Variable
+          name: "x"
+      field: "z"
+      is_optional: false
+    key: ExprKind::Variable
+      name: "k"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)
+StmtKind::ExprStmt
+  expr: SetItem
+    node: GetProp
+      node: GetItem
+        node: Call
+          callee: GetProp
+            node: GetProp
+              node: GetProp
+                node: ExprKind::Variable
+                  name: "a"
+                field: "b"
+                is_optional: false
+              field: "c"
+              is_optional: false
+            field: "d"
+            is_optional: false
+          args=
+          tco: false
+          rest: false
+        key: ExprKind::Variable
+          name: "x"
+      field: "z"
+      is_optional: false
+    key: ExprKind::Variable
+      name: "k"
+    value: Lit
+      token: "5"
+      value: LitValue::Number(5.0)

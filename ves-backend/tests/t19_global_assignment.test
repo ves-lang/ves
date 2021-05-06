@@ -9,3 +9,4 @@ a = 5
 |0003| PushNum32(5.0)
 |0004| SetGlobal(0)
 |0005| Pop
+|0006| Return

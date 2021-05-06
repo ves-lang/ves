@@ -35,3 +35,4 @@ mut a;
 |0017| Jump(11)        // continue         <@third: start>
 |0018| Pop             // pop b
 |0019| Jump(3)         // continue         <@first: start>
+|0020| Return

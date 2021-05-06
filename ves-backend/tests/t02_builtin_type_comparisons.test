@@ -37,3 +37,4 @@
 |0018| PushNum32(0.0)
 |0019| IsSome
 |0020| Pop
+|0021| Return

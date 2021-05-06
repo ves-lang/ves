@@ -74,17 +74,18 @@ For
 StmtKind::_Empty
 ForEach
   variable: "e"
-  iterator: ExprKind::Array
-    values=
-      Lit
-        token: "1"
-        value: LitValue::Number(1.0)
-      Lit
-        token: "\"arr prop\""
-        value: LitValue::Str("arr prop")
-      Lit
-        token: "3"
-        value: LitValue::Number(3.0)
+  iterator: IteratorKind::Expr
+    iterable: ExprKind::Array
+      values=
+        Lit
+          token: "1"
+          value: LitValue::Number(1.0)
+        Lit
+          token: "\"arr prop\""
+          value: LitValue::Str("arr prop")
+        Lit
+          token: "3"
+          value: LitValue::Number(3.0)
   body: StmtKind::Block
     statements=
       StmtKind::Print

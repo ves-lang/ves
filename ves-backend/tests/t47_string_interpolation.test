@@ -1,0 +1,11 @@
+f"test {1 + 1}"
+
+%output
+
+|0000| GetConst(0)
+|0001| PushNum32(1.0)
+|0002| PushNum32(1.0)
+|0003| Add
+|0004| Interpolate(2)
+|0005| Pop
+|0006| Return
