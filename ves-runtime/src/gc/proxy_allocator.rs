@@ -1,6 +1,3 @@
-#[cfg(feature = "auto_gc")]
-use std::alloc::{Allocator, Global};
-
 use std::{
     alloc::{Allocator, Global},
     sync::{
@@ -37,7 +34,7 @@ impl ProxyAllocator {
     ///
     /// # Panics
     /// Panics if compiled with debug assertions.
-    #[cfg(not(feature = "debug-assertions"))]
+    #[cfg(not(debug_assertions))]
     #[inline]
     pub fn release(&self, n: usize) -> usize {
         self.0.fetch_sub(n, Ordering::SeqCst).saturating_sub(n)
@@ -48,7 +45,7 @@ impl ProxyAllocator {
     ///
     /// # Panics
     /// Panics if compiled with debug assertions.
-    #[cfg(feature = "debug-assertions")]
+    #[cfg(debug_assertions)]
     #[inline]
     pub fn release(&self, n: usize) -> usize {
         self.0

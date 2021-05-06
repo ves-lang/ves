@@ -302,10 +302,9 @@ impl NanBox {
     }
 }
 
-impl From<NanBox> for Value {
-    #[inline]
-    fn from(b: NanBox) -> Self {
-        b.unbox()
+impl<V: Into<Value>> From<V> for NanBox {
+    fn from(value: V) -> Self {
+        NanBox::new(value.into())
     }
 }
 

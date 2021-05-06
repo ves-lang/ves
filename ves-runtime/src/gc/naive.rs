@@ -55,9 +55,11 @@ impl NaiveMarkAndSweep {
         while let Some(obj) = cursor.current() {
             if !obj.header.marked {
                 self.bytes_allocated.release(std::mem::size_of::<GcBox>());
+                // println!("[GC] dropping obj {:?}", obj);
                 cursor.remove_current();
             } else {
                 obj.header.marked = false;
+                cursor.move_next();
             }
         }
     }
@@ -83,6 +85,11 @@ impl NaiveMarkAndSweep {
         for data in roots.data {
             data.trace(&mut |obj| Self::tracer(&mut worklist, unsafe { obj.ptr.as_mut() }))
         }
+
+        // QQQ: Should we trace the permanent space? If we don't, storing a non-permanent pointer in a permanent object would be fatal.
+        self.permanent_space
+            .iter_mut()
+            .for_each(|ptr| Self::tracer(&mut worklist, unsafe { ptr.as_mut() }));
 
         // NOTE: this may segfault
         self.shared_space
@@ -119,23 +126,43 @@ impl VesGc for NaiveMarkAndSweep {
     where
         I: Iterator<Item = &'data mut dyn Trace>,
     {
+        // TODO: use log
+        #[cfg(feature = "gc-debug")]
+        {
+            eprintln!("[GC] Preparing to allocate an object ...");
+            eprintln!(
+                "[GC] Allocated = {}, Next GC = {}",
+                self.bytes_allocated(),
+                self.next_gc
+            );
+        }
+
+        if self.bytes_allocated() > self.next_gc {
+            self.force_collect(roots);
+            #[cfg(feature = "gc-debug")]
+            eprintln!(
+                "[GC] Performed a collection. New heap size: {}",
+                self.bytes_allocated()
+            );
+        }
+
+        if self.bytes_allocated() as f64 > self.next_gc as f64 * self.used_space_ratio {
+            self.next_gc = (self.bytes_allocated() as f64 / self.used_space_ratio) as usize;
+            #[cfg(feature = "gc-debug")]
+            {
+                eprintln!("[GC] Next GC has ben updated to {}", self.next_gc);
+            }
+        }
+
         let obj = v.into();
-        self.bytes_allocated
-            .bump(std::mem::size_of::<crate::VesObject>());
+        self.bytes_allocated.bump(std::mem::size_of::<GcBox>());
 
         self.objects.push_back(GcBox {
             data: obj,
             header: GcHeader::default(),
         });
+
         let ptr = unsafe { NonNull::new_unchecked(self.objects.back_mut().unwrap()) };
-
-        if self.bytes_allocated() > self.next_gc {
-            self.force_collect(roots);
-        }
-
-        if self.bytes_allocated() as f64 > self.next_gc as f64 * self.used_space_ratio {
-            self.next_gc = (self.bytes_allocated() as f64 / self.used_space_ratio) as usize;
-        }
 
         Ok(GcObj { ptr })
     }
@@ -174,5 +201,31 @@ impl VesGc for NaiveMarkAndSweep {
 
     fn proxy(&self) -> ProxyAllocator {
         self.bytes_allocated.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NaiveMarkAndSweep;
+    use crate::gc::GcHandle;
+
+    #[test]
+    fn generic_naive_mark_and_sweep_test() {
+        let initial_threshold = 10;
+        let factor = 1.2;
+        let gc = NaiveMarkAndSweep::new(initial_threshold, factor);
+        let handle = GcHandle::new(gc);
+
+        crate::gc::tests::generic_gc_test(
+            handle,
+            crate::gc::tests::TestConfig {
+                name: "naive-mark-sweep",
+                seed: Some(1620272182),
+                iterations: 10,
+                stack_size: 1000,
+                permanent_space_size: 300,
+                drop_chance: 0.50,
+            },
+        )
     }
 }

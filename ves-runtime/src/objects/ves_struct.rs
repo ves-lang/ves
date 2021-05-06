@@ -9,9 +9,14 @@ use super::{ves_str::view::VesStrView, Value};
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
-#[derive(Debug)]
 pub struct ViewKey {
     view: UnsafeCell<VesStrView>,
+}
+
+impl std::fmt::Debug for ViewKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ViewKey({:?})", unsafe { &*self.view.get() })
+    }
 }
 
 impl From<GcObj> for ViewKey {
@@ -20,7 +25,8 @@ impl From<GcObj> for ViewKey {
             crate::VesObject::Str(_) => ViewKey {
                 view: UnsafeCell::new(VesStrView::new(obj)),
             },
-            rest => panic!("Unexpected object type: {:?}", rest),
+            crate::VesObject::Instance(_) => panic!("Unexpected object type: instance"),
+            crate::VesObject::Struct(_) => panic!("Unexpected object type: struct"),
         }
     }
 }
@@ -53,12 +59,13 @@ impl VesStruct {
 
 unsafe impl Trace for VesStruct {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        for (k, v) in &mut self.methods {
-            Trace::trace(unsafe { &mut *k.view.get() }, tracer);
+        // println!("tracing a struct at {:#p}", self);
+        for (name, v) in &mut self.methods {
+            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
             Trace::trace(v, tracer);
         }
-        for name in self.fields.keys() {
-            unsafe { (&mut *name.view.get()).trace(tracer) }
+        for (name, _) in &mut self.fields {
+            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
         }
     }
 }
@@ -75,7 +82,7 @@ impl VesInstance {
     pub fn new(mut ty: GcObj, proxy: ProxyAllocator) -> Self {
         let raw = match &mut *ty {
             crate::VesObject::Struct(s) => NonNull::new(s as *mut _).unwrap(),
-            _ => unreachable!(),
+            rest => unreachable!("{:?}", rest),
         };
         let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
         Self { fields, ty, raw }

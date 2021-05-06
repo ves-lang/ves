@@ -38,10 +38,7 @@ impl VesStrView {
 }
 
 unsafe impl Trace for VesStrView {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj))
-    where
-        Self: Sized,
-    {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         tracer(&mut self._ptr);
     }
 

@@ -104,10 +104,20 @@ where
 }
 
 impl<'s, 'data> Roots<'s, 'data, std::iter::Empty<&'data mut dyn Trace>> {
-    pub fn empty(stack: &'s mut Vec<NanBox>) -> Self {
+    pub fn with_stack(stack: &'s mut Vec<NanBox>) -> Self {
         Self {
             stack,
             data: std::iter::empty(),
+        }
+    }
+
+    pub fn and_data<I>(self, data: I) -> Roots<'s, 'data, I>
+    where
+        I: Iterator<Item = &'data mut dyn Trace>,
+    {
+        Roots {
+            data,
+            stack: self.stack,
         }
     }
 }
@@ -204,6 +214,16 @@ unsafe impl Trace for GcObj {
     }
 }
 
+unsafe impl<T: Trace> Trace for &mut Vec<T> {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        self.iter_mut().for_each(|obj| obj.trace(tracer));
+    }
+
+    fn after_forwarding(&mut self) {
+        self.iter_mut().for_each(|obj| obj.after_forwarding())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct GcRcObj {
     obj: Rc<GcObj>,
@@ -218,4 +238,164 @@ impl Deref for GcRcObj {
 }
 
 #[cfg(test)]
-mod tests {}
+pub(crate) mod tests {
+    use crate::{
+        gc::{Roots, Trace},
+        objects::ves_struct::{VesInstance, VesStruct, ViewKey},
+        NanBox, Value, VesObject,
+    };
+
+    use super::{GcHandle, GcObj, VesGc};
+
+    use hashbrown::HashMap;
+    use rand::prelude::*;
+    use rand::rngs::StdRng;
+    use rand::SeedableRng;
+    #[derive(Debug, Clone)]
+    pub struct TestConfig {
+        pub name: &'static str,
+        pub seed: Option<u64>,
+        pub iterations: usize,
+        pub stack_size: usize,
+        pub permanent_space_size: usize,
+        pub drop_chance: f64,
+    }
+
+    macro_rules! roots {
+        ($stack:expr, $structs:expr) => {
+            Roots::with_stack($stack).and_data($structs.iter_mut().map(|obj| obj as &mut dyn Trace))
+        };
+    }
+
+    #[allow(unused)]
+    pub fn generic_gc_test<T: VesGc>(mut handle: GcHandle<T>, config: TestConfig) {
+        let seed = config.seed.unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+        });
+
+        eprintln!("[GC TEST: `{}`] CONFIG: {:#?}", config.name, config);
+        eprintln!("[GC TEST: `{}`] SEED: {}", config.name, seed);
+
+        let mut stack = Vec::new();
+        let mut structs = Vec::new();
+        let mut rng = StdRng::seed_from_u64(seed);
+
+        for _ in 0..config.permanent_space_size {
+            // handle.alloc_permanent(gen_object(
+            //     &mut rng,
+            //     &mut stack,
+            //     &mut structs,
+            //     handle.clone(),
+            // ));
+            // handle.alloc_permanent(random_string(&mut rng, 15));
+            handle.alloc_permanent(gen_struct(
+                &mut rng,
+                &mut stack,
+                &mut structs,
+                handle.clone(),
+            ));
+            assert!(stack.is_empty());
+            assert!(structs.is_empty());
+        }
+
+        let permanent_bytes = handle.bytes_allocated();
+        handle.force_collect(Roots::with_stack(&mut stack));
+        eprintln!("{} -> {}", permanent_bytes, handle.bytes_allocated());
+        assert_eq!(handle.bytes_allocated(), permanent_bytes);
+
+        eprintln!(
+            "[GC TEST: `{}`] PERM BYTES: {}",
+            config.name, permanent_bytes
+        );
+
+        for i in 0..config.iterations {
+            for j in 0..config.stack_size {
+                let nanbox = match rng.gen_bool(0.3) {
+                    true => match rng.gen_range(0..3) {
+                        0 => NanBox::from(rng.gen::<f64>()),
+                        1 => NanBox::from(rng.gen::<bool>()),
+                        2 => NanBox::new(Value::None),
+                        _ => unreachable!(),
+                    },
+                    false => {
+                        let obj = gen_object(&mut rng, &mut stack, &mut structs, handle.clone());
+                        let was_struct = matches!(obj, VesObject::Struct(_));
+                        let ptr = handle.alloc(obj, roots!(&mut stack, structs)).unwrap();
+                        if was_struct {
+                            structs.push(ptr);
+                        }
+                        NanBox::from(ptr)
+                    }
+                };
+                stack.push(nanbox);
+            }
+
+            if rng.gen_bool(config.drop_chance) {
+                stack.clear();
+            }
+            if rng.gen_bool(config.drop_chance) {
+                structs.clear();
+            }
+        }
+
+        stack.clear();
+        structs.clear();
+
+        handle.force_collect(roots!(&mut stack, structs));
+
+        assert_eq!(handle.bytes_allocated(), permanent_bytes);
+    }
+
+    fn gen_object<T: VesGc>(
+        rng: &mut StdRng,
+        stack: &mut Vec<NanBox>,
+        structs: &mut Vec<GcObj>,
+        handle: GcHandle<T>,
+    ) -> VesObject {
+        match rng.gen_range(0..3) {
+            0 => random_string(rng, 50).into(),
+            1 => gen_struct(rng, stack, structs, handle).into(),
+            2 if structs.is_empty() => gen_struct(rng, stack, structs, handle).into(),
+            2 => {
+                let ty = *structs.choose(rng).unwrap();
+                // println!("{:?} {:?}", ty, structs);
+                // println!("{:?} {:#?}", ty, &*ty);
+                VesInstance::new(ty, handle.proxy()).into()
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    fn random_string(rng: &mut StdRng, len: usize) -> String {
+        std::iter::repeat(())
+            .take(len)
+            .map(|_| rng.gen::<char>())
+            .collect::<String>()
+    }
+
+    fn gen_struct<T: VesGc>(
+        rng: &mut StdRng,
+        stack: &mut Vec<NanBox>,
+        structs: &mut Vec<GcObj>,
+        mut handle: GcHandle<T>,
+    ) -> VesStruct {
+        let mut fields = HashMap::new_in(handle.proxy());
+
+        for i in 0..rng.gen_range(5..10) {
+            let s = handle
+                .alloc(random_string(rng, 15), roots!(stack, structs))
+                .unwrap();
+            stack.push(NanBox::from(s));
+            fields.insert(ViewKey::from(s), i);
+        }
+
+        for _ in 0..fields.len() {
+            stack.pop();
+        }
+
+        VesStruct::new(fields, HashMap::new_in(handle.proxy()))
+    }
+}
