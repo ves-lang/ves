@@ -38,6 +38,8 @@ StmtKind::ExprStmt
       right: Lit
         token: "7"
         value: LitValue::Number(7.0)
-    right: Lit
-      token: "-3"
-      value: LitValue::Number(-3.0)
+    right: ExprKind::Unary
+      op: Negate
+      operand: Lit
+        token: "3"
+        value: LitValue::Number(3.0)

@@ -1,0 +1,32 @@
+print((fn()=>1)() + (fn()=>1)() == (fn()=>2)());
+
+%output
+
+|0000| GetConst(<fn [fn@1:8]>)
+|0001| Call(0)
+|0002| GetConst(<fn [fn@1:22]>)
+|0003| Call(0)
+|0004| Add              // 1 + 1
+|0005| GetConst(<fn [fn@1:37]>)
+|0006| Call(0)
+|0007| Equal            // == 2
+|0008| Print
+|0009| Return
+>>>>>> [fn@1:8]
+|0000| Pop              // pop receiver 
+|0001| PushNum32(1.0)   
+|0002| Return           // return 1
+|0003| Pop
+|0004| Return
+>>>>>> [fn@1:22]
+|0000| Pop              // pop receiver
+|0001| PushNum32(1.0)
+|0002| Return           // return 1
+|0003| Pop
+|0004| Return
+>>>>>> [fn@1:37]
+|0000| Pop              // pop receiver
+|0001| PushNum32(2.0)
+|0002| Return           // return 2
+|0003| Pop
+|0004| Return

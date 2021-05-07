@@ -1933,4 +1933,5 @@ mod tests {
     test_ok!(t29_import);
     test_err!(t30_bad_import);
     test_ok!(t31_parse_assignment);
+    test_ok!(t32_fn_if_expr_regression);
 }

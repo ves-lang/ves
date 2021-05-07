@@ -1609,6 +1609,7 @@ mod tests {
     test_eq!(t54_while_condition_patterns);
     test_eq!(t55_fn_emit);
     test_eq!(t56_recursive_fn);
+    test_eq!(t57_anonymous_fn);
 
     mod _impl {
         use crate::gc::DefaultGc;
@@ -1660,13 +1661,9 @@ mod tests {
         }
 
         pub fn compile(src: String) -> String {
-            let mut ast = Parser::new(
-                Lexer::new(&src),
-                FileId::anon(),
-                &VesFileDatabase::default(),
-            )
-            .parse()
-            .unwrap();
+            let mut fdb = VesFileDatabase::default();
+            let fid = fdb.add_snippet(&src);
+            let mut ast = Parser::new(Lexer::new(&src), fid, &fdb).parse().unwrap();
             Resolver::new().resolve(&mut ast).unwrap();
             let gc = GcHandle::new(DefaultGc::default());
             let mut out = String::new();
