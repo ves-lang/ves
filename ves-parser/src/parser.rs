@@ -776,8 +776,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         if !self.match_(&TokenKind::Semi) && self.match_(&TokenKind::LeftBrace) {
             while !self.match_(&TokenKind::RightBrace) {
                 let prop_name = self
-                    .consume(
-                        &TokenKind::Identifier,
+                    .consume_any(
+                        &[TokenKind::Identifier, TokenKind::AtIdentifier],
                         "Expected a method, static field or static method declaration",
                     )
                     .map_err(|mut e| {
@@ -813,10 +813,14 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     let body = self.fn_decl_body()?;
                     if params.is_instance_method_params() {
                         methods.push(ast::FnInfo {
+                            kind: match prop_name.kind {
+                                TokenKind::Identifier => ast::FnKind::Method,
+                                TokenKind::AtIdentifier => ast::FnKind::MagicMethod,
+                                _ => unreachable!(),
+                            },
                             name: prop_name,
                             params,
                             body,
-                            kind: ast::FnKind::Method,
                         });
                     } else {
                         r#static.methods.push(ast::FnInfo {

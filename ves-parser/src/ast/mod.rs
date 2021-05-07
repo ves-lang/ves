@@ -407,6 +407,9 @@ pub enum FnKind {
     /// An initializer block.
     /// Example: `init { print self.a; }`
     Initializer,
+    /// A magic method.
+    /// Example: `@iter(self) { ... }`
+    MagicMethod,
 }
 
 /// A function or  method declaration.
@@ -429,7 +432,7 @@ impl<'a> FnInfo<'a> {
     pub fn is_method(&self) -> bool {
         match self.kind {
             FnKind::Function => false,
-            FnKind::Initializer | FnKind::Method | FnKind::Static => true,
+            FnKind::Initializer | FnKind::Method | FnKind::Static | FnKind::MagicMethod => true,
         }
     }
 }

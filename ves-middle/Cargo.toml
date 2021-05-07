@@ -12,6 +12,7 @@ ahash = "0.7.2"
 pathdiff = "0.2.0"
 petgraph = "0.5.1"
 log = "0.4.14"
+lazy_static = "1.4.0"
 
 [dev-dependencies]
 ves_testing = { package = "ves-testing", path = "../ves-testing" }

@@ -1,0 +1,11 @@
+struct T {
+    @nope(self) {}
+}
+
+%output
+
+error: Invalid magic method: @nope
+  ┌─ <source: #ee4cc82da410b48f>:2:5
+  │
+2 │     @nope(self) {}
+  │     ^^^^^

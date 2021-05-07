@@ -101,6 +101,8 @@ pub enum VesErrorKind {
     OptionalAccessAssignment,
     /// An unused local variable.
     UnusedLocal,
+    /// An unknown magic method or invalid magic method params
+    BadMagicMethod,
     /// An error issued when the user attempts to shadow a local variable.
     AttemptedToShadowLocalVariable(Span),
     /// Attempted to use a global variable before its declaration.
