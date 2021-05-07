@@ -306,7 +306,7 @@ impl<'a> State<'a> {
                     )
                 })
                 .unwrap();
-            self.builder.op(Opcode::SetGlobal(index), span.clone());
+            self.builder.op(Opcode::SetGlobal(index), span);
         } else {
             self.add_local(name);
         }
@@ -1015,14 +1015,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         Ok(())
     }
 
+    // TODO
     fn emit_struct_expr(
         &mut self,
-        info: &StructInfo<'a>,
-        span: Span,
-        is_sub_expr: bool,
+        _info: &StructInfo<'a>,
+        _span: Span,
+        _is_sub_expr: bool,
     ) -> Result<()> {
         unimplemented!();
-        Ok(())
     }
 
     fn emit_fn_expr(&mut self, info: &'b FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
@@ -1615,7 +1615,7 @@ mod tests {
         use crate::gc::DefaultGc;
 
         use super::*;
-        use ves_error::{FileId, VesFileDatabase};
+        use ves_error::VesFileDatabase;
         use ves_middle::Resolver;
         use ves_parser::{Lexer, Parser};
 
