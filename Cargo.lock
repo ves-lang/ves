@@ -965,6 +965,16 @@ dependencies = [
  "pretty_assertions",
  "regex",
  "ves-error",
+ "ves-testing-macro",
+]
+
+[[package]]
+name = "ves-testing-macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

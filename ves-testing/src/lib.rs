@@ -6,6 +6,7 @@ use ves_error::{ErrCtx, FileId, VesFileDatabase};
 
 pub use lazy_static::lazy_static;
 pub use pretty_assertions;
+pub use ves_testing_macro::ves_test_suite;
 
 /// Cleans the given AST, removing all special characters.
 pub fn clean_tree(tree: String) -> String {
@@ -16,18 +17,40 @@ pub fn clean_tree(tree: String) -> String {
         .join("\n")
 }
 
+/// The kind of output a test may have.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum OutputKind {
+    OkOrEq,
+    Err,
+}
+
 /// Loads a test file from the given tests directory and returns a tuple of
 /// (source code, expected output).
-pub fn load_test_file(tests_dir: &Path, name: &str) -> (String, String) {
+pub fn load_test_file(tests_dir: &Path, name: &str) -> (String, String, OutputKind) {
     let path = std::path::PathBuf::from(tests_dir).join(format!("{}.test", name));
     let source = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read `{}`: {}", path.display(), e))
         .unwrap();
     let source = source.replace("\r\n", "\n");
-    let (code, expected) = source.split_once("%output\n").expect(
+    let (code, expected) = source.split_once("%output").expect(
         "Invalid test file format. Make sure that your test contains the %output directive.",
     );
-    (code.trim().to_owned(), expected.trim().to_owned())
+    let (output_kind, expected) = expected.split_once("\n").expect(
+        "Invalid test file format. Make sure that the %output directive is on a separate line.",
+    );
+    let output_kind = match output_kind.trim() {
+        "err" => OutputKind::Err,
+        "ok" | "eq" | "" => OutputKind::OkOrEq,
+        rest => panic!(
+            "Unrecognized test type -- `{}`. Expected either `ok`, `err`, or `eq`",
+            rest
+        ),
+    };
+    (
+        code.trim().to_owned(),
+        expected.trim().to_owned(),
+        output_kind,
+    )
 }
 
 /// Asserts that output of the given closure matches the expected output.
@@ -131,7 +154,7 @@ macro_rules! make_test_macros {
                         $d(#[$d attr])*
                         #[test]
                         fn $test_name() {
-                            let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
+                            let (source, output, _kind) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
                             $crate::test_eq(stringify!($test_name), source, $output_preprocessor(output), $f);
                         }
                     };
@@ -155,7 +178,7 @@ macro_rules! make_test_macros {
                         $d(#[$d attr])*
                         #[test]
                         fn $test_name() {
-                            let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
+                            let (source, output, _kind) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
                             $crate::test_ok_ast(stringify!($test_name), source, $output_preprocessor(output), $ok_pipeline);
                         }
                     };
@@ -166,8 +189,22 @@ macro_rules! make_test_macros {
                         $d (#[$d attr])*
                         #[test]
                         fn $test_name() {
-                            let (source, output) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
+                            let (source, output, _kind) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
                             $crate::test_err(stringify!($test_name), source, output, $err_pipeline);
+                        }
+                    };
+                }
+
+                macro_rules! test_auto {
+                    ($test_name:ident $d( $d attr:ident ),*) => {
+                        $d (#[$d attr])*
+                        #[test]
+                        fn $test_name() {
+                            let (source, output, kind) = $crate::load_test_file(&__TESTS_DIR, stringify!($test_name));
+                            match kind {
+                                $crate::OutputKind::OkOrEq => $crate::test_ok_ast(stringify!($test_name), source, $output_preprocessor(output), $ok_pipeline),
+                                $crate::OutputKind::Err => $crate::test_err(stringify!($test_name), source, output, $err_pipeline),
+                            }
                         }
                     };
                 }

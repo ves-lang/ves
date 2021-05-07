@@ -3,7 +3,7 @@ export struct /* no name */ {}
 
 export { a as /* missing alias name */ }
 
-%output
+%output err
 
 error: Expected function name
   ┌─ <source: #d472ee88cdf261c9>:1:8

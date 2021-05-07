@@ -1854,13 +1854,19 @@ fn check_assignment_target(expr: &ast::Expr<'_>, check_top: bool) -> AssignmentK
 }
 
 #[cfg(test)]
-mod tests {
+#[ves_testing::ves_test_suite]
+mod suite {
     use super::*;
     use ast2str::AstToStr;
-    use ves_testing::make_test_macros;
 
-    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-    static TESTS_DIR: &str = "tests";
+    #[ves_tests = "tests"]
+    mod parser {
+        #[ok_callback]
+        use super::parse as parse_ok;
+
+        #[err_callback]
+        use super::parse as parse_err;
+    }
 
     fn parse<'a>(
         src: std::borrow::Cow<'a, str>,
@@ -1896,42 +1902,4 @@ mod tests {
             )
         })
     }
-
-    make_test_macros!(CRATE_ROOT, TESTS_DIR, parse, parse);
-
-    test_ok!(t1_parse_block);
-    test_ok!(t2_parse_comma);
-    test_ok!(t3_parse_or);
-    test_ok!(t4_parse_access);
-    test_ok!(t5_parse_increment);
-    test_err!(t6_parse_invalid_assignments);
-    test_ok!(t7_parse_array_literal);
-    test_ok!(t8_parse_map_literals);
-    test_ok!(t9_precedence);
-    test_ok!(t10_string_interpolation);
-    test_ok!(t11_parse_call);
-    test_ok!(t12_parse_compound_assignment);
-    test_ok!(t13_if_expr);
-    test_ok!(t14_parse_do_block);
-    test_ok!(t15_parse_fn_decl);
-    test_err!(t16_parse_bad_fn_decl);
-    test_ok!(t17_parse_struct_decl);
-    test_ok!(t18_parse_var_decl);
-    test_err!(t19_let_variables_must_be_initialized);
-    test_ok!(t20_parse_print_statement);
-    test_err!(t21_parse_bad_struct_decl);
-    test_ok!(t22_parse_loop);
-    test_err!(t23_parse_bad_loop);
-    test_ok!(t24_parse_break_and_continue);
-    test_ok!(t25_parse_defer_and_return);
-    test_err!(t26_unclosed_string_interpolation_0);
-    test_err!(t26_unclosed_string_interpolation_1);
-    test_err!(t26_unclosed_string_interpolation_2);
-    test_err!(t26_unclosed_string_interpolation_3);
-    test_ok!(t27_export);
-    test_err!(t28_bad_export);
-    test_ok!(t29_import);
-    test_err!(t30_bad_import);
-    test_ok!(t31_parse_assignment);
-    test_ok!(t32_fn_if_expr_regression);
 }

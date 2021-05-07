@@ -1,7 +1,7 @@
 // unterminated fragment
 f"test {1+1";
 
-%output
+%output err
 
 error: One of this interpolated string's fragments is missing a closing brace
   ┌─ <source: #77916f69b8a4a59d>:2:1

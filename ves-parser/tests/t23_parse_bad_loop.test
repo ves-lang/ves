@@ -11,7 +11,7 @@ for i = 0, /* trailing comma is invalid here */ ;; {}
 while /* no condition */ {}
 while true /* no body */ ;
 
-%output
+%output err
 
 error: Expected a ':' after the label
   ┌─ <source: #9f58d84e530cf088>:1:23

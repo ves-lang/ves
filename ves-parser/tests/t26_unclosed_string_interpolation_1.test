@@ -1,7 +1,7 @@
 // unclosed quote
 f"test {1+1};
 
-%output
+%output err
 
 error: This interpolated string is missing a closing quote
   ┌─ <source: #9acc5010c9592cd6>:2:1

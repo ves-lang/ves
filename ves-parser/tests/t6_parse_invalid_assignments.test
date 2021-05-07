@@ -8,7 +8,7 @@ a?.b++;
 call(x) = 5;
 if Ok(x) = none {}
 
-%output
+%output err
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
   ┌─ <source: #3a3825bbb3fdb791>:1:1

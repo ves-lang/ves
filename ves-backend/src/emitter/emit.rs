@@ -1540,72 +1540,18 @@ fn maybe_f32(value: f64) -> Option<f32> {
 }
 
 #[cfg(test)]
-mod tests {
+#[ves_testing::ves_test_suite]
+mod suite {
     use super::*;
 
-    static CRATE_ROOT: &str = env!("CARGO_MANIFEST_DIR");
-    static TESTS_DIR: &str = "tests/codegen";
-    ves_testing::make_test_macros!(eq => CRATE_ROOT, TESTS_DIR, _impl::compile, _impl::strip_comments);
+    #[ves_tests = "tests/codegen"]
+    mod codegen_tests {
+        #[ok_callback]
+        use super::_impl::compile;
 
-    test_eq!(t01_simple_arithmetic_expr);
-    test_eq!(t02_builtin_type_comparisons);
-    test_eq!(t03_struct_type_comparison);
-    test_eq!(t04_field_check);
-    test_eq!(t05_global_and_local_variables);
-    test_eq!(t06_many_local_variables);
-    test_eq!(t07_print);
-    test_eq!(t08_global_variable_access);
-    test_eq!(t09_local_variable_access);
-    test_eq!(t10_nested_scope_local_resolution_with_shadowing);
-    test_eq!(t11_empty_loop);
-    test_eq!(t12_loop_with_body);
-    test_eq!(t13_loop_inside_scope);
-    test_eq!(t14_continue_in_empty_loop);
-    test_eq!(t15_break_in_empty_loop);
-    test_eq!(t16_continue_in_loop_with_body);
-    test_eq!(t17_break_in_loop_with_body);
-    test_eq!(t18_break_and_continue_in_named_loops);
-    test_eq!(t19_global_assignment);
-    test_eq!(t20_global_compound_assignment);
-    test_eq!(t21_local_assignment);
-    test_eq!(t22_local_compound_assignment);
-    test_eq!(t23_comma_expression);
-    test_eq!(t24_get_property);
-    test_eq!(t25_get_property_optional);
-    test_eq!(t26_set_property);
-    test_eq!(t27_get_item);
-    test_eq!(t28_set_item);
-    test_eq!(t29_nested_get_access);
-    // TODO: more optimal codegen for increment/decrement
-    test_eq!(t30_prefix_increment);
-    test_eq!(t31_postfix_increment);
-    // TODO: comment this
-    test_eq!(t32_nested_prefix_increment);
-    test_eq!(t33_empty_for_loop);
-    test_eq!(t34_unlabeled_for_loop);
-    test_eq!(t35_unlabeled_while_loop);
-    test_eq!(t36_while_loop_with_break_and_continue);
-    test_eq!(t37_named_while_loop);
-    test_eq!(t38_loop_for_with_break_and_continue);
-    test_eq!(t39_unlabeled_foreach_loop);
-    test_eq!(t40_labeled_foreach_with_control);
-    test_eq!(t41_multiple_global_vars);
-    test_eq!(t42_empty_do_block_expr);
-    test_eq!(t43_do_block_expr_with_value);
-    test_eq!(t44_simple_if_expr);
-    test_eq!(t45_nested_if_expr);
-    test_eq!(t46_call_expr);
-    test_eq!(t47_string_interpolation);
-    test_eq!(t48_array_literal);
-    test_eq!(t49_map_literal);
-    test_eq!(t50_defer_stmt);
-    test_eq!(t51_return_stmt);
-    test_eq!(t52_foreach_iterable);
-    test_eq!(t53_if_condition_patterns);
-    test_eq!(t54_while_condition_patterns);
-    test_eq!(t55_fn_emit);
-    test_eq!(t56_recursive_fn);
-    test_eq!(t57_anonymous_fn);
+        #[input_callback]
+        use super::_impl::strip_comments;
+    }
 
     mod _impl {
         use crate::gc::DefaultGc;
