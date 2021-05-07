@@ -19,7 +19,7 @@ print(v)
 |0005| IsNum            // v is num
 |0006| JumpIfFalse(12)  // if false jump @if.other0
 |0007| Pop              // pop v is num
-|0008| GetConst(0)      // "num"
+|0008| GetConst(num)    // "num"
 |0009| SetLocal(0)      // [[VALUE]] = "num"
 |0010| Pop              // pop "num"
 |0011| Jump(25)         // jump @if.end
@@ -29,13 +29,13 @@ print(v)
 |0014| IsNone           // v is none
 |0015| JumpIfFalse(21)  // if false jump @if.other1
 |0016| Pop              // pop v is none
-|0017| GetConst(1)      // "none"
+|0017| GetConst(none)   // "none"
 |0018| SetLocal(0)      // [[VALUE]] = "none"
 |0019| Pop              // pop "none"
 |0020| Jump(25)         // jump @end
 // @if.other1:
 |0021| Pop              // pop v is none
-|0022| GetConst(2)      // "unknown"
+|0022| GetConst(unknown)// "unknown"
 |0023| SetLocal(0)      // [[VALUE]] = "unknown"
 |0024| Pop              // pop "unknown"
 // @if.end:

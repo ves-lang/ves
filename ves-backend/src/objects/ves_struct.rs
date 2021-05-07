@@ -1,4 +1,9 @@
-use std::{cell::UnsafeCell, ptr::NonNull, vec::from_elem_in};
+use std::{
+    cell::UnsafeCell,
+    fmt::{self, Display, Formatter},
+    ptr::NonNull,
+    vec::from_elem_in,
+};
 
 use crate::gc::{proxy_allocator::ProxyAllocator, GcObj, Trace};
 use ahash::RandomState;
@@ -52,6 +57,8 @@ impl Eq for ViewKey {}
 
 #[derive(Debug)]
 pub struct VesStruct {
+    // TODO: store name
+    // TODO: static fields
     methods: VesHashMap<ViewKey, GcObj>,
     fields: VesHashMap<ViewKey, u8>,
 }
@@ -157,5 +164,19 @@ unsafe impl Trace for VesInstance {
         for v in &mut self.fields {
             v.trace(tracer);
         }
+    }
+}
+
+impl Display for VesStruct {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // TODO: better formatting
+        f.debug_struct("Struct").finish()
+    }
+}
+
+impl Display for VesInstance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // TODO: better formatting
+        f.debug_struct("Instance").finish()
     }
 }

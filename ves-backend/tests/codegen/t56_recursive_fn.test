@@ -17,16 +17,16 @@ test3(0);
 
 %output
 
-|0000| GetConst(0)
+|0000| GetConst(<fn test>)
 |0001| SetGlobal(0)     // fn test() { ... }
 |0002| Pop
 |0003| GetGlobal(0)
 |0004| Call(0)
 |0005| Pop
-|0006| GetConst(1)
+|0006| CreateClosure(<fn test2>, 1)
 |0007| Call(0)          // (fn test2() { ... })();
 |0008| Pop
-|0009| GetConst(2)
+|0009| GetConst(<fn test3>)
 |0010| SetGlobal(1)
 |0011| Pop
 |0012| GetGlobal(1)
@@ -47,7 +47,7 @@ test3(0);
 |0003| Pop              // pop receiver
 |0004| Return
 >>>>>> test3
-|0000| GetConst(0)
+|0000| CreateClosure(<fn test4>, 1)
 |0001| PushNum32(1.0)
 |0002| Call(1)          // (fn test4(b) { ... })(1);
 |0003| Pop              // pop result

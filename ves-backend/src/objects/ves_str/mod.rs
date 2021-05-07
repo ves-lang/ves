@@ -1,6 +1,10 @@
 pub mod view;
 
-use std::{borrow::Cow, cell::Cell};
+use std::{
+    borrow::Cow,
+    cell::Cell,
+    fmt::{self, Display, Formatter},
+};
 
 use crate::gc::Trace;
 
@@ -51,4 +55,10 @@ impl std::ops::Deref for VesStr {
 
 unsafe impl Trace for VesStr {
     fn trace(&mut self, _tracer: &mut dyn FnMut(&mut crate::gc::GcObj)) {}
+}
+
+impl Display for VesStr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.s)
+    }
 }

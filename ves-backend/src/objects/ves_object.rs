@@ -1,5 +1,8 @@
 //! Contains the implementation of the [`VesObject`] type.
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::{self, Display, Formatter},
+};
 
 use crate::{
     gc::{GcObj, Trace},
@@ -133,6 +136,19 @@ unsafe impl Trace for VesObject {
             VesObject::Closure(c) => c.after_forwarding(),
             // not traceable, only used as a constant
             VesObject::ClosureDescriptor(_) => (),
+        }
+    }
+}
+
+impl Display for VesObject {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            VesObject::Str(v) => v.fmt(f),
+            VesObject::Instance(v) => v.fmt(f),
+            VesObject::Struct(v) => v.fmt(f),
+            VesObject::Fn(v) => v.fmt(f),
+            VesObject::Closure(v) => v.fmt(f),
+            VesObject::ClosureDescriptor(v) => v.fmt(f),
         }
     }
 }

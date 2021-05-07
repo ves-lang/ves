@@ -209,6 +209,7 @@ impl<'a> State<'a> {
     }
 
     fn add_upvalue(&mut self, upvalue: UpvalueInfo) -> u32 {
+        println!("{:?}", upvalue);
         // don't duplicate upvalues
         for (index, existing) in self.upvalues.iter().enumerate() {
             if existing == &upvalue {
@@ -1061,6 +1062,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             },
         );
         self.state.builder.op(Opcode::Return, span.clone());
+        let upvalues = std::mem::take(&mut self.state.upvalues);
         let chunk = self.end_state();
         if is_sub_expr {
             // close the temporary function local scope, but don't pop the value
@@ -1079,7 +1081,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             span.clone(),
         )?;
         // if there are no upvalues, the function does not need to be a closure
-        if self.state.upvalues.is_empty() {
+        if upvalues.is_empty() {
             self.state
                 .builder
                 .op(Opcode::GetConst(fn_constant_index), span.clone());
@@ -1087,7 +1089,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             let closure_desc_index = self.state.builder.constant(
                 self.ctx.alloc_value(ClosureDescriptor {
                     fn_constant_index,
-                    upvalues: std::mem::take(&mut self.state.upvalues),
+                    upvalues,
                 }),
                 span.clone(),
             )?;
@@ -1616,6 +1618,26 @@ mod tests {
         use ves_middle::Resolver;
         use ves_parser::{Lexer, Parser};
 
+        fn format_closure_descriptor(d: &ClosureDescriptor, c: &[Value]) -> String {
+            format!("{}, {}", c[d.fn_constant_index as usize], d.upvalues.len())
+        }
+
+        fn format_op(op: &Opcode, c: &[Value]) -> String {
+            match op {
+                Opcode::GetConst(i) => format!("GetConst({})", c[*i as usize]),
+                Opcode::CreateClosure(i) => format!("CreateClosure({})", {
+                    match c[*i as usize] {
+                        Value::Ref(v) => match &*v {
+                            VesObject::ClosureDescriptor(v) => format_closure_descriptor(v, c),
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    }
+                }),
+                _ => format!("{:?}", op),
+            }
+        }
+
         fn chunk_concat(out: &mut String, r#fn: &VesFn) {
             if &**r#fn.name.as_str().unwrap() != "<main>" {
                 *out += &format!("\n>>>>>> {}\n", &**r#fn.name.as_str().unwrap());
@@ -1625,7 +1647,7 @@ mod tests {
                 .code
                 .iter()
                 .enumerate()
-                .map(|(i, op)| format!("|{:<04}| {:?}", i, op))
+                .map(|(i, op)| format!("|{:<04}| {}", i, format_op(&op, &r#fn.chunk.constants)))
                 .collect::<Vec<_>>()
                 .join("\n");
             for constant in r#fn.chunk.constants.iter() {

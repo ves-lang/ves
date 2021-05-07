@@ -1,4 +1,7 @@
-use std::ptr::NonNull;
+use std::{
+    fmt::{self, Display, Formatter},
+    ptr::NonNull,
+};
 
 use ves_error::FileId;
 
@@ -66,5 +69,27 @@ pub struct VesFn {
 unsafe impl Trace for VesFn {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         self.name.trace(tracer);
+    }
+}
+
+impl Display for VesFn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // TODO: better formatting
+        write!(f, "<fn {}>", self.name.as_str().unwrap())
+    }
+}
+
+impl Display for VesClosure {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        unsafe { self.r#fn.as_ref().fmt(f) }
+    }
+}
+
+impl Display for ClosureDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Descriptor")
+            .field(&self.fn_constant_index)
+            .field(&self.upvalues.len())
+            .finish()
     }
 }

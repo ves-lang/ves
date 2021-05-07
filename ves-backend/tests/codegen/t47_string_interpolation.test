@@ -2,7 +2,7 @@ f"test {1 + 1}"
 
 %output
 
-|0000| GetConst(0)
+|0000| GetConst(test )
 |0001| PushNum32(1.0)
 |0002| PushNum32(1.0)
 |0003| Add

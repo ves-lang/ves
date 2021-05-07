@@ -1,4 +1,6 @@
 //! Contains the implementation of the Ves [`Value`] type.
+use std::fmt::{self, Display, Formatter};
+
 use crate::gc::{Trace, VesRef};
 
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
@@ -81,6 +83,17 @@ unsafe impl Trace for Value {
     fn after_forwarding(&mut self) {
         if let Value::Ref(p) = self {
             p.after_forwarding()
+        }
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Num(v) => v.fmt(f),
+            Value::Bool(v) => v.fmt(f),
+            Value::None => write!(f, "none"),
+            Value::Ref(v) => (*v).fmt(f),
         }
     }
 }

@@ -133,14 +133,19 @@ pub enum Opcode {
     ///
     /// The stack should look like: [<function>, <receiver>, <arg 0>, <arg 1>, <arg 2>, ..., <arg [count]>]
     ///
+    /// If the function has default parameters, any parameter which does not receive a value should be set
+    /// to `none`. If the function has a rest parameter, any parameters beyond `N+M` (where `N` is the number
+    /// of positional args and `M` the number of default args) are pushed into an array, which is passed in
+    /// as the last argument of the call.
+    ///
     /// The `receiver` stack slot is reserved and it's value is `none` if there is no receiver
     Call(/* count */ u32),
     /// Defer a call
     ///
     /// This checks if the call is valid, and pushes it onto the current call's defer stack.
     ///
-    /// When the call stack is unwound or the function returns, any deferred calls from
-    /// the defer stack are executed.
+    /// When a scope closes, any deferred calls from that scope are executed.
+    /// When the stack beings unwinding due to a panic, deferred calls are also executed.
     Defer,
     /// Join `count` fragments on the stack into a single string
     Interpolate(/* count */ u32),
@@ -153,6 +158,16 @@ pub enum Opcode {
     /// Extend a map with all entries of another map
     MapExtend,
     /// Create a closure from a closure descriptor in the constants pool
+    ///
+    /// The process is:
+    /// 1. Create a closure object
+    /// 2. Push it onto the stack (!!!)
+    /// 3. Get its closure descriptor
+    /// 4. Retrieve, clone and insert upvalues into the closure
+    ///    based on the information in the descriptor
+    ///
+    /// Pushing the closure onto the stack before adding upvalues
+    /// is necessary because the closure may use *itself* as an upvalue.
     CreateClosure(/* descriptor constant index */ u32),
     /// Print a single value
     Print,
