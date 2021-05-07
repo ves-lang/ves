@@ -289,6 +289,29 @@ impl<'a> State<'a> {
 
         Ok(())
     }
+
+    fn define_no_pop<S: Into<Cow<'a, str>>>(&mut self, name: S, span: Span) -> Result<()> {
+        let name = name.into();
+        if self.scope_depth == 0 {
+            let index = self
+                .globals
+                .get(&name[..])
+                .copied()
+                .ok_or_else(|| {
+                    format!(
+                        /* This shouldn't ever happen since we collect and check all globals */
+                        "Attempted to define the variable `{}` as a global variable",
+                        name
+                    )
+                })
+                .unwrap();
+            self.builder.op(Opcode::SetGlobal(index), span.clone());
+        } else {
+            self.add_local(name);
+        }
+
+        Ok(())
+    }
 }
 
 fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> HashMap<String, u32> {
@@ -1002,6 +1025,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 
     fn emit_fn_expr(&mut self, info: &'b FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
+        // if the fn is in a sub expression, then it should only be accessible from its own body
+        if is_sub_expr {
+            // open an extra scope just for the function local
+            self.state.begin_scope();
+            self.state.define(info.name.lexeme.clone(), span.clone())?;
+        }
         self.begin_state();
         self.state.begin_scope();
         self.state.fn_kind = Some(info.kind);
@@ -1033,6 +1062,10 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         );
         self.state.builder.op(Opcode::Return, span.clone());
         let chunk = self.end_state();
+        if is_sub_expr {
+            // close the temporary function local scope, but don't pop the value
+            self.state.end_scope_partial(span.clone(), 1);
+        }
         let name = self.ctx.alloc_or_intern(info.name.lexeme.clone());
         let fn_constant_index = self.state.builder.constant(
             self.ctx.alloc_value(VesFn {
@@ -1062,9 +1095,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .builder
                 .op(Opcode::CreateClosure(closure_desc_index), span.clone());
         }
-
         if !is_sub_expr {
-            self.state.define(info.name.lexeme.clone(), span)?;
+            self.state.define_no_pop(info.name.lexeme.clone(), span)?;
         }
         Ok(())
     }
@@ -1502,7 +1534,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 fn maybe_f32(value: f64) -> Option<f32> {
     const MIN: f64 = f32::MIN as f64;
     const MAX: f64 = f32::MAX as f64;
-    if (MIN..=MAX).contains(&value) {
+    if (MIN..=MAX).contains(&value) || value.is_nan() || value.is_infinite() {
         Some(value as f32)
     } else {
         None
@@ -1574,6 +1606,7 @@ mod tests {
     test_eq!(t53_if_condition_patterns);
     test_eq!(t54_while_condition_patterns);
     test_eq!(t55_fn_emit);
+    test_eq!(t56_recursive_fn);
 
     mod _impl {
         use crate::gc::DefaultGc;

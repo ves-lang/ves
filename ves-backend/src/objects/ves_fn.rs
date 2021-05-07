@@ -2,8 +2,6 @@ use std::ptr::NonNull;
 
 use ves_error::FileId;
 
-use super::ves_str::VesStr;
-
 use crate::{
     emitter::{builder::Chunk, emit::UpvalueInfo},
     gc::{GcObj, Trace},

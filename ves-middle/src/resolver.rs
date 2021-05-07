@@ -474,11 +474,13 @@ impl<'a> Resolver<'a> {
     fn resolve_function<T>(
         &mut self,
         f: &mut FnInfo<'a>,
-        should_declare: bool,
+        is_sub_expr: bool,
         registry: &ModuleRegistry<T>,
         ex: &mut ErrCtx,
     ) {
-        if should_declare && f.kind != FnKind::Initializer {
+        // if this function is declared in a sub expression, it should not declare
+        // a variable in its enclosing scope, but only in the scope of its own body
+        if is_sub_expr && f.kind != FnKind::Initializer {
             self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
             self.assign(&f.name, ex);
         }
@@ -491,6 +493,12 @@ impl<'a> Resolver<'a> {
             FnKind::Initializer => ScopeKind::Initializer,
         };
         self.push();
+
+        // function is always accessible from its own body, but don't re-declare it
+        if !is_sub_expr && f.kind != FnKind::Initializer {
+            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
+            self.assign(&f.name, ex);
+        }
 
         for (_, p, _) in &mut f.params.default {
             self.resolve_expr(p, true, registry, ex);

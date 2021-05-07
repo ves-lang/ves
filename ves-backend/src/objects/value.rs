@@ -18,10 +18,8 @@ pub enum Value {
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Value::Num(l), Value::Num(r)) => {
-                // IEEE-754? Don't make me laugh
-                *l == *r || (l.is_nan() && r.is_nan())
-            }
+            // Value::Num *never* contains NaN, see emit.rs@maybe_f32
+            (Value::Num(l), Value::Num(r)) => *l == *r,
             (Value::Bool(l), Value::Bool(r)) => *l == *r,
             (Value::Ref(l), Value::Ref(r)) => *l == *r,
             _ => true,
