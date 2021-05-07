@@ -671,7 +671,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .builder
                     .constant(self.ctx.alloc_or_intern("iter").into(), span.clone())?;
                 // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
-                self.state.builder.op(Opcode::GetProp(iter), span.clone());
+                // AAA(compiler): probably a builtin since we want to distinguish between actual impls and name collisions
+                self.state.builder.get_magic(iter, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
 
                 // now emit `<item>`
@@ -684,7 +685,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .state
                     .builder
                     .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
-                self.state.builder.op(Opcode::GetProp(next), span.clone());
+                self.state.builder.get_magic(next, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
             }
         }
@@ -724,7 +725,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .state
                     .builder
                     .constant(self.ctx.alloc_or_intern("done").into(), span.clone())?;
-                self.state.builder.op(Opcode::GetProp(done), span.clone());
+                self.state.builder.get_magic(done, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 self.state.builder.op(Opcode::Not, span.clone());
                 self.state
@@ -766,7 +767,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .state
                     .builder
                     .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
-                self.state.builder.op(Opcode::GetProp(next), span.clone());
+                self.state.builder.get_magic(next, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
                     .state
@@ -1370,18 +1371,16 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
             span.clone(),
         )?;
-        self.state.builder.op(
-            if is_optional {
-                Opcode::TryGetProp(offset)
-            } else {
-                Opcode::GetProp(offset)
-            },
-            span.clone(),
-        );
         // TODO: try to speculatively populate the cache
-        self.state.builder.op(Opcode::Data(0), span.clone());
-        self.state.builder.op(Opcode::Data(0), span.clone());
-        self.state.builder.op(Opcode::Data(0), span);
+        self.state.builder.with_ic(
+            if is_optional {
+                Opcode::TryGetProp
+            } else {
+                Opcode::GetProp
+            },
+            offset,
+            span,
+        );
         Ok(())
     }
 
@@ -1398,11 +1397,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
             span.clone(),
         )?;
-        self.state.builder.op(Opcode::SetProp(offset), span.clone());
         // TODO: try to speculatively populate the cache
-        self.state.builder.op(Opcode::Data(0), span.clone());
-        self.state.builder.op(Opcode::Data(0), span.clone());
-        self.state.builder.op(Opcode::Data(0), span);
+        self.state.builder.set_prop(offset, span);
         Ok(())
     }
 
@@ -1505,7 +1501,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     self.ctx.alloc_or_intern(get.field.lexeme.clone()).into(),
                     span.clone(),
                 )?;
-                self.state.builder.op(Opcode::SetProp(offset), span.clone());
+                self.state.builder.set_prop(offset, span.clone());
             }
             ExprKind::GetItem(ref get) => {
                 self.emit_get_item(&get.node, &get.key, span.clone())?;

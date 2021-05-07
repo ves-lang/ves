@@ -68,6 +68,25 @@ impl BytecodeBuilder {
         (self.code.len() - 1) as u32
     }
 
+    pub fn get_prop(&mut self, idx: u32, span: Span) {
+        self.with_ic(Opcode::GetProp, idx, span);
+    }
+
+    pub fn set_prop(&mut self, idx: u32, span: Span) {
+        self.with_ic(Opcode::SetProp, idx, span);
+    }
+
+    pub fn get_magic(&mut self, idx: u32, span: Span) {
+        self.with_ic(Opcode::GetMagicProp, idx, span);
+    }
+
+    pub fn with_ic(&mut self, constructor: impl Fn(u32) -> Opcode, idx: u32, span: Span) {
+        self.op(constructor(idx), span.clone());
+        for _ in 0..3 {
+            self.op(Opcode::Data(0), span.clone());
+        }
+    }
+
     // Labels are compile-time only so they don't need spans
     pub fn label(&mut self, label: u32) {
         self.code.push(Opcode::Label(label));

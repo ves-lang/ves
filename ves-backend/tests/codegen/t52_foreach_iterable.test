@@ -10,32 +10,44 @@ for item in iterable {
 |0001| SetGlobal(0)     // mut iterable
 |0002| Pop              // 
 |0003| GetGlobal(0)     // get iterable
-|0004| GetProp(0)       // get prop "iter"
-|0005| Call(0)          // [[ITER]] = iterable.iter()
-|0006| GetLocal(0)      // get [[ITER]]
-|0007| GetProp(1)       // get prop "next"
-|0008| Call(0)          // <item> = [[ITER]].next()
-// @loop.start:
+|0004| GetMagicProp(0)  // get prop "iter"
+|0005| Data(0)
+|0006| Data(0)
+|0007| Data(0)
+|0008| Call(0)          // [[ITER]] = iterable.iter()
 |0009| GetLocal(0)      // get [[ITER]]
-|0010| GetProp(2)       // get prop "done"
-|0011| Call(0)          // call [[ITER]].done
-|0012| Not              // ![[ITER]].done()
-|0013| JumpIfFalse(25)  // jump_if_false @loop.exit
-|0014| Pop              // pop <condition> result
-|0015| Jump(22)         // jump @loop.body
+|0010| GetMagicProp(1)  // get prop "next"
+|0011| Data(0)
+|0012| Data(0)
+|0013| Data(0)
+|0014| Call(0)          // <item> = [[ITER]].next()
+// @loop.start:
+|0015| GetLocal(0)      // get [[ITER]]
+|0016| GetMagicProp(2)  // get prop "done"
+|0017| Data(0)
+|0018| Data(0)
+|0019| Data(0)
+|0020| Call(0)          // call [[ITER]].done
+|0021| Not              // ![[ITER]].done()
+|0022| JumpIfFalse(37)  // jump_if_false @loop.exit
+|0023| Pop              // pop <condition> result
+|0024| Jump(34)         // jump @loop.body
 // @loop.latch:
-|0016| GetLocal(0)      // get [[ITER]]
-|0017| GetProp(1)       // get prop "next"
-|0018| Call(0)          // call [[ITER]].next
-|0019| SetLocal(1)      // <item> = [[ITER]].next()
-|0020| Pop              // pop (call [[ITER]].next)
-|0021| Jump(9)          // jump @loop.start
+|0025| GetLocal(0)      // get [[ITER]]
+|0026| GetMagicProp(1)       // get prop "next"
+|0027| Data(0)
+|0028| Data(0)
+|0029| Data(0)
+|0030| Call(0)          // call [[ITER]].next
+|0031| SetLocal(1)      // <item> = [[ITER]].next()
+|0032| Pop              // pop (call [[ITER]].next)
+|0033| Jump(15)          // jump @loop.start
 // @loop.body:
-|0022| GetLocal(1)      // get <item>
-|0023| Print            // print(item)
-|0024| Jump(16)         // jump @loop.latch
+|0034| GetLocal(1)      // get <item>
+|0035| Print            // print(item)
+|0036| Jump(25)         // jump @loop.latch
 // @loop.exit:
-|0025| Pop              // pop <condition> result
-|0026| PopN(2)          // pop <item>, [[ITER]]
+|0037| Pop              // pop <condition> result
+|0038| PopN(2)          // pop <item>, [[ITER]]
 // @loop.end:
-|0027| Return
+|0039| Return
