@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cell::Cell, rc::Rc};
+use std::{borrow::Cow, cell::Cell, collections::HashSet, rc::Rc};
 
 use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
 use ves_parser::{
@@ -478,6 +478,10 @@ impl<'a> Resolver<'a> {
         registry: &ModuleRegistry<T>,
         ex: &mut ErrCtx,
     ) {
+        if f.kind == FnKind::MagicMethod && !self.validate_magic_method(f, ex) {
+            return;
+        }
+
         // if this function is declared in a sub expression, it should not declare
         // a variable in its enclosing scope, but only in the scope of its own body
         if is_sub_expr && f.kind != FnKind::Initializer {
@@ -487,7 +491,7 @@ impl<'a> Resolver<'a> {
 
         let prev_kind = self.scope_kind;
         self.scope_kind = match f.kind {
-            FnKind::Method => ScopeKind::Method,
+            FnKind::Method | FnKind::MagicMethod => ScopeKind::Method,
             FnKind::Static => ScopeKind::AssocMethod,
             FnKind::Function => ScopeKind::Function,
             FnKind::Initializer => ScopeKind::Initializer,
@@ -527,6 +531,33 @@ impl<'a> Resolver<'a> {
 
         self.pop(ex);
         self.scope_kind = prev_kind;
+    }
+
+    // ugh...
+    #[rustfmt::skip]
+    fn validate_magic_method(&mut self, info: &FnInfo<'a>, ex: &mut ErrCtx) -> bool {
+        // check if the name is a known magic method + if the params match it
+        // TODO: provide a nice error message
+        lazy_static::lazy_static! {
+            static ref TABLE: HashSet<&'static str> = {
+                let mut s = HashSet::new();
+                s.insert("@iter");
+                s.insert("@done");
+                s.insert("@next");
+                s
+            };
+        };
+        if TABLE.contains(info.name.lexeme.as_ref()) {
+            true
+        } else {
+            Self::error_of_kind(
+                VesErrorKind::BadMagicMethod,
+                format!("Invalid magic method: {}", info.name.lexeme),
+                info.name.span.clone(),
+                ex,
+            );
+            false
+        }
     }
 
     fn resolve_expr<T>(
@@ -961,4 +992,5 @@ pub mod tests {
     test_err!(t15_fn_doesnt_declare_as_sub_expr);
     test_err!(t16_struct_doesnt_declare_as_sub_expr);
     test_err!(t17_fn_struct_dont_declare_local);
+    test_err!(t18_unknown_magic);
 }

@@ -670,8 +670,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .state
                     .builder
                     .constant(self.ctx.alloc_or_intern("iter").into(), span.clone())?;
-                // QQQ(moscow): should this be `GetProp` or a special opcode for fetching builtins?
-                // AAA(compiler): probably a builtin since we want to distinguish between actual impls and name collisions
                 self.state.builder.get_magic(iter, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
 
@@ -1037,7 +1035,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state.begin_scope();
         self.state.fn_kind = Some(info.kind);
         match info.kind {
-            FnKind::Method | FnKind::Initializer => self.state.add_local("self"),
+            FnKind::Method | FnKind::Initializer | FnKind::MagicMethod => {
+                self.state.add_local("self")
+            }
             FnKind::Function | FnKind::Static => self.state.add_local(""),
         };
         for param in info.params.positional.iter() {

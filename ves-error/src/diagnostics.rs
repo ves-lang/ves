@@ -29,7 +29,8 @@ pub fn build_diagnostic<
         | FnBeforeMethod
         | UsedGlobalBeforeDeclaration(_)
         | AttemptedToShadowLocalVariable(_)
-        | Import => Diagnostic::error(),
+        | Import
+        | BadMagicMethod => Diagnostic::error(),
         UnusedLocal => Diagnostic::warning(),
         Warning => Diagnostic::warning(),
         Emit => Diagnostic::error(),
