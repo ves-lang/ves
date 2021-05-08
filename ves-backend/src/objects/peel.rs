@@ -1,7 +1,4 @@
-use std::{
-    ops::{Deref, DerefMut},
-    ptr::NonNull,
-};
+use std::ptr::NonNull;
 
 use crate::{
     gc::{GcObj, Trace},
@@ -50,6 +47,16 @@ impl<T> Peeled<T> {
     pub fn peeled_ptr(&self) -> &GcObj {
         &self._obj
     }
+
+    #[inline]
+    pub fn get(&self) -> &T {
+        unsafe { self.peeled.as_ref() }
+    }
+
+    #[inline]
+    pub fn get_mut(&mut self) -> &mut T {
+        unsafe { self.peeled.as_mut() }
+    }
 }
 
 unsafe impl<T> Trace for Peeled<T> {
@@ -59,20 +66,5 @@ unsafe impl<T> Trace for Peeled<T> {
 
     fn after_forwarding(&mut self) {
         self.peeled = unsafe { NonNull::new_unchecked((self.peel)(&mut *self._obj)) };
-    }
-}
-
-/// NOTE: these deref impls may turn out to be a footgun. Should we use explicit methods instead?
-impl<T> Deref for Peeled<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.peeled.as_ref() }
-    }
-}
-
-impl<T> DerefMut for Peeled<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { self.peeled.as_mut() }
     }
 }

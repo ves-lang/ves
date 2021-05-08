@@ -22,6 +22,14 @@ impl VesClosure {
             upvalues: vec![],
         }
     }
+
+    pub fn r#fn(&self) -> &VesFn {
+        self.r#fn.get()
+    }
+
+    pub fn fn_mut(&mut self) -> &mut VesFn {
+        self.r#fn.get_mut()
+    }
 }
 
 unsafe impl Trace for VesClosure {
@@ -75,7 +83,7 @@ impl Display for VesFn {
 
 impl Display for VesClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        (&*self.r#fn).fmt(f)
+        self.r#fn.get().fmt(f)
     }
 }
 

@@ -50,7 +50,7 @@ impl std::ops::Deref for VesStrView {
     type Target = VesStr;
 
     fn deref(&self) -> &Self::Target {
-        &*self.peeled
+        self.peeled.get()
     }
 }
 

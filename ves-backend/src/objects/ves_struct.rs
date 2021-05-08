@@ -106,8 +106,19 @@ impl VesInstance {
     }
 
     #[inline]
+    pub fn ty(&self) -> &VesStruct {
+        self.ty.get()
+    }
+
+    #[inline]
+    pub fn ty_mut(&mut self) -> &mut VesStruct {
+        self.ty.get_mut()
+    }
+
+    #[inline]
     pub fn get_property_slot(&self, name: &VesStrView) -> Option<u8> {
         self.ty
+            .get()
             .fields
             .get(&ViewKey {
                 view: UnsafeCell::new(*name),
