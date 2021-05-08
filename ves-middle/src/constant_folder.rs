@@ -295,12 +295,10 @@ impl<'a> ConstantFolder<'a> {
                 ref mut initializer,
             }) => {
                 self.propagated_variables.add(name.lexeme.clone(), None);
-                if let Some(fields) = fields {
-                    fields
-                        .default
-                        .iter_mut()
-                        .for_each(|(_, v, _)| self.fold_expr(v))
-                }
+                fields
+                    .default
+                    .iter_mut()
+                    .for_each(|(_, v, _)| self.fold_expr(v));
                 if let Some(init) = initializer {
                     self.fold_function(&mut init.body);
                 }

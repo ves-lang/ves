@@ -197,7 +197,10 @@ StmtKind::Block
     StmtKind::ExprStmt
       expr: StructInfo
         name: "a"
-        fields: None
+        fields: Params
+          positional=
+          default=
+          rest: None
         methods=
         initializer: None
         r#static: StructStaticProps

@@ -321,11 +321,7 @@ impl<T: VesGc> VmBytes<T> {
         let name = self.constants[id].unbox().as_ptr().unwrap();
         let name = match *name {
             VesObject::Str(_) => VesStrView::new(name),
-            VesObject::Instance(_) => unreachable!(),
-            VesObject::Struct(_) => unreachable!(),
-            VesObject::Fn(_) => unreachable!(),
-            VesObject::Closure(_) => unreachable!(),
-            VesObject::ClosureDescriptor(_) => unreachable!(),
+            _ => unreachable!(),
         };
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {

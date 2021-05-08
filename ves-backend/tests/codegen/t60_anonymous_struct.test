@@ -1,0 +1,39 @@
+(struct T(a) {
+    sf = 0
+    sm() => T.sf
+    init {
+        print(T.sm());
+    }
+});
+
+%output
+
+|0000| CreateStruct
+|0001| CreateClosure(<fn T.sm>, 1)
+|0002| AddStaticMethod(2)
+|0003| PushNum32(0.0)
+|0004| AddStaticField(3)
+|0005| CreateClosure(<fn T.init>, 1)
+|0006| AddMethod(4)
+|0007| Pop
+|0008| Return
+>>>>>> T.sm
+|0000| Pop
+|0001| GetUpvalue(0)
+|0002| GetProp(0)
+|0003| Data(0)
+|0004| Data(0)
+|0005| Data(0)
+|0006| Return
+|0007| Pop
+|0008| PushNone
+|0009| Return
+>>>>>> T.init
+|0000| GetUpvalue(0)        // get T
+|0001| GetProp(0)           // get T.static
+|0002| Data(0)
+|0003| Data(0)
+|0004| Data(0)
+|0005| Call(0)
+|0006| Print                // print(T.sm())
+|0007| Return

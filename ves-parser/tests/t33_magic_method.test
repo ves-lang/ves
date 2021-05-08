@@ -103,7 +103,94 @@ StmtKind::ExprStmt
             return_value: ExprKind::Variable
               name: "self"
         kind: MagicMethod
-    initializer: None
+    initializer: Initializer
+      body: FnInfo
+        name: "init"
+        params: Params
+          positional=
+          default=
+          rest: None
+        body=
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "x"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "x"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "y"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "y"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "z"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "z"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+        kind: Initializer
+      may_escape: false
     r#static: StructStaticProps
       fields=
       methods=

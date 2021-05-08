@@ -8,7 +8,7 @@ use crate::{
     Value, VesObject,
 };
 
-use super::peel::Peeled;
+use super::{peel::Peeled, ves_str::view::VesStrView};
 
 #[derive(Debug)]
 pub struct VesClosure {
@@ -50,7 +50,7 @@ pub struct ClosureDescriptor {
 #[derive(Debug)]
 pub struct VesFn {
     // QQQ: use a stringview instead?
-    pub name: GcObj,
+    pub name: VesStrView,
     /// How many positional arguments this function accepts
     pub positionals: u32,
     /// How many default arguments this function accepts
@@ -64,7 +64,7 @@ pub struct VesFn {
 
 impl VesFn {
     pub fn name(&self) -> &str {
-        self.name.as_str().unwrap()
+        self.name.str().as_ref()
     }
 }
 
@@ -77,7 +77,7 @@ unsafe impl Trace for VesFn {
 impl Display for VesFn {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
-        write!(f, "<fn {}>", self.name.as_str().unwrap())
+        write!(f, "<fn {}>", self.name.str())
     }
 }
 

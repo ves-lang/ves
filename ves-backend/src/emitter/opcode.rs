@@ -171,6 +171,16 @@ pub enum Opcode {
     /// Pushing the closure onto the stack before adding upvalues
     /// is necessary because the closure may use *itself* as an upvalue.
     CreateClosure(/* descriptor constant index */ u32),
+    /// Creates an empty struct
+    CreateStruct,
+    /// Add a method to a struct
+    AddMethod(/* name constant index */ u32),
+    /// Add a magic method to a struct
+    AddMagicMethod(/* name constant index */ u32),
+    /// Add a static method to a struct
+    AddStaticMethod(/* name constant index */ u32),
+    /// Add a static field to a struct
+    AddStaticField(/* name constant index */ u32),
     /// Print a single value
     Print,
     /// Print N values

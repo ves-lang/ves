@@ -2,7 +2,10 @@ use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 use crate::{
     gc::{GcObj, VesGc},
-    objects::ves_fn::{ClosureDescriptor, VesFn},
+    objects::{
+        ves_fn::{ClosureDescriptor, VesFn},
+        ves_str::view::VesStrView,
+    },
     Span, Value, VesObject,
 };
 
@@ -62,6 +65,7 @@ struct State<'a> {
     upvalues: Vec<UpvalueInfo>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
+    struct_name: Option<Cow<'a, str>>,
 
     // The id of the next label
     label_id: u32,
@@ -88,6 +92,7 @@ impl<'a> State<'a> {
             globals,
             scope_depth: 0,
             label_id: 0,
+            struct_name: None,
         }
     }
 
@@ -150,6 +155,26 @@ impl<'a> State<'a> {
 
     fn end_loop(&mut self) {
         self.scope_depth -= 1;
+    }
+
+    fn begin_struct<S: Into<Cow<'a, str>>>(&mut self, name: S) {
+        self.struct_name = Some(name.into());
+    }
+
+    fn end_struct(&mut self) {
+        self.struct_name = None;
+    }
+
+    fn resolve_struct_name(&self) -> Option<Cow<'a, str>> {
+        let mut current = Some(self);
+        while let Some(state) = current {
+            if let Some(ref name) = state.struct_name {
+                return Some(name.clone());
+            } else {
+                current = self.enclosing.as_deref()
+            }
+        }
+        None
     }
 
     fn reserve_label(&mut self) -> u32 {
@@ -371,7 +396,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state.builder.op(Opcode::Return, 0..0);
 
         let f = VesFn {
-            name: self.ctx.alloc_or_intern("<main>"), // TODO: use module name
+            name: VesStrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
             positionals: 0,
             defaults: 0,
             rest: false,
@@ -888,7 +913,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             ExprKind::Lit(ref literal) => self.emit_lit(literal)?,
             ExprKind::Binary(op, ref a, ref b) => self.emit_binary_expr(op, a, b, span)?,
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
-            // TODO
             ExprKind::Struct(ref info) => self.emit_struct_expr(info, span, is_sub_expr)?,
             ExprKind::Fn(ref info) => self.emit_fn_expr(info, span, is_sub_expr)?,
             ExprKind::If(ref info) => self.emit_if_expr(info, span)?,
@@ -1026,16 +1050,99 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     // TODO
     fn emit_struct_expr(
         &mut self,
-        _info: &StructInfo<'a>,
-        _span: Span,
-        _is_sub_expr: bool,
+        info: &'b StructInfo<'a>,
+        span: Span,
+        is_sub_expr: bool,
     ) -> Result<()> {
-        unimplemented!();
+        self.state.begin_struct(info.name.lexeme.clone());
+        if is_sub_expr {
+            // if the struct is in a sub expression, then it should only be accessible from its own body
+            self.state.begin_scope();
+            self.state.define(info.name.lexeme.clone(), span.clone())?;
+        }
+        self.state.builder.op(Opcode::CreateStruct, span.clone());
+        // (magic) methods
+        for method in info.methods.iter() {
+            self.emit_fn_expr(method, span.clone(), true)?;
+            match method.name.lexeme.strip_prefix('@') {
+                Some(name) => {
+                    // TODO: how to *not* to_string here?
+                    let name_index = self.state.builder.constant(
+                        self.ctx.alloc_or_intern(name.to_string()).into(),
+                        span.clone(),
+                    )?;
+                    self.state
+                        .builder
+                        .op(Opcode::AddMagicMethod(name_index), span.clone());
+                }
+                None => {
+                    // TODO: how to *not* to_string here?
+                    let name_index = self.state.builder.constant(
+                        self.ctx
+                            .alloc_or_intern(method.name.lexeme.to_string())
+                            .into(),
+                        span.clone(),
+                    )?;
+                    self.state
+                        .builder
+                        .op(Opcode::AddMethod(name_index), span.clone());
+                }
+            }
+        }
+        // static methods
+        for method in info.r#static.methods.iter() {
+            self.emit_fn_expr(method, span.clone(), true)?;
+            let name_index = self.state.builder.constant(
+                self.ctx.alloc_or_intern(method.name.lexeme.clone()).into(),
+                span.clone(),
+            )?;
+            self.state
+                .builder
+                .op(Opcode::AddStaticMethod(name_index), span.clone());
+        }
+        // static fields
+        for field in info.r#static.fields.iter() {
+            if let Some(ref init) = field.1 {
+                self.emit_expr(init, true)?;
+            } else {
+                self.state.builder.op(Opcode::PushNone, span.clone());
+            }
+            let name_index = self.state.builder.constant(
+                self.ctx.alloc_or_intern(field.0.lexeme.clone()).into(),
+                span.clone(),
+            )?;
+            self.state
+                .builder
+                .op(Opcode::AddStaticField(name_index), span.clone());
+        }
+        // initializer
+        if let Some(ref initializer) = info.initializer {
+            let name_index = self
+                .state
+                .builder
+                .constant(self.ctx.alloc_or_intern("init").into(), span.clone())?;
+            self.emit_fn_expr(&initializer.body, span.clone(), true)?;
+            self.state
+                .builder
+                .op(Opcode::AddMethod(name_index), span.clone());
+        }
+        if is_sub_expr {
+            // close the temporary function local scope, but don't pop the value
+            self.state.end_scope_partial(span.clone(), 1);
+        }
+        if !is_sub_expr {
+            // if the struct isn't in a sub expression, it should define a variable
+            // in the scope where it's declared
+            self.state.define_no_pop(info.name.lexeme.clone(), span)?;
+        }
+        self.state.end_struct();
+        Ok(())
     }
 
     fn emit_fn_expr(&mut self, info: &'b FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
-        // if the fn is in a sub expression, then it should only be accessible from its own body
-        if is_sub_expr {
+        // just like structs, if the fn is in a sub expression,
+        // then it should only be accessible from its own body
+        if info.kind == FnKind::Function && is_sub_expr {
             // open an extra scope just for the function local
             self.state.begin_scope();
             self.state.define(info.name.lexeme.clone(), span.clone())?;
@@ -1043,13 +1150,19 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.begin_state();
         self.state.begin_scope();
         self.state.fn_kind = Some(info.kind);
-        match info.kind {
-            FnKind::Method | FnKind::Initializer | FnKind::MagicMethod => {
-                self.state.add_local("self")
-            }
-            FnKind::Function | FnKind::Static => self.state.add_local(""),
-        };
+        if matches!(
+            info.kind,
+            FnKind::Method | FnKind::Initializer | FnKind::MagicMethod
+        ) {
+            self.state.add_local("self");
+        } else {
+            self.state.add_local("");
+        }
         for param in info.params.positional.iter() {
+            if param.0.lexeme == "self" {
+                // `self` is implicit
+                continue;
+            }
             self.state.add_local(param.0.lexeme.clone());
         }
         for param in info.params.default.iter() {
@@ -1071,17 +1184,29 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 0
             },
         );
+        if info.kind != FnKind::Initializer {
+            self.state.builder.op(Opcode::PushNone, span.clone());
+        }
         self.state.builder.op(Opcode::Return, span.clone());
         let upvalues = std::mem::take(&mut self.state.upvalues);
         let chunk = self.end_state();
-        if is_sub_expr {
+        if info.kind == FnKind::Function && is_sub_expr {
             // close the temporary function local scope, but don't pop the value
             self.state.end_scope_partial(span.clone(), 1);
         }
-        let name = self.ctx.alloc_or_intern(info.name.lexeme.clone());
+        let name = self.ctx.alloc_or_intern(if info.kind == FnKind::Function {
+            info.name.lexeme.clone()
+        } else {
+            format!(
+                "{}.{}",
+                self.state.resolve_struct_name().unwrap(),
+                info.name.lexeme
+            )
+            .into()
+        });
         let fn_constant_index = self.state.builder.constant(
             self.ctx.alloc_value(VesFn {
-                name,
+                name: VesStrView::new(name),
                 positionals: info.params.positional.len() as u32,
                 defaults: info.params.default.len() as u32,
                 rest: info.params.rest.is_some(),
@@ -1107,7 +1232,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .builder
                 .op(Opcode::CreateClosure(closure_desc_index), span.clone());
         }
-        if !is_sub_expr {
+        // if the fn isn't in a sub expression, it should define a variable
+        // in the scope where it's declared
+        if info.kind == FnKind::Function && !is_sub_expr {
             self.state.define_no_pop(info.name.lexeme.clone(), span)?;
         }
         Ok(())
@@ -1591,8 +1718,8 @@ mod suite {
         }
 
         fn chunk_concat(out: &mut String, r#fn: &VesFn) {
-            if &**r#fn.name.as_str().unwrap() != "<main>" {
-                *out += &format!("\n>>>>>> {}\n", &**r#fn.name.as_str().unwrap());
+            if r#fn.name.str() != "<main>" {
+                *out += &format!("\n>>>>>> {}\n", r#fn.name.str());
             }
             *out += &r#fn
                 .chunk
