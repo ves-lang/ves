@@ -377,6 +377,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             rest: false,
             chunk: self.state.finish(),
             file_id: self.ast.file_id,
+            is_magic_method: false,
         };
         let ptr = self.ctx.gc.alloc_permanent(VesObject::Fn(f));
         Ok(ptr)
@@ -1087,6 +1088,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 rest: info.params.rest.is_some(),
                 chunk,
                 file_id: self.ast.file_id,
+                is_magic_method: info.kind == FnKind::MagicMethod,
             }),
             span.clone(),
         )?;

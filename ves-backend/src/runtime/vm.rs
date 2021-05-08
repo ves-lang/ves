@@ -75,15 +75,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::SetProp(_) => unimplemented!(),
                 Opcode::GetItem => unimplemented!(),
                 Opcode::SetItem => unimplemented!(),
-                Opcode::Add => unimplemented!(),
-                Opcode::AddOne => unimplemented!(),
+                Opcode::Add => self.add()?,
                 Opcode::Subtract => unimplemented!(),
-                Opcode::SubtractOne => unimplemented!(),
                 Opcode::Multiply => unimplemented!(),
                 Opcode::Divide => unimplemented!(),
                 Opcode::Remainder => unimplemented!(),
                 Opcode::Power => unimplemented!(),
                 Opcode::Negate => unimplemented!(),
+                Opcode::AddOne => unimplemented!(),
+                Opcode::SubtractOne => unimplemented!(),
                 Opcode::And => unimplemented!(),
                 Opcode::Or => unimplemented!(),
                 Opcode::Not => unimplemented!(),
@@ -144,6 +144,30 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
 
         Ok(())
+    }
+
+    fn add(&mut self) -> Result<(), VesError> {
+        let right = self.pop();
+        let left = self.pop();
+
+        if left.is_num() && right.is_num() {
+            self.push(NanBox::from(
+                left.as_num_unchecked() + right.as_num_unchecked(),
+            ));
+            return Ok(());
+        }
+
+        // TODO: use a function-level inline cache here.
+        // if self.get_magic_method(left, name)? {}
+        todo!()
+    }
+
+    fn get_magic_method(&self, left: NanBox, name: &str) -> Result<GcObj, VesError> {
+        self.get_method(left, name).and_then(|obj| todo!())//if obj.as_fn().unwrap().is_magic_method());
+    }
+
+    fn get_method(&self, left: NanBox, name: &str) -> Result<GcObj, VesError> {
+        todo!()
     }
 
     fn get_const(&mut self, idx: u32) {
@@ -294,7 +318,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[cfg(feature = "fast")]
     #[inline]
     fn const_at(&self, idx: usize) -> &Value {
-        unsafe { self.frame_unchecked().chunk().constants.get_unchecked(idx) }
+        unsafe { self.frame_unchecked().constants().get_unchecked(idx) }
     }
 
     fn push_frame(&mut self, frame: CallFrame) -> Result<(), VesError> {

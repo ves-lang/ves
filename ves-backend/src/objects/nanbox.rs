@@ -241,7 +241,7 @@ impl NanBox {
     /// The caller must ensure that the boxed value is an f64. Failure to do so will result in a NaN
     /// being returned.
     #[inline(always)]
-    pub unsafe fn as_num_unchecked(&self) -> f64 {
+    pub fn as_num_unchecked(&self) -> f64 {
         f64::from_bits(self.0)
     }
 

@@ -60,6 +60,9 @@ pub struct VesFn {
     pub chunk: Chunk,
     /// This function's source file ID
     pub file_id: FileId,
+
+    /// Specifies whether the function is a magic method.
+    pub is_magic_method: bool,
 }
 
 impl VesFn {
