@@ -789,6 +789,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         }
                         e
                     })?;
+                // TODO: detect duplicate properties here? (`@add` and `add` are duplicate)
 
                 if prop_name.lexeme == "init" {
                     // this must be an initializer

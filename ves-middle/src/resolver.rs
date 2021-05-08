@@ -10,6 +10,9 @@ use ves_parser::{
 use crate::resolver_definitions::{LoopKind, NameKind, ScopeKind, VarUsage};
 use crate::{env::Env, registry::ModuleRegistry};
 
+// TODO: probably need to add more tests for labels vs magic methods and improve errors
+// such as duplicate methods in case of `@add` and `add` (because they use the same
+// name at runtime)
 // TODO: some kind of settings struct?
 
 /// A resolver pass that performs a series of checks on the AST.
