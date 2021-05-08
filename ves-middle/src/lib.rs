@@ -56,11 +56,19 @@ pub struct VesMiddleConfig<'path> {
 }
 
 impl<'path> VesMiddleConfig<'path> {
-    /// Creates a new [`VesMiddleConfig`] instance initialized with the default values.
+    /// Creates a new [`VesMiddleConfig`] instance initialized with the default values and the given import_config.
     pub fn with_import_config(import_config: ImportConfig<'path>) -> Self {
         Self {
             fold_config: ConstantFoldingConfig::default(),
             import_config,
+        }
+    }
+
+    /// Sets the given constant folding configuration.
+    pub fn and_fold_config(self, fold_config: ConstantFoldingConfig) -> Self {
+        Self {
+            fold_config,
+            ..self
         }
     }
 }

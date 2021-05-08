@@ -112,7 +112,9 @@ pub mod suite {
         use std::collections::HashMap;
 
         use ves_error::ErrCtx;
-        use ves_middle::{ves_path::VesPath, ImportConfig, VesMiddle};
+        use ves_middle::{
+            ves_path::VesPath, ConstantFoldingConfig, ImportConfig, VesMiddle, VesMiddleConfig,
+        };
 
         use crate::{
             emitter::{emit::Emitter, CompilationContext},
@@ -122,11 +124,15 @@ pub mod suite {
 
         pub fn compile_and_run(src: String) -> String {
             let mut mid = VesMiddle::<()>::new(
-                ImportConfig {
+                VesMiddleConfig::with_import_config(ImportConfig {
                     ves_path: VesPath::default().unwrap().unwrap(),
                     variables: std::collections::HashMap::new(),
-                }
-                .into(),
+                })
+                .and_fold_config(ConstantFoldingConfig {
+                    interning_threshold: 20,
+                    constant_folding: false,
+                    dead_store_elimination: false,
+                }),
             );
 
             match mid.process_snippet(src) {
