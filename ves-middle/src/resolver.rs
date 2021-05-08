@@ -481,13 +481,13 @@ impl<'a> Resolver<'a> {
         registry: &ModuleRegistry<T>,
         ex: &mut ErrCtx,
     ) {
-        if f.kind == FnKind::MagicMethod && !self.validate_magic_method(f, ex) {
-            return;
+        if f.kind == FnKind::MagicMethod {
+            self.validate_magic_method(f, ex);
         }
 
         // if this function is declared in a sub expression, it should not declare
         // a variable in its enclosing scope, but only in the scope of its own body
-        if is_sub_expr && f.kind != FnKind::Initializer {
+        if !is_sub_expr && f.kind != FnKind::Initializer {
             self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
             self.assign(&f.name, ex);
         }
@@ -502,7 +502,7 @@ impl<'a> Resolver<'a> {
         self.push();
 
         // function is always accessible from its own body, but don't re-declare it
-        if !is_sub_expr && f.kind != FnKind::Initializer {
+        if is_sub_expr && f.kind != FnKind::Initializer {
             self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
             self.assign(&f.name, ex);
         }
@@ -538,7 +538,7 @@ impl<'a> Resolver<'a> {
 
     // ugh...
     #[rustfmt::skip]
-    fn validate_magic_method(&mut self, info: &FnInfo<'a>, ex: &mut ErrCtx) -> bool {
+    fn validate_magic_method(&mut self, info: &FnInfo<'a>, ex: &mut ErrCtx) {
         // check if the name is a known magic method + if the params match it
         // TODO: provide a nice error message
         lazy_static::lazy_static! {
@@ -550,16 +550,13 @@ impl<'a> Resolver<'a> {
                 s
             };
         };
-        if TABLE.contains(info.name.lexeme.as_ref()) {
-            true
-        } else {
+        if !TABLE.contains(info.name.lexeme.as_ref()) {
             Self::error_of_kind(
                 VesErrorKind::BadMagicMethod,
                 format!("Invalid magic method: {}", info.name.lexeme),
                 info.name.span.clone(),
                 ex,
             );
-            false
         }
     }
 
@@ -582,6 +579,11 @@ impl<'a> Resolver<'a> {
                     self.declare(name, Rc::new(Cell::new(0)), NameKind::Let, ex);
                     self.assign(name, ex);
                 }
+                self.push();
+                if is_sub_expr {
+                    self.declare(name, Rc::new(Cell::new(0)), NameKind::Let, ex);
+                    self.assign(name, ex);
+                }
 
                 if let Some(init) = initializer {
                     self.push();
@@ -593,7 +595,7 @@ impl<'a> Resolver<'a> {
                     self.pop(ex);
                 }
 
-                for (_, field, _) in fields.iter_mut().flat_map(|f| &mut f.default) {
+                for (_, field, _) in fields.default.iter_mut() {
                     self.resolve_expr(field, true, registry, ex);
                 }
 
@@ -604,9 +606,11 @@ impl<'a> Resolver<'a> {
                 for method in methods.iter_mut().chain(r#static.methods.iter_mut()) {
                     self.resolve_function(method, true, registry, ex);
                 }
+
+                self.pop(ex);
             }
             ExprKind::Fn(box ref mut r#fn) => {
-                self.resolve_function(r#fn, !is_sub_expr, registry, ex);
+                self.resolve_function(r#fn, is_sub_expr, registry, ex);
             }
             // FIXME: ast change to if expressions
             ExprKind::If(ref mut r#if) => self.resolve_if(r#if, registry, ex),

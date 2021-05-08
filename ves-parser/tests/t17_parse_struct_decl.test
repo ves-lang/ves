@@ -26,7 +26,10 @@ struct Test(a, b, c) {
 StmtKind::ExprStmt
   expr: StructInfo
     name: "[struct@1:1]"
-    fields: None
+    fields: Params
+      positional=
+      default=
+      rest: None
     methods=
     initializer: None
     r#static: StructStaticProps
@@ -35,7 +38,10 @@ StmtKind::ExprStmt
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
-    fields: None
+    fields: Params
+      positional=
+      default=
+      rest: None
     methods=
     initializer: None
     r#static: StructStaticProps
@@ -58,14 +64,52 @@ StmtKind::ExprStmt
           field2: false
       rest: None
     methods=
-    initializer: None
+    initializer: Initializer
+      body: FnInfo
+        name: "init"
+        params: Params
+          positional=
+          default=
+          rest: None
+        body=
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "b"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "b"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+        kind: Initializer
+      may_escape: false
     r#static: StructStaticProps
       fields=
       methods=
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
-    fields: None
+    fields: Params
+      positional=
+      default=
+      rest: None
     methods=
     initializer: None
     r#static: StructStaticProps
@@ -114,7 +158,42 @@ StmtKind::ExprStmt
               token: "0"
               value: LitValue::Number(0.0)
         kind: Method
-    initializer: None
+    initializer: Initializer
+      body: FnInfo
+        name: "init"
+        params: Params
+          positional=
+          default=
+          rest: None
+        body=
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "b"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "b"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+        kind: Initializer
+      may_escape: false
     r#static: StructStaticProps
       fields=
         tuple

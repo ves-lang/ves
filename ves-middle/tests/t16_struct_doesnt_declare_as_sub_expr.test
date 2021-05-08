@@ -9,3 +9,11 @@ error: Undefined variable `A`
   │
 3 │ A(); // undefined
   │ ^
+
+warning: Variable `A` is never used
+  ┌─ <source: #7a1410220645f47c>:1:17
+  │
+1 │ let s = (struct A {});
+  │                 ^
+  │                 │
+  │                 help: if this is intentional, replace or prefix it with an underscore: `_A`

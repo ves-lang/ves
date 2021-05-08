@@ -759,9 +759,9 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         let fields = if self.match_(&TokenKind::LeftParen) {
             let fields = self.param_pack(ParamListKind::StructFields)?;
             self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
-            Some(fields)
+            fields
         } else {
-            None
+            ast::Params::default()
         };
 
         // parse struct body
@@ -789,6 +789,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         }
                         e
                     })?;
+                // QQQ(moscow): do we have static magic methods? if no, it should be an error here
                 // TODO: detect duplicate properties here? (`@add` and `add` are duplicate)
 
                 if prop_name.lexeme == "init" {
@@ -842,6 +843,28 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 }
             }
         }
+        let mut field_initializers = fields
+            .default
+            .iter()
+            .map(|(name, value, _)| struct_field_init_stmt(name, value))
+            .collect::<Vec<ast::Stmt<'_>>>();
+        let initializer = match initializer {
+            Some(mut initializer) => {
+                std::mem::swap(&mut initializer.body.body, &mut field_initializers);
+                initializer.body.body.extend(field_initializers);
+                Some(initializer)
+            }
+            None if !field_initializers.is_empty() => Some(ast::Initializer {
+                body: ast::FnInfo {
+                    name: Token::new("init", struct_name.span.clone(), TokenKind::Identifier),
+                    params: ast::Params::default(),
+                    body: field_initializers,
+                    kind: ast::FnKind::Initializer,
+                },
+                may_escape: false,
+            }),
+            _ => None,
+        };
         Ok(ast::StructInfo {
             name: struct_name,
             fields,
@@ -954,6 +977,21 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                     &[TokenKind::Identifier, TokenKind::Self_],
                     "Expected a parameter name",
                 )?;
+                if name.lexeme == "self" && kind != ParamListKind::Method {
+                    return Err(VesError::parse(
+                        "'self' may only be used in methods",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
+                }
+                if !positional.is_empty() && kind == ParamListKind::Method && name.lexeme == "self"
+                {
+                    return Err(VesError::parse(
+                        "'self' must be the first parameter",
+                        self.previous.span.clone(),
+                        self.fid,
+                    ));
+                }
                 if is_mutable && kind == ParamListKind::Method && name.lexeme == "self" {
                     return Err(VesError::parse(
                         "'self' may not be mutable",
@@ -1775,6 +1813,71 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     #[inline(always)]
     fn at_end(&self) -> bool {
         self.current.kind == TokenKind::EOF
+    }
+}
+
+fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::Stmt<'a> {
+    let span = name.span.start..value.span.end;
+    ast::Stmt {
+        span: span.clone(),
+        kind: ast::StmtKind::ExprStmt(box ast::Expr {
+            span: span.clone(),
+            kind: ast::ExprKind::If(box ast::If {
+                condition: ast::Condition {
+                    value: ast::Expr {
+                        span: span.clone(),
+                        kind: ast::ExprKind::Binary(
+                            ast::BinOpKind::Is,
+                            box ast::Expr {
+                                span: span.clone(),
+                                kind: ast::ExprKind::GetProp(box ast::GetProp {
+                                    node: ast::Expr {
+                                        span: span.clone(),
+                                        kind: ast::ExprKind::Variable(Token::new(
+                                            "self",
+                                            span.clone(),
+                                            TokenKind::Self_,
+                                        )),
+                                    },
+                                    field: name.clone(),
+                                    is_optional: false,
+                                }),
+                            },
+                            box ast::Expr {
+                                span: span.clone(),
+                                kind: ast::ExprKind::Lit(box ast::Lit {
+                                    token: Token::new("none", span.clone(), TokenKind::None),
+                                    value: ast::LitValue::None,
+                                }),
+                            },
+                        ),
+                    },
+                    pattern: ast::ConditionPattern::Value,
+                },
+                then: ast::DoBlock {
+                    statements: vec![ast::Stmt {
+                        span: span.clone(),
+                        kind: ast::StmtKind::ExprStmt(box ast::Expr {
+                            span: span.clone(),
+                            kind: ast::ExprKind::SetProp(box ast::SetProp {
+                                node: ast::Expr {
+                                    span: span.clone(),
+                                    kind: ast::ExprKind::Variable(Token::new(
+                                        "self",
+                                        span.clone(),
+                                        TokenKind::Self_,
+                                    )),
+                                },
+                                field: name.clone(),
+                                value: value.clone(),
+                            }),
+                        }),
+                    }],
+                    value: None,
+                },
+                otherwise: None,
+            }),
+        }),
     }
 }
 

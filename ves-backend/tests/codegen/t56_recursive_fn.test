@@ -39,20 +39,23 @@ test3(0);
 |0001| Call(0)          // test();
 |0002| Pop
 |0003| Pop
-|0004| Return
+|0004| PushNone
+|0005| Return
 >>>>>> test2
 |0000| GetUpvalue(0)    // test2 is an upvalue because it exists only as a local when its declared
 |0001| Call(0)          // test2();
 |0002| Pop              // pop result
 |0003| Pop              // pop receiver
-|0004| Return
+|0004| PushNone
+|0005| Return
 >>>>>> test3
 |0000| CreateClosure(<fn test4>, 1)
 |0001| PushNum32(1.0)
 |0002| Call(1)          // (fn test4(b) { ... })(1);
 |0003| Pop              // pop result
 |0004| PopN(2)          // pop a, receiver
-|0005| Return
+|0005| PushNone
+|0006| Return
 >>>>>> test4
 |0000| GetGlobal(1)
 |0001| PushNum32(2.0)
@@ -63,4 +66,5 @@ test3(0);
 |0006| Call(1)          // test4(3);
 |0007| Pop              // pop result
 |0008| PopN(2)          // pop b, receiver
-|0009| Return
+|0009| PushNone
+|0010| Return
