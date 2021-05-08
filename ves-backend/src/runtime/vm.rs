@@ -1,16 +1,16 @@
 use ves_error::VesError;
 
 use crate::{
-    gc::{GcHandle, GcObj, Trace, VesGc},
+    gc::{GcHandle, GcObj, VesGc},
     NanBox, Value,
 };
 
-use super::{call_frame::CallFrame, Context, VmGlobals};
+use super::{call_frame::CallFrame, VmGlobals};
 
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
 
-pub struct Vm<T: VesGc> {
+pub struct Vm<T: VesGc, W> {
     gc: GcHandle<T>,
     globals: VmGlobals,
     stack: Vec<NanBox>,
@@ -19,10 +19,15 @@ pub struct Vm<T: VesGc> {
     ip: usize,
     // TODO: look at the asm for this vs Option<NonNull<CallFrame/>> + unwrap_unchecked()
     frame: *mut CallFrame,
+    writer: W,
 }
 
-impl<T: VesGc> Vm<T> {
-    pub fn new(gc: GcHandle<T>, globals: VmGlobals) -> Self {
+impl<T: VesGc, W: std::io::Write> Vm<T, W> {
+    pub fn new(gc: GcHandle<T>, globals: VmGlobals) -> Vm<T, std::io::Stdout> {
+        Vm::with_writer(gc, globals, std::io::stdout())
+    }
+
+    pub fn with_writer(gc: GcHandle<T>, globals: VmGlobals, writer: W) -> Vm<T, W> {
         Self {
             gc,
             globals,
@@ -31,6 +36,7 @@ impl<T: VesGc> Vm<T> {
             ip: 0,
             frame: std::ptr::null_mut(),
             max_cs_size: DEFAULT_MAX_CALL_STACK_SIZE,
+            writer,
         }
     }
 
@@ -116,7 +122,16 @@ impl<T: VesGc> Vm<T> {
                 Opcode::PopN(_) => unimplemented!(),
                 Opcode::Jump(_) => unimplemented!(),
                 Opcode::JumpIfFalse(_) => unimplemented!(),
-                Opcode::Return => unimplemented!(),
+                Opcode::Return => {
+                    let cs_size = self.call_stack.len();
+
+                    if cs_size == 1 {
+                        self.pop_frame();
+                        break; // todo: return result
+                    }
+
+                    todo!("function calls")
+                }
                 Opcode::Data(_) => {
                     unreachable!("Data instructions aren't supposed to be executed")
                 }
@@ -192,7 +207,8 @@ impl<T: VesGc> Vm<T> {
 
     fn print(&mut self) -> Result<(), VesError> {
         let v = self.pop();
-        println!("{}", self.stringify(&v.unbox())?);
+        let output = self.stringify(&v.unbox())?;
+        writeln!(self.writer, "{}", output).expect("Failed to write to STDOUT");
         Ok(())
     }
 
@@ -202,7 +218,7 @@ impl<T: VesGc> Vm<T> {
         for item in items {
             output.push(self.stringify(&item.unbox())?);
         }
-        println!("{}", output.join(", "));
+        writeln!(self.writer, "{}", output.join(", ")).expect("Failed to write to STDOUT");
         Ok(())
     }
 

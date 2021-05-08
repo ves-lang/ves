@@ -147,7 +147,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
     /// Maps the given processor function to the AST of every module stored. The modules are guaranteed to be
     /// syntactically and semantically correct.
     /// Calling this function renders the entire module unusable
-    pub fn map_modules<'a: 'this, F, T>(&'a mut self, mut processor: F) -> ProcessingResult<T>
+    pub fn map_modules<'a: 'this, F, T>(&'a mut self, mut processor: F) -> ProcessingResult<T, M>
     where
         F: FnMut(&'a AST<'a>) -> Result<T, ErrCtx>,
     {
@@ -170,6 +170,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
         let db = self.db.clone_owned();
         ProcessingResult {
             output,
+            registry: std::mem::take(&mut self.registry),
             diagnostics,
             db,
             config: self.config.clone(),
@@ -301,9 +302,11 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
 /// A module resolution result containing the file database, all errors, warnings, and suggestions,
 /// the list of successfully processed modules, and the import configuration.j
 #[derive(Debug)]
-pub struct ProcessingResult<'path, T> {
+pub struct ProcessingResult<'path, T, M> {
     /// The list of outputs produced by the mapping function applied to all valid ASTs.
     output: Vec<T>,
+    /// The module registry.
+    pub registry: ModuleRegistry<M>,
     /// The list of diagnostics produced by all modules in the dependency graph.
     pub diagnostics: ErrCtx,
     /// The file database containing the names and sources of all modules in the dependency graph (including invalid ones).
@@ -312,7 +315,7 @@ pub struct ProcessingResult<'path, T> {
     pub config: VesMiddleConfig<'path>,
 }
 
-impl<'path, T> ProcessingResult<'path, T> {
+impl<'path, T, M> ProcessingResult<'path, T, M> {
     /// Returns [`true`] if a module in the compilation unit had an error.
     #[inline]
     pub fn had_error(&self) -> bool {

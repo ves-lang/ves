@@ -29,6 +29,13 @@ impl ErrCtx {
         }
     }
 
+    /// Creates a new error [`ErrCtx`] and record the given error.
+    pub fn with_error(e: VesError) -> Self {
+        let mut this = Self::new();
+        this.record(e);
+        this
+    }
+
     /// Adds a new error or warning to the context.
     pub fn record(&mut self, e: VesError) {
         if e.kind == VesErrorKind::Warning {

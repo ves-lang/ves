@@ -4,6 +4,7 @@ use ves_error::FileId;
 use ves_parser::ast::AST;
 
 /// The implementation of a module.
+#[derive(Debug)]
 pub enum ModuleImpl<T> {
     /// A native module of type [`T`].
     Native(T),
@@ -12,6 +13,7 @@ pub enum ModuleImpl<T> {
 }
 
 /// A module with a defined list of exports.
+#[derive(Debug)]
 pub struct Module<T> {
     /// The implementation of the module.
     pub implementation: ModuleImpl<T>,
@@ -28,6 +30,7 @@ impl<T> Module<T> {
 }
 
 /// A module registry that holds
+#[derive(Debug)]
 pub struct ModuleRegistry<T> {
     /// A map from (module path) to (module interface).
     pub modules: HashMap<String, Module<T>>,
@@ -131,6 +134,12 @@ impl<T> ModuleRegistry<T> {
         let name = name.to_string();
         let len = self.globals.len();
         *self.globals.entry((file_id, name)).or_insert_with(|| len)
+    }
+
+    /// Returns the hashmap of globals.
+    #[inline]
+    pub fn globals(&self) -> &HashMap<(FileId, String), usize> {
+        &self.globals
     }
 }
 

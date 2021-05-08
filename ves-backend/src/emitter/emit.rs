@@ -1,14 +1,17 @@
 use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 use crate::{
-    gc::{GcHandle, GcObj, VesGc},
+    gc::{GcObj, VesGc},
     objects::ves_fn::{ClosureDescriptor, VesFn},
     Span, Value, VesObject,
 };
 
-use super::builder::{BytecodeBuilder, Chunk};
 use super::opcode::Opcode;
 use super::Result;
+use super::{
+    builder::{BytecodeBuilder, Chunk},
+    CompilationContext,
+};
 use ves_error::FileId;
 use ves_parser::ast::*;
 use ves_parser::lexer::{Token, TokenKind};
@@ -325,29 +328,6 @@ fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> Hash
             )
         })
         .collect()
-}
-
-// temp
-pub struct CompilationContext<'a, 'b, T: VesGc> {
-    pub(super) gc: GcHandle<T>,
-    pub(super) strings: &'b mut HashMap<Cow<'a, str>, GcObj>,
-}
-
-impl<'a, 'b, T: VesGc> CompilationContext<'a, 'b, T> {
-    pub fn alloc_or_intern(&mut self, s: impl Into<Cow<'a, str>>) -> GcObj {
-        let s = s.into();
-        if let Some(ptr) = self.strings.get(&s) {
-            *ptr
-        } else {
-            let ptr = self.gc.alloc_permanent(s.to_string());
-            self.strings.insert(s, ptr);
-            ptr
-        }
-    }
-
-    pub fn alloc_value(&mut self, v: impl Into<VesObject>) -> Value {
-        Value::Ref(self.gc.alloc_permanent(v))
-    }
 }
 
 pub struct Emitter<'a, 'b, T: VesGc> {
@@ -1554,7 +1534,7 @@ mod suite {
     }
 
     mod _impl {
-        use crate::gc::DefaultGc;
+        use crate::gc::{DefaultGc, GcHandle};
 
         use super::*;
         use ves_error::VesFileDatabase;
