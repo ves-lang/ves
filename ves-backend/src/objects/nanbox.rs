@@ -185,6 +185,16 @@ impl NanBox {
     }
 
     #[inline]
+    pub fn r#true() -> Self {
+        Self(BOOL_TAG | 1)
+    }
+
+    #[inline]
+    pub fn r#false() -> Self {
+        Self(BOOL_TAG)
+    }
+
+    #[inline]
     pub fn is_num(&self) -> bool {
         (self.0 & QNAN) != QNAN
     }

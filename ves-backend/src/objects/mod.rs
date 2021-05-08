@@ -1,4 +1,5 @@
 pub mod nanbox;
+mod peel;
 pub mod value;
 pub mod ves_fn;
 pub mod ves_object;

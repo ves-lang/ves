@@ -8,6 +8,7 @@ use ves_error::{FileId, VesError};
 
 #[derive(Debug, Clone)]
 pub struct Chunk {
+    // SHould the these vecs be allocated using the proxy allocator?
     pub code: Vec<Opcode>,
     pub spans: Vec<Span>,
     pub constants: Vec<Value>,

@@ -183,6 +183,11 @@ impl VesError {
         VesError::new(msg, span, VesErrorKind::Import, file_id)
     }
 
+    /// Creates a new [`VesErrorKind::RUntime`] error.
+    pub fn runtime<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Runtime, file_id)
+    }
+
     /// Adds the name of the function the error originates from to this error.
     pub fn with_function<S: Into<String>>(self, function: S) -> Self {
         Self {

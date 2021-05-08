@@ -328,12 +328,12 @@ fn extract_global_slots(globals: &std::collections::HashSet<Global<'_>>) -> Hash
 }
 
 // temp
-pub struct CompilationContext<'a, T: VesGc> {
-    pub gc: GcHandle<T>,
-    pub strings: HashMap<Cow<'a, str>, GcObj>,
+pub struct CompilationContext<'a, 'b, T: VesGc> {
+    pub(super) gc: GcHandle<T>,
+    pub(super) strings: &'b mut HashMap<Cow<'a, str>, GcObj>,
 }
 
-impl<'a, T: VesGc> CompilationContext<'a, T> {
+impl<'a, 'b, T: VesGc> CompilationContext<'a, 'b, T> {
     pub fn alloc_or_intern(&mut self, s: impl Into<Cow<'a, str>>) -> GcObj {
         let s = s.into();
         if let Some(ptr) = self.strings.get(&s) {
@@ -353,11 +353,11 @@ impl<'a, T: VesGc> CompilationContext<'a, T> {
 pub struct Emitter<'a, 'b, T: VesGc> {
     state: State<'a>,
     ast: &'b AST<'a>,
-    ctx: CompilationContext<'a, T>,
+    ctx: CompilationContext<'a, 'b, T>,
 }
 
 impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
-    pub fn new(ast: &'b AST<'a>, ctx: CompilationContext<'a, T>) -> Self {
+    pub fn new(ast: &'b AST<'a>, ctx: CompilationContext<'a, 'b, T>) -> Self {
         let globals = Rc::new(extract_global_slots(&ast.globals));
         Emitter {
             state: State::new(None, ast.file_id, globals),
@@ -1616,7 +1616,7 @@ mod suite {
                     CompilationContext {
                         // we mustn't move the Gc into here since it may get dropped
                         gc: gc.clone(),
-                        strings: HashMap::new(),
+                        strings: &mut HashMap::new(),
                     },
                 )
                 .emit()

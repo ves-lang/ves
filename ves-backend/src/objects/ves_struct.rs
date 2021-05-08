@@ -1,15 +1,17 @@
 use std::{
     cell::UnsafeCell,
     fmt::{self, Display, Formatter},
-    ptr::NonNull,
     vec::from_elem_in,
 };
 
-use crate::gc::{proxy_allocator::ProxyAllocator, GcObj, Trace};
+use crate::{
+    gc::{proxy_allocator::ProxyAllocator, GcObj, Trace},
+    VesObject,
+};
 use ahash::RandomState;
 use hashbrown::HashMap;
 
-use super::{ves_str::view::VesStrView, Value};
+use super::{peel::Peeled, ves_str::view::VesStrView, Value};
 
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
@@ -59,6 +61,7 @@ impl Eq for ViewKey {}
 pub struct VesStruct {
     // TODO: store name
     // TODO: static fields
+    // NOTE(compiler): static field should be stored in the meta type.
     methods: VesHashMap<ViewKey, GcObj>,
     fields: VesHashMap<ViewKey, u8>,
 }
@@ -85,33 +88,26 @@ unsafe impl Trace for VesStruct {
 pub struct VesInstance {
     // Should also include bound methods (lazily copied by default).
     fields: Vec<Value, ProxyAllocator>,
-    ty: GcObj,
-    raw: NonNull<VesStruct>,
+    ty: Peeled<VesStruct>,
 }
 
 impl VesInstance {
-    pub fn new(mut ty: GcObj, proxy: ProxyAllocator) -> Self {
-        let raw = match &mut *ty {
-            crate::VesObject::Struct(s) => NonNull::new(s as *mut _).unwrap(),
-            rest => unreachable!("{:?}", rest),
-        };
+    pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
         let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
-        Self { fields, ty, raw }
-    }
-
-    #[inline]
-    pub fn ty(&self) -> &VesStruct {
-        unsafe { self.raw.as_ref() }
+        Self {
+            fields,
+            ty: Peeled::new(ty, VesObject::as_struct_mut_unwrapped),
+        }
     }
 
     #[inline]
     pub fn ty_ptr(&self) -> &GcObj {
-        &self.ty
+        self.ty.peeled_ptr()
     }
 
     #[inline]
     pub fn get_property_slot(&self, name: &VesStrView) -> Option<u8> {
-        self.ty()
+        self.ty
             .fields
             .get(&ViewKey {
                 view: UnsafeCell::new(*name),

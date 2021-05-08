@@ -64,6 +64,30 @@ impl VesObject {
             None
         }
     }
+
+    pub fn as_struct_mut_unwrapped(&mut self) -> &mut VesStruct {
+        if let Self::Struct(v) = self {
+            v
+        } else {
+            panic!("Couldn't unwrap {:?} as VesObject::Fn", self)
+        }
+    }
+
+    pub fn as_fn_mut_unwrapped(&mut self) -> &mut VesFn {
+        if let Self::Fn(v) = self {
+            v
+        } else {
+            panic!("Couldn't unwrap {:?} as VesObject::Fn", self)
+        }
+    }
+
+    pub fn as_str_mut_unwrapped(&mut self) -> &mut VesStr {
+        if let Self::Str(v) = self {
+            v
+        } else {
+            panic!("Couldn't unwrap {:?} as VesObject::Str", self)
+        }
+    }
 }
 
 impl From<VesStr> for VesObject {

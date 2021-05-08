@@ -1,48 +1,35 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    ptr::NonNull,
-};
+use std::fmt::{self, Display, Formatter};
 
 use ves_error::FileId;
 
 use crate::{
     emitter::{builder::Chunk, emit::UpvalueInfo},
     gc::{GcObj, Trace},
-    Value,
+    Value, VesObject,
 };
+
+use super::peel::Peeled;
 
 #[derive(Debug)]
 pub struct VesClosure {
-    _fn: GcObj,
-    r#fn: NonNull<VesFn>,
+    r#fn: Peeled<VesFn>,
     pub upvalues: Vec<Value>,
 }
 impl VesClosure {
     pub fn new(r#fn: GcObj) -> Self {
         Self {
-            r#fn: Self::get_raw(r#fn),
-            _fn: r#fn,
+            r#fn: Peeled::new(r#fn, VesObject::as_fn_mut_unwrapped),
             upvalues: vec![],
-        }
-    }
-    fn get_raw(mut ptr: GcObj) -> NonNull<VesFn> {
-        match &mut *ptr {
-            crate::VesObject::Fn(f) => unsafe { NonNull::new_unchecked(f as *mut _) },
-            _ => unreachable!(),
         }
     }
 }
 
 unsafe impl Trace for VesClosure {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        self._fn.trace(tracer);
+        Trace::trace(&mut self.r#fn, tracer);
         for value in self.upvalues.iter_mut() {
             value.trace(tracer);
         }
-    }
-
-    fn after_forwarding(&mut self) {
-        self.r#fn = Self::get_raw(self._fn);
     }
 }
 
@@ -54,6 +41,7 @@ pub struct ClosureDescriptor {
 
 #[derive(Debug)]
 pub struct VesFn {
+    // QQQ: use a stringview instead?
     pub name: GcObj,
     /// How many positional arguments this function accepts
     pub positionals: u32,
@@ -64,6 +52,12 @@ pub struct VesFn {
     pub chunk: Chunk,
     /// This function's source file ID
     pub file_id: FileId,
+}
+
+impl VesFn {
+    pub fn name(&self) -> &str {
+        self.name.as_str().unwrap()
+    }
 }
 
 unsafe impl Trace for VesFn {
@@ -81,7 +75,7 @@ impl Display for VesFn {
 
 impl Display for VesClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        unsafe { self.r#fn.as_ref().fmt(f) }
+        (&*self.r#fn).fmt(f)
     }
 }
 
