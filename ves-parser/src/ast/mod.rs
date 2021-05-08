@@ -15,7 +15,7 @@ pub type Args<'a> = Vec<Expr<'a>>;
 /// Returns `true` if the given token is a reserved identifier.
 pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     if token.kind == TokenKind::Identifier {
-        matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "arr")
+        matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "array")
     } else {
         token.kind == TokenKind::Self_ || token.kind == TokenKind::Some
     }
@@ -29,6 +29,20 @@ pub struct Global<'a> {
     pub name: Token<'a>,
     /// The kind of the global.
     pub kind: VarKind,
+    /// The global index of this global.
+    pub index: Option<usize>,
+}
+
+impl<'a> PartialOrd<Global<'a>> for Global<'a> {
+    fn partial_cmp(&self, other: &Global<'a>) -> Option<std::cmp::Ordering> {
+        self.name.span.start.partial_cmp(&other.name.span.start)
+    }
+}
+
+impl<'a> Ord for Global<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.name.span.start.cmp(&other.name.span.start)
+    }
 }
 
 /// An imported or exported symbol.
@@ -174,31 +188,31 @@ pub enum BinOpKind {
     /// The `+` operator (addition)
     Add,
     /// The `-` operator (subtraction)
-    Sub,
+    Subtract,
     /// The `*` operator (multiplication)
-    Mul,
+    Multiply,
     /// The `/` operator (division)
-    Div,
+    Divide,
     /// The `%` operator (modulus)
-    Rem,
+    Remainder,
     /// The `**` operator (exponentiation)
-    Pow,
+    Power,
     /// The `&&` operator (logical and)
     And,
     /// The `||` operator (logical or)
     Or,
     /// The `==` operator (equality)
-    Eq,
+    Equal,
     /// The `!=` operator (not equal to)
-    Ne,
+    NotEqual,
     /// The `<` operator (less than)
-    Lt,
+    LessThan,
     /// The `<=` operator (less than or equal to)
-    Le,
+    LessEqual,
     /// The `>=` operator (greater than or equal to)
-    Ge,
+    GreaterEqual,
     /// The `>` operator (greater than)
-    Gt,
+    GreaterThan,
 }
 
 /// The possible unary operators.
@@ -207,13 +221,13 @@ pub enum UnOpKind {
     /// The `!` operator for logical inversion
     Not,
     /// The `-` operator for negation
-    Neg,
+    Negate,
     /// The `try` operator for error propagation.
     Try,
     /// The `ok` operator for marking values as `Ok`.
-    Ok,
+    WrapOk,
     /// The `err` operator for marking values as `Err`.
-    Err,
+    WrapErr,
 }
 
 /// Represents the value of a literal.
@@ -393,6 +407,9 @@ pub enum FnKind {
     /// An initializer block.
     /// Example: `init { print self.a; }`
     Initializer,
+    /// A magic method.
+    /// Example: `@iter(self) { ... }`
+    MagicMethod,
 }
 
 /// A function or  method declaration.
@@ -415,7 +432,7 @@ impl<'a> FnInfo<'a> {
     pub fn is_method(&self) -> bool {
         match self.kind {
             FnKind::Function => false,
-            FnKind::Initializer | FnKind::Method | FnKind::Static => true,
+            FnKind::Initializer | FnKind::Method | FnKind::Static | FnKind::MagicMethod => true,
         }
     }
 }
@@ -456,10 +473,10 @@ pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
     /// The fields defined on this struct.
-    pub fields: Option<Params<'a>>,
+    pub fields: Params<'a>,
     /// The methods defined on this struct.
     pub methods: Vec<FnInfo<'a>>,
-    /// THe initializer block of this struct.
+    /// The initializer block of this struct.
     pub initializer: Option<Initializer<'a>>,
     /// The static fields and methods defined on this struct.
     pub r#static: StructStaticProps<'a>,
@@ -486,6 +503,12 @@ pub struct Condition<'a> {
     pub pattern: ConditionPattern<'a>,
 }
 
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum Else<'a> {
+    If(#[forward] Ptr<If<'a>>),
+    Block(#[forward] Ptr<DoBlock<'a>>),
+}
+
 /// An if statement.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct If<'a> {
@@ -494,7 +517,7 @@ pub struct If<'a> {
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
-    pub otherwise: Option<DoBlock<'a>>,
+    pub otherwise: Option<Else<'a>>,
 }
 
 /// A `do` block.
@@ -591,8 +614,6 @@ pub enum ExprKind<'a> {
     Map(#[rename = "values"] Vec<MapEntry<'a>>),
     /// A variable access expression (includes self).
     Variable(#[rename = "name"] Token<'a>),
-    /// A range specified, e.g. `0..10` or `start..end, -2`.
-    Range(#[forward] Ptr<Range<'a>>),
     /// A prefix increment or decrement
     PrefixIncDec(#[rename = "inner"] Ptr<IncDec<'a>>),
     /// A postfix increment or decrement
@@ -601,8 +622,6 @@ pub enum ExprKind<'a> {
     Assignment(#[forward] Ptr<Assignment<'a>>),
     /// A grouping expression, e.g. `(a + b)`.
     Grouping(#[rename = "inner"] ExprPtr<'a>),
-    /// An "at identifier", e.g. `@outer`
-    AtIdent(#[rename = "name"] Token<'a>),
 }
 
 /// An expression.
@@ -649,7 +668,7 @@ pub struct Loop<'a> {
     /// The body of the loop.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A for loop statement.
@@ -664,7 +683,13 @@ pub struct For<'a> {
     /// The body of the loop.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
+}
+
+#[derive(Debug, Clone, PartialEq, AstToStr)]
+pub enum IteratorKind<'a> {
+    Range(#[forward] Range<'a>),
+    Expr(#[rename = "iterable"] Expr<'a>),
 }
 
 /// A foreach loop statement, e.g. `for a in 0..10 {}`
@@ -673,11 +698,11 @@ pub struct ForEach<'a> {
     /// The variable to bind the elements to.
     pub variable: Token<'a>,
     /// The iterator to iterate over.
-    pub iterator: Expr<'a>,
+    pub iterator: IteratorKind<'a>,
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A while loop statement, e.g. `while true {}`
@@ -688,7 +713,7 @@ pub struct While<'a> {
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.
-    pub label: Option<Token<'a>>,
+    pub label: Token<'a>,
 }
 
 /// A statement kind.
@@ -714,11 +739,11 @@ pub enum StmtKind<'a> {
     /// A return statement.
     Return(#[rename = "return_value"] Option<ExprPtr<'a>>),
     /// A break statement.
-    Break(#[rename = "label"] Option<Token<'a>>),
+    Break(#[rename = "label"] Token<'a>),
     /// A continue statement.
-    Continue(#[rename = "label"] Option<Token<'a>>),
+    Continue(#[rename = "label"] Token<'a>),
     /// A `defer` statement. Must store only `Call` expressions.
-    Defer(#[rename = "call"] Ptr<Expr<'a>>),
+    Defer(#[rename = "call"] Ptr<Call<'a>>),
     /// An empty node that compiles to nothing.
     /// Used by the constant folder to remove dead code.
     _Empty,

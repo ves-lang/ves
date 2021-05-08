@@ -1,0 +1,10 @@
+{ mut a, b, c, d }
+
+%output
+
+|0000| PushNone    // mut a = none
+|0001| PushNone    // mut b = none
+|0002| PushNone    // mut c = none
+|0003| PushNone    // mut d = none
+|0004| PopN(4)     // pop a, b, c, d
+|0005| Return

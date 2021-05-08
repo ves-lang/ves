@@ -29,7 +29,7 @@ While
     pattern: ConditionPattern::Value
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 0..5>"
 StmtKind::ExprStmt
   expr: DoBlock
     statements=
@@ -53,7 +53,7 @@ For
         token: "0"
         value: LitValue::Number(0.0)
   condition: ExprKind::Binary
-    op: Lt
+    op: LessThan
     left: ExprKind::Variable
       name: "i"
     right: Lit
@@ -70,24 +70,25 @@ For
         value: LitValue::Number(1.0)
   body: StmtKind::Block
     statements=
-  label: None
+  label: "<@label: 159..162>"
 StmtKind::_Empty
 ForEach
   variable: "e"
-  iterator: ExprKind::Array
-    values=
-      Lit
-        token: "1"
-        value: LitValue::Number(1.0)
-      Lit
-        token: "\"arr prop\""
-        value: LitValue::Str("arr prop")
-      Lit
-        token: "3"
-        value: LitValue::Number(3.0)
+  iterator: IteratorKind::Expr
+    iterable: ExprKind::Array
+      values=
+        Lit
+          token: "1"
+          value: LitValue::Number(1.0)
+        Lit
+          token: "\"arr prop\""
+          value: LitValue::Str("arr prop")
+        Lit
+          token: "3"
+          value: LitValue::Number(3.0)
   body: StmtKind::Block
     statements=
       StmtKind::Print
         value: ExprKind::Variable
           name: "e"
-  label: None
+  label: "<@label: 213..216>"

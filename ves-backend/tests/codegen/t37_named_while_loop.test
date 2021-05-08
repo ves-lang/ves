@@ -1,0 +1,87 @@
+mut a = 10
+
+@first: while a > 0 { 
+    mut b = a - 1
+
+    @second: while b > 0 {
+        mut c = b - 1
+        b = c
+        continue @first
+        break @second
+    }
+
+    @third: while b > 0 {
+        mut d = b - 1
+        b = d
+        break @first
+        continue @third
+    }
+
+    a = b
+}
+
+%output
+
+|0000| PushNum32(10.0)  // push 10
+|0001| SetGlobal(0)     // mut a = 10
+|0002| Pop              // pop (a = 10)
+// @first.start:
+|0003| GetGlobal(0)     // get a
+|0004| PushNum32(0.0)   // push 0
+|0005| GreaterThan      // a > 0
+|0006| JumpIfFalse(52)  // jump @first.exit
+|0007| Pop              // pop (a > 0)
+|0008| GetGlobal(0)     // get a
+|0009| PushNum32(1.0)   // push 1
+|0010| Subtract         // b = a - 1
+// @second.start:
+|0011| GetLocal(0)      // get b
+|0012| PushNum32(0.0)   // push 0
+|0013| GreaterThan      // b > 0
+|0014| JumpIfFalse(28)  // jump @second.exit
+|0015| Pop              // pop (b > 0)
+|0016| GetLocal(0)      // get b
+|0017| PushNum32(1.0)   // push 1
+|0018| Subtract         // mut c = b - 1
+|0019| GetLocal(1)      // get c
+|0020| SetLocal(0)      // b = c
+|0021| Pop              // pop (b = c)
+|0022| PopN(2)          // pop b, c
+|0023| Jump(3)          // jump @first.start
+|0024| Pop              // (unreachable) pop c
+|0025| Jump(29)         // (unreachable) jump @second.end
+|0026| Pop              // (unreachable) pop c
+|0027| Jump(11)         // (unreachable) jump @second.start
+// @second.exit:
+|0028| Pop              // pop (b > 0)
+// @second.end:
+// @third.start:
+|0029| GetLocal(0)      // get b
+|0030| PushNum32(0.0)   // push 0
+|0031| GreaterThan      // b > 0
+|0032| JumpIfFalse(46)  // jump @third.exit
+|0033| Pop              // pop (b > 0)
+|0034| GetLocal(0)      // get b
+|0035| PushNum32(1.0)   // push 1
+|0036| Subtract         // mut d = b - 1
+|0037| GetLocal(1)      // get d
+|0038| SetLocal(0)      // b = d
+|0039| Pop              // pop (b = d)
+|0040| PopN(2)          // pop b, d
+|0041| Jump(53)         // jump @first.end
+|0042| Pop              // (unreachable) pop d
+|0043| Jump(29)         // (unreachable) jump @third.start
+|0044| Pop              // (unreachable) pop d
+|0045| Jump(29)         // (unreachable) jump @third.start
+// @third.exit:
+|0046| Pop              // pop (b > 0)
+// @third.end:
+|0047| GetLocal(0)      // get b
+|0048| SetGlobal(0)     // a = b
+|0049| Pop              // pop (a = b)
+|0050| Pop              // pop b
+|0051| Jump(3)          // jump @first.start
+// @first.exit:
+|0052| Pop              // pop (a > 0)
+// @first.end:
+|0053| Return

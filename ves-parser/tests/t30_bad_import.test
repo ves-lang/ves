@@ -8,7 +8,7 @@ import { a } from "./thing" as thing /* alias invalid here */ ;
 import { /* at least one import required */ } from thing;
 import { a as /* missing name */ } from thing;
 
-%output
+%output err
 
 error: Expected import name or path
   ┌─ <source: #83d518e6159e92c3>:1:1

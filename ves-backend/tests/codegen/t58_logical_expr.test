@@ -1,0 +1,22 @@
+false || true && false || true
+
+%output
+
+|0000| PushFalse        // push false
+|0001| JumpIfFalse(3)   // if false jump @other0
+|0002| Jump(8)          // else jump @end
+// @other0:
+|0003| Pop              // pop false
+|0004| PushTrue         // push true
+|0005| JumpIfFalse(8)   // if false jump @end0
+|0006| Pop
+|0007| PushFalse        // push false
+// @end0:
+|0008| JumpIfFalse(10)  // if false jump @other1
+|0009| Jump(12)         // else jump @end1
+// @other1:
+|0010| Pop              // pop false
+|0011| PushTrue         // push true
+// @end1
+|0012| Pop              // pop true
+|0013| Return

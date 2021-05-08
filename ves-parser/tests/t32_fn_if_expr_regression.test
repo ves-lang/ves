@@ -1,0 +1,74 @@
+let result = (fn fib(n) => if n < 2 { n } else { fib(n-1) + fib(n-2) })(30);
+
+%output
+
+StmtKind::Var
+  declarations=
+    Var
+      name: "result"
+      kind: Let
+      initializer: Call
+        callee: ExprKind::Grouping
+          inner: FnInfo
+            name: "fib"
+            params: Params
+              positional=
+                tuple
+                  field0: "n"
+                  field1: false
+              default=
+              rest: None
+            body=
+              StmtKind::Return
+                return_value: If
+                  condition: Condition
+                    value: ExprKind::Binary
+                      op: LessThan
+                      left: ExprKind::Variable
+                        name: "n"
+                      right: Lit
+                        token: "2"
+                        value: LitValue::Number(2.0)
+                    pattern: ConditionPattern::Value
+                  then: DoBlock
+                    statements=
+                    value: ExprKind::Variable
+                      name: "n"
+                  otherwise: DoBlock
+                    statements=
+                    value: ExprKind::Binary
+                      op: Add
+                      left: Call
+                        callee: ExprKind::Variable
+                          name: "fib"
+                        args=
+                          ExprKind::Binary
+                            op: Subtract
+                            left: ExprKind::Variable
+                              name: "n"
+                            right: Lit
+                              token: "1"
+                              value: LitValue::Number(1.0)
+                        tco: false
+                        rest: false
+                      right: Call
+                        callee: ExprKind::Variable
+                          name: "fib"
+                        args=
+                          ExprKind::Binary
+                            op: Subtract
+                            left: ExprKind::Variable
+                              name: "n"
+                            right: Lit
+                              token: "2"
+                              value: LitValue::Number(2.0)
+                        tco: false
+                        rest: false
+            kind: Function
+        args=
+          Lit
+            token: "30"
+            value: LitValue::Number(30.0)
+        tco: false
+        rest: false
+      n_uses: 0

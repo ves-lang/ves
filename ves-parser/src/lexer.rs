@@ -160,7 +160,7 @@ pub enum TokenKind<'a> {
     /// TODO: underscores
     /// TODO: allow '0.' and '.0' in a way that is not ambiguous with ranges
     #[regex(
-        "-?(((([0-9]+)(\\.[0-9]+)?)([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
+        "(((([0-9]+)(\\.[0-9]+)?)([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
         priority = 2
     )]
     Number,

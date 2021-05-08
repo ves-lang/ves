@@ -14,10 +14,10 @@ Loop
   body: StmtKind::Block
     statements=
       StmtKind::Break
-        label: None
+        label: "<@label: 0..4>"
       StmtKind::Continue
-        label: None
-  label: None
+        label: "<@label: 0..4>"
+  label: "<@label: 0..4>"
 Loop
   body: StmtKind::Block
     statements=

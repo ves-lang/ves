@@ -29,6 +29,13 @@ impl ErrCtx {
         }
     }
 
+    /// Creates a new error [`ErrCtx`] and record the given error.
+    pub fn with_error(e: VesError) -> Self {
+        let mut this = Self::new();
+        this.record(e);
+        this
+    }
+
     /// Adds a new error or warning to the context.
     pub fn record(&mut self, e: VesError) {
         if e.kind == VesErrorKind::Warning {
@@ -87,8 +94,8 @@ pub enum VesErrorKind {
     Lex,
     /// Represents a parse error.
     Parse,
-    /// Represents a compile error.
-    Compile,
+    /// Represents an error during bytecode emit.
+    Emit,
     /// Represents a resolution error.
     Resolution,
     /// Represents a resolution error that suggests to use a wildcard as a variable name.
@@ -101,6 +108,8 @@ pub enum VesErrorKind {
     OptionalAccessAssignment,
     /// An unused local variable.
     UnusedLocal,
+    /// An unknown magic method or invalid magic method params
+    BadMagicMethod,
     /// An error issued when the user attempts to shadow a local variable.
     AttemptedToShadowLocalVariable(Span),
     /// Attempted to use a global variable before its declaration.
@@ -156,6 +165,11 @@ impl VesError {
         VesError::new(msg, span, VesErrorKind::Parse, file_id)
     }
 
+    /// Creates a new [`VesErrorKind::Emit`] error.
+    pub fn emit<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Emit, file_id)
+    }
+
     /// Creates a new [`VesErrorKind::LetWithoutValue`] error.
     pub fn let_without_value<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
         VesError::new(msg, span, VesErrorKind::LetWithoutValue, file_id)
@@ -174,6 +188,11 @@ impl VesError {
     /// Creates a new [`VesErrorKind::Import`] error.
     pub fn import<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
         VesError::new(msg, span, VesErrorKind::Import, file_id)
+    }
+
+    /// Creates a new [`VesErrorKind::RUntime`] error.
+    pub fn runtime<S: Into<String>>(msg: S, span: Span, file_id: FileId) -> Self {
+        VesError::new(msg, span, VesErrorKind::Runtime, file_id)
     }
 
     /// Adds the name of the function the error originates from to this error.

@@ -7,8 +7,8 @@ none
 // number
 1
 1.2
-100_000.2
-100_000.2e2
+1.2e2
+-1.2e-1
 
 // boolean
 true
@@ -171,6 +171,35 @@ Type.static_method() // 10
 // struct fields cannot be added or removed
 // v.nonexistent = "test"; // error
 print v.nonexistent; // none
+
+struct List(head, tail) {
+    // builtins are special methods which are marked with the `@` symbol
+    // they allow overloading various operators and implementing protocols, 
+    // such as the iterator protocol
+    @iter(self) => ListIterator(self.head)
+}
+struct Vec3(x, y, z) {
+    // overloading arithmetic operators example
+    @add(self, other) => (
+        self.x += other.x,
+        self.y += other.y,
+        self.z += other.z,
+        self
+    )
+    @sub(self, other) => (
+        self.x -= other.x,
+        self.y -= other.y,
+        self.z -= other.z,
+        self
+    )
+    @eq(self, other) => (
+        self.x == other.x &&
+        self.y == other.y &&
+        self.z == other.z
+    )
+}
+let v = Vec3(1, 1, 1) + Vec3(2, 2, 0);
+print(v == Vec3(3, 3, 1)); // true
 ```
 
 ### Control flow
@@ -195,32 +224,40 @@ for initializer; condition; increment { ... }
 // for..in loop
 for item in rangeStart..rangeEnd { ... }
 for item in rangeStart..=rangeEnd { ... }
+for i in 0..10 { print(i) }
+
+// `iterable` must have the `@iter` builtin defined,
+// and it must return an object which has the 
+// `@next` and `@done` builtins defined
 for item in iterable { ... }
 // while loop
-while condition { ... }
-// loop controls
-break;
-continue;
-// may only appear inside functions
+while condition {
+    // loop controls
+    break;
+    continue;
+}
+// labeled loops
+@a: loop {
+    @b: loop {
+        @c: loop {
+            break @a
+        }
+        continue @a
+    }
+}
+
+// returns are allowed at the top level
 return;
 return expression();
 
 // a `do` block evaluates to the last expression in the block
-// the last expression is 'none' if there is no other expression
-let v = do { expression() };
-
-// a `try` expression simplifies error propagation
-// sugar for:
-// let v = do {
-//     let temp = fallible();
-//     if temp is err { return temp }
-//     temp.unwrap()
-// }
-let v = try fallible()
+// the last expression is 'none' if there is no other expression,
+// or if the last expression is terminated by a semicolon
+(do { 0 } == 0)
+(do { 0; } == none)
 
 // `defer` accepts either a function call or a block, which
-// will be executed, in the opposite order of evaluation,
-// at the end of the current block's scope
+// will be executed at the end of the current block's scope
 {
     let file = File.open("something.txt")
     defer file.close()
@@ -238,4 +275,54 @@ let v = try fallible()
     // defer { if ... { ... } } executed here
     // defer file.close() called here
 }
+// defers are executed in reverse order of evaluation
+{
+    defer { print("a") }
+    defer { print("b") }
+    defer { print("c") }
+    // print c
+    // prints b
+    // prints a
+}
+// defers are *guaranteed* to execute even in the case of a panic:
+{ // prints "we're fine!" followed by the panic message and stack trace
+    defer { print("we're fine!") }
+    panic("something went wrong, unwinding stack")
+}
+// note that a `return` inside of a defer block will simply exit
+// out of the block, and not the function in which it appears
+// as explained a bit above, deferred blocks implicitly create closures,
+// so it's the same as returning from the closure
+fn test() {
+    { defer { return; } }
+    // the above is equivalent to:
+    // { defer (fn(){ return; })() }
+    print("reachable");
+}
+
+// even though you may execute arbitrary code from within a defer block,
+// there is still no way to catch a panic.
+// to create recoverable errors, use the built-in `ok`, `err` and `try` facilities:
+fn validate(value) {
+    if value > 10 {
+        return err "value too large"
+    } else {
+        return ok value + 5
+    }
+}
+let value = 10
+if let ok(valid) = validate(value) {
+    print(valid);
+} else {
+    print(f"invalid value: {value}");
+}
+
+// a `try` expression simplifies error propagation
+// it is syntax sugar for:
+// let v = do {
+//     let temp = fallible();
+//     if temp is err { return temp }
+//     temp.unwrap()
+// }
+let v = try fallible()
 ```

@@ -5,6 +5,7 @@ macro_rules! remember_if_global {
             $self.globals.insert(Global {
                 name: $tok.clone(),
                 kind: $kind,
+                index: None,
             });
         }
     };

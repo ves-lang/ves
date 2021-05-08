@@ -1,0 +1,46 @@
+mut v = none
+v = if v is num {
+    "num"
+} else if v is none {
+    "none"
+} else {
+    "unknown"
+}
+print(v)
+
+%output
+
+|0000| PushNone         // 
+|0001| SetGlobal(0)     // mut v = none
+|0002| Pop              // 
+// @if.start:
+|0003| PushNone         // push [[VALUE]]
+|0004| GetGlobal(0)     // get v
+|0005| IsNum            // v is num
+|0006| JumpIfFalse(12)  // if false jump @if.other0
+|0007| Pop              // pop v is num
+|0008| GetConst(num)    // "num"
+|0009| SetLocal(0)      // [[VALUE]] = "num"
+|0010| Pop              // pop "num"
+|0011| Jump(25)         // jump @if.end
+// @if.other0:
+|0012| Pop              // pop v is num
+|0013| GetGlobal(0)     // get v
+|0014| IsNone           // v is none
+|0015| JumpIfFalse(21)  // if false jump @if.other1
+|0016| Pop              // pop v is none
+|0017| GetConst(none)   // "none"
+|0018| SetLocal(0)      // [[VALUE]] = "none"
+|0019| Pop              // pop "none"
+|0020| Jump(25)         // jump @end
+// @if.other1:
+|0021| Pop              // pop v is none
+|0022| GetConst(unknown)// "unknown"
+|0023| SetLocal(0)      // [[VALUE]] = "unknown"
+|0024| Pop              // pop "unknown"
+// @if.end:
+|0025| SetGlobal(0)     // v = [[VALUE]]
+|0026| Pop              // pop [[VALUE]]
+|0027| GetGlobal(0)     // get v
+|0028| Print            // print(v)
+|0029| Return

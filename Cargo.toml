@@ -3,7 +3,8 @@ members = [
     "ves-error",
     "ves-parser",
     "ves-middle",
-    "ves-runtime",
+    "ves-backend",
     "ves-testing",
+    "ves-testing/ves-testing-macro",
     "experiments"
 ]

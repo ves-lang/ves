@@ -7,7 +7,7 @@ StmtKind::ExprStmt
   expr: ExprKind::Binary
     op: Add
     left: ExprKind::Binary
-      op: Div
+      op: Divide
       left: Lit
         token: "1"
         value: LitValue::Number(1.0)
@@ -15,12 +15,12 @@ StmtKind::ExprStmt
         token: "1"
         value: LitValue::Number(1.0)
     right: ExprKind::Binary
-      op: Mul
+      op: Multiply
       left: Lit
         token: "1"
         value: LitValue::Number(1.0)
       right: ExprKind::Binary
-        op: Pow
+        op: Power
         left: Lit
           token: "1"
           value: LitValue::Number(1.0)
@@ -31,13 +31,15 @@ StmtKind::ExprStmt
   expr: ExprKind::Binary
     op: Add
     left: ExprKind::Binary
-      op: Rem
+      op: Remainder
       left: Lit
         token: "10"
         value: LitValue::Number(10.0)
       right: Lit
         token: "7"
         value: LitValue::Number(7.0)
-    right: Lit
-      token: "-3"
-      value: LitValue::Number(-3.0)
+    right: ExprKind::Unary
+      op: Negate
+      operand: Lit
+        token: "3"
+        value: LitValue::Number(3.0)

@@ -1,0 +1,15 @@
+loop { break; }
+none
+
+loop { break; }
+
+%output
+
+
+|0000| Jump(2)    // break -> none
+|0001| Jump(0)    // [unreachable] continue the loop
+|0002| PushNone   // none
+|0003| Pop        // pop none
+|0004| Jump(6)    // break -> halt the program
+|0005| Jump(4)    // [unreachable] continue the loop
+|0006| Return

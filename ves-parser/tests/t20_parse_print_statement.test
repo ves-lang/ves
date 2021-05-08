@@ -42,7 +42,10 @@ StmtKind::Print
 StmtKind::Print
   value: StructInfo
     name: "S"
-    fields: None
+    fields: Params
+      positional=
+      default=
+      rest: None
     methods=
     initializer: None
     r#static: StructStaticProps

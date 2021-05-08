@@ -1,0 +1,38 @@
+mut a;
+@first: loop { 
+    mut b;
+    @second: loop {
+        mut c;
+        continue @first;
+        break @second;
+    }
+    @third: loop {
+        mut d;
+        break @first;
+        continue @third;
+    }
+}
+
+%output
+
+|0000| PushNone
+|0001| SetGlobal(0)    // mut a = none
+|0002| Pop             // pop (a = none)
+|0003| PushNone        // mut b = none 
+|0004| PushNone        // mut c = none
+|0005| PopN(2)         // pop c and b
+|0006| Jump(3)         // continue         <@first: start>
+|0007| Pop             // pop c
+|0008| Jump(11)        // break            <@second: end> + 1
+|0009| Pop             // pop c
+|0010| Jump(4)         // continue         <@second: start>
+|0011| PushNone        // mut d = none
+|0012| PopN(2)         // pop d and b
+|0013| Jump(20)        // break            <@first: end> + 1
+|0014| Pop             // pop d
+|0015| Jump(11)        // continue         <@third: start>
+|0016| Pop             // pop d
+|0017| Jump(11)        // continue         <@third: start>
+|0018| Pop             // pop b
+|0019| Jump(3)         // continue         <@first: start>
+|0020| Return

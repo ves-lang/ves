@@ -3,7 +3,7 @@ fn(...a, b) {}
 fn a) {}
 fn(a {}
 
-%output
+%output err
 
 error: Positional arguments may not appear after arguments with default values
   ┌─ <source: #9ed601521a65842b>:1:8

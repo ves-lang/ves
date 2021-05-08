@@ -6,7 +6,7 @@ struct t4(...a) /* rest params invalid in struct field */
 struct t5 { m(self = "bad") {} }
 struct t6 { not_a_keyword m() {} }
 
-%output
+%output err
 
 error: Expected a closing `)`
   ┌─ <source: #fe379a3900dd64a5>:1:31

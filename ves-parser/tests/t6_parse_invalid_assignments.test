@@ -5,40 +5,49 @@ a()?.b().c = v;
 ++a?.b;
 a?.b++;
 
-%output
+call(x) = 5;
+if Ok(x) = none {}
+
+%output err
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:1:1
+  ┌─ <source: #3a3825bbb3fdb791>:1:1
   │
 1 │ a?.b = v;
   │ ^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:2:1
+  ┌─ <source: #3a3825bbb3fdb791>:2:1
   │
 2 │ a()?.b = v;
   │ ^^^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:3:1
+  ┌─ <source: #3a3825bbb3fdb791>:3:1
   │
 3 │ [a,b,c].f()?.x = v;
   │ ^^^^^^^^^^^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:4:1
-  │
-4 │ a()?.b().c = v;
-  │ ^^^^^^^^^^
-
-error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:5:1
+  ┌─ <source: #3a3825bbb3fdb791>:5:1
   │
 5 │ ++a?.b;
   │ ^^^^^^
 
 error: Cannot assign to an optional field access. Consider performing the assignment in an `if` block.
-  ┌─ <source: #6730db97cf02dd5c>:6:1
+  ┌─ <source: #3a3825bbb3fdb791>:6:1
   │
 6 │ a?.b++;
   │ ^^^^^^
+
+error: Invalid assignment target. Only variables, struct.fields, and item[accesses] may be assigned to.
+  ┌─ <source: #3a3825bbb3fdb791>:8:1
+  │
+8 │ call(x) = 5;
+  │ ^^^^^^^
+
+error: Invalid assignment target. Only variables, struct.fields, and item[accesses] may be assigned to.
+  ┌─ <source: #3a3825bbb3fdb791>:9:4
+  │
+9 │ if Ok(x) = none {}
+  │    ^^^^^

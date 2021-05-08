@@ -1,0 +1,196 @@
+struct Vec3(x = 0, y = 0, z = 0) {
+    @add(self, other) {
+        self.x += other.x
+        self.y += other.y
+        self.z += other.z
+        return self
+    }
+}
+
+%output
+
+StmtKind::ExprStmt
+  expr: StructInfo
+    name: "Vec3"
+    fields: Params
+      positional=
+      default=
+        tuple
+          field0: "x"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+          field2: false
+        tuple
+          field0: "y"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+          field2: false
+        tuple
+          field0: "z"
+          field1: Lit
+            token: "0"
+            value: LitValue::Number(0.0)
+          field2: false
+      rest: None
+    methods=
+      FnInfo
+        name: "@add"
+        params: Params
+          positional=
+            tuple
+              field0: "self"
+              field1: false
+            tuple
+              field0: "other"
+              field1: false
+          default=
+          rest: None
+        body=
+          StmtKind::ExprStmt
+            expr: SetProp
+              node: ExprKind::Variable
+                name: "self"
+              field: "x"
+              value: ExprKind::Binary
+                op: Add
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "x"
+                  is_optional: false
+                right: GetProp
+                  node: ExprKind::Variable
+                    name: "other"
+                  field: "x"
+                  is_optional: false
+          StmtKind::ExprStmt
+            expr: SetProp
+              node: ExprKind::Variable
+                name: "self"
+              field: "y"
+              value: ExprKind::Binary
+                op: Add
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "y"
+                  is_optional: false
+                right: GetProp
+                  node: ExprKind::Variable
+                    name: "other"
+                  field: "y"
+                  is_optional: false
+          StmtKind::ExprStmt
+            expr: SetProp
+              node: ExprKind::Variable
+                name: "self"
+              field: "z"
+              value: ExprKind::Binary
+                op: Add
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "z"
+                  is_optional: false
+                right: GetProp
+                  node: ExprKind::Variable
+                    name: "other"
+                  field: "z"
+                  is_optional: false
+          StmtKind::Return
+            return_value: ExprKind::Variable
+              name: "self"
+        kind: MagicMethod
+    initializer: Initializer
+      body: FnInfo
+        name: "init"
+        params: Params
+          positional=
+          default=
+          rest: None
+        body=
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "x"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "x"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "y"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "y"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+          StmtKind::ExprStmt
+            expr: If
+              condition: Condition
+                value: ExprKind::Binary
+                  op: Is
+                  left: GetProp
+                    node: ExprKind::Variable
+                      name: "self"
+                    field: "z"
+                    is_optional: false
+                  right: Lit
+                    token: "none"
+                    value: LitValue::None
+                pattern: ConditionPattern::Value
+              then: DoBlock
+                statements=
+                  StmtKind::ExprStmt
+                    expr: SetProp
+                      node: ExprKind::Variable
+                        name: "self"
+                      field: "z"
+                      value: Lit
+                        token: "0"
+                        value: LitValue::Number(0.0)
+                value: None
+              otherwise: None
+        kind: Initializer
+      may_escape: false
+    r#static: StructStaticProps
+      fields=
+      methods=

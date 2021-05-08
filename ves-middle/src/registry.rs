@@ -4,6 +4,7 @@ use ves_error::FileId;
 use ves_parser::ast::AST;
 
 /// The implementation of a module.
+#[derive(Debug)]
 pub enum ModuleImpl<T> {
     /// A native module of type [`T`].
     Native(T),
@@ -12,6 +13,7 @@ pub enum ModuleImpl<T> {
 }
 
 /// A module with a defined list of exports.
+#[derive(Debug)]
 pub struct Module<T> {
     /// The implementation of the module.
     pub implementation: ModuleImpl<T>,
@@ -28,9 +30,11 @@ impl<T> Module<T> {
 }
 
 /// A module registry that holds
+#[derive(Debug)]
 pub struct ModuleRegistry<T> {
     /// A map from (module path) to (module interface).
     pub modules: HashMap<String, Module<T>>,
+    globals: HashMap<(FileId, String), usize>,
 }
 
 impl<T> ModuleRegistry<T> {
@@ -62,6 +66,7 @@ impl<T> ModuleRegistry<T> {
     pub fn new() -> Self {
         Self {
             modules: HashMap::new(),
+            globals: HashMap::new(),
         }
     }
 
@@ -122,6 +127,19 @@ impl<T> ModuleRegistry<T> {
         );
 
         Ok(())
+    }
+
+    pub fn get_global_index(&mut self, name: &str, file_id: FileId) -> usize {
+        // This allocation should be ok since we call get_global_index() once per global per module.
+        let name = name.to_string();
+        let len = self.globals.len();
+        *self.globals.entry((file_id, name)).or_insert_with(|| len)
+    }
+
+    /// Returns the hashmap of globals.
+    #[inline]
+    pub fn globals(&self) -> &HashMap<(FileId, String), usize> {
+        &self.globals
     }
 }
 

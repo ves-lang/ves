@@ -1,0 +1,22 @@
+mut f;
+let v = [0, 1, "test", f(), f"1 + 1 = {1 + 1}"]
+
+%output
+
+|0000| PushNone             // 
+|0001| SetGlobal(0)         // mut f
+|0002| Pop                  // 
+|0003| PushNum32(0.0)       // push 0
+|0004| PushNum32(1.0)       // push 1
+|0005| GetConst(test)       // push "test"
+|0006| GetGlobal(0)         // get f
+|0007| Call(0)              // f()
+|0008| GetConst(1 + 1 = )   // push "1 + 1 = "
+|0009| PushNum32(1.0)       // push 1
+|0010| PushNum32(1.0)       // push 1
+|0011| Add                  // add 1 + 1
+|0012| Interpolate(2)       // f"1 + 1 = {1 + 1}"
+|0013| CreateArray(5)       // create [0, 1, "test", f(), f"1 + 1 = {1 + 1}"]
+|0014| SetGlobal(1)         // set v
+|0015| Pop                  // pop array
+|0016| Return

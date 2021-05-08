@@ -1,0 +1,40 @@
+
+0 is num
+0 is str
+0 is bool
+0 is map
+0 is array
+0 is none
+0 is some
+
+%output
+
+// 0 is num
+|0000| PushNum32(0.0)
+|0001| IsNum
+|0002| Pop
+// 0 i str
+|0003| PushNum32(0.0)
+|0004| IsStr
+|0005| Pop
+// 0 is bool
+|0006| PushNum32(0.0)
+|0007| IsBool
+|0008| Pop
+// 0 is map
+|0009| PushNum32(0.0)
+|0010| IsMap
+|0011| Pop
+// 0 is array
+|0012| PushNum32(0.0)
+|0013| IsArray
+|0014| Pop
+// 0 is none
+|0015| PushNum32(0.0)
+|0016| IsNone
+|0017| Pop
+// 0 is some
+|0018| PushNum32(0.0)
+|0019| IsSome
+|0020| Pop
+|0021| Return

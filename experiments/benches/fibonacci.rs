@@ -1,31 +1,24 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
-use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching};
-use ves_cc::CcContext;
-use ves_runtime::{
+use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching, vm_enum_instruction_inline_caching};
+use ves_backend::{
+    gc::{self, GcHandle, VesGc},
     nanbox::NanBox,
-    objects::ves_str::{StrCcExt, VesStr},
-    VesObject,
 };
 
-fn get_enum_vm() -> vm_enum::VmEnum {
+fn get_enum_vm() -> vm_enum::VmEnum<gc::DefaultGc> {
     use vm_enum::Inst;
-    let heap = CcContext::new();
+    let gc = gc::DefaultGc::default();
+    let mut handle = GcHandle::new(gc);
     vm_enum::VmEnum::new(
-        heap.clone(),
+        handle.clone(),
         vec![
-            NanBox::num(200.0),
+            NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "a").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "b").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "n").view())),
-            )),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         {
             vec![
@@ -72,24 +65,19 @@ fn get_enum_vm() -> vm_enum::VmEnum {
     )
 }
 
-fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum {
+fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum<gc::DefaultGc> {
     use vm_enum_inline_caching::Inst;
-    let heap = CcContext::new();
+    let gc = gc::DefaultGc::default();
+    let mut handle = GcHandle::new(gc);
     vm_enum_inline_caching::VmEnum::new(
-        heap.clone(),
+        handle.clone(),
         vec![
-            NanBox::num(200.0),
+            NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "a").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "b").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                heap.cc(VesObject::Str(VesStr::on_heap(&heap, "n").view())),
-            )),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         {
             vec![
@@ -136,24 +124,36 @@ fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum {
     )
 }
 
-fn get_byte_vm() -> vm_bytes::VmBytes {
-    use vm_bytes::Inst;
-    let ctx = CcContext::new();
-    vm_bytes::VmBytes::new(
-        ctx.clone(),
+fn get_enum_inst_ic_vm() -> vm_enum_instruction_inline_caching::VmEnum<gc::DefaultGc> {
+    let gc = ves_backend::gc::DefaultGc::default();
+    let mut handle = GcHandle::new(gc);
+    vm_enum_instruction_inline_caching::VmEnum::new(
+        handle.clone(),
         vec![
-            NanBox::num(200.0),
+            NanBox::num(100.0),
             NanBox::num(0.0),
             NanBox::num(1.0),
-            NanBox::new(ves_runtime::Value::from(
-                ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "a").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "b").view())),
-            )),
-            NanBox::new(ves_runtime::Value::from(
-                ctx.cc(VesObject::Str(VesStr::on_heap(&ctx, "n").view())),
-            )),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+        ],
+        Vec::from(vm_enum_instruction_inline_caching::FIB_INSTS),
+    )
+}
+
+fn get_byte_vm() -> vm_bytes::VmBytes<gc::DefaultGc> {
+    use vm_bytes::Inst;
+    let gc = gc::DefaultGc::default();
+    let mut handle = GcHandle::new(gc);
+    vm_bytes::VmBytes::new(
+        handle.clone(),
+        vec![
+            NanBox::num(100.0),
+            NanBox::num(0.0),
+            NanBox::num(1.0),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
+            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
         ],
         vec![
             Inst::Alloc as _,
@@ -249,6 +249,13 @@ fn bench_fibonacci(c: &mut Criterion) {
     });
     group.bench_function("<enum opcodes + IC: fib-iterative(200)>", move |b| {
         let mut vm = get_enum_ic_vm();
+        b.iter(|| {
+            vm.reset();
+            black_box(vm.run().unwrap())
+        })
+    });
+    group.bench_function("<enum opcodes + Inst IC: fib-iterative(200)>", move |b| {
+        let mut vm = get_enum_inst_ic_vm();
         b.iter(|| {
             vm.reset();
             black_box(vm.run().unwrap())

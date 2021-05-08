@@ -3,7 +3,7 @@ let second // error
 
 let first = 5, second, third = 10
 
-%output
+%output err
 
 error: Immutable variable `second` must be initialized at declaration
   ┌─ <source: #67e7b419ce8b9b23>:2:5

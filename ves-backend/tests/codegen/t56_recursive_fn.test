@@ -1,0 +1,70 @@
+fn test() {
+    test();
+}
+test();
+
+(fn test2() {
+    test2();
+})();
+
+fn test3(a) {
+    (fn test4(b) {
+        test3(2);
+        test4(3);
+    })(1);
+}
+test3(0);
+
+%output
+
+|0000| GetConst(<fn test>)
+|0001| SetGlobal(0)     // fn test() { ... }
+|0002| Pop
+|0003| GetGlobal(0)
+|0004| Call(0)
+|0005| Pop
+|0006| CreateClosure(<fn test2>, 1)
+|0007| Call(0)          // (fn test2() { ... })();
+|0008| Pop
+|0009| GetConst(<fn test3>)
+|0010| SetGlobal(1)
+|0011| Pop
+|0012| GetGlobal(1)
+|0013| PushNum32(0.0)
+|0014| Call(1)          // (fn test3() { ... })(0);
+|0015| Pop
+|0016| Return
+>>>>>> test
+|0000| GetGlobal(0)
+|0001| Call(0)          // test();
+|0002| Pop
+|0003| Pop
+|0004| PushNone
+|0005| Return
+>>>>>> test2
+|0000| GetUpvalue(0)    // test2 is an upvalue because it exists only as a local when its declared
+|0001| Call(0)          // test2();
+|0002| Pop              // pop result
+|0003| Pop              // pop receiver
+|0004| PushNone
+|0005| Return
+>>>>>> test3
+|0000| CreateClosure(<fn test4>, 1)
+|0001| PushNum32(1.0)
+|0002| Call(1)          // (fn test4(b) { ... })(1);
+|0003| Pop              // pop result
+|0004| PopN(2)          // pop a, receiver
+|0005| PushNone
+|0006| Return
+>>>>>> test4
+|0000| GetGlobal(1)
+|0001| PushNum32(2.0)
+|0002| Call(1)          // test3(2);
+|0003| Pop              // pop result
+|0004| GetUpvalue(0)
+|0005| PushNum32(3.0)
+|0006| Call(1)          // test4(3);
+|0007| Pop              // pop result
+|0008| PopN(2)          // pop b, receiver
+|0009| PushNone
+|0010| Return

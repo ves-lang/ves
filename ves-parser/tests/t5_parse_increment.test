@@ -43,21 +43,21 @@ StmtKind::ExprStmt
       kind: Increment
 StmtKind::ExprStmt
   expr: ExprKind::Unary
-    op: Ok
+    op: WrapOk
     operand: ExprKind::Variable
       name: "val"
 StmtKind::ExprStmt
   expr: ExprKind::Unary
-    op: Err
+    op: WrapErr
     operand: ExprKind::Unary
-      op: Err
+      op: WrapErr
       operand: ExprKind::Variable
         name: "val"
 StmtKind::ExprStmt
   expr: ExprKind::Unary
     op: Try
     operand: ExprKind::Unary
-      op: Err
+      op: WrapErr
       operand: ExprKind::PrefixIncDec
         inner: IncDec
           expr: ExprKind::Variable

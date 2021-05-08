@@ -1,0 +1,12 @@
+{
+    (fn f() => 1)() + (fn f() => 1)() == (fn f() => 2)();
+    f(); // undefined
+}
+
+%output
+
+error: Undefined variable `f`
+  ┌─ <source: #1108d98e81e4956b>:3:5
+  │
+3 │     f(); // undefined
+  │     ^

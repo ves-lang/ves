@@ -29,10 +29,11 @@ pub fn build_diagnostic<
         | FnBeforeMethod
         | UsedGlobalBeforeDeclaration(_)
         | AttemptedToShadowLocalVariable(_)
-        | Import => Diagnostic::error(),
+        | Import
+        | BadMagicMethod => Diagnostic::error(),
         UnusedLocal => Diagnostic::warning(),
         Warning => Diagnostic::warning(),
-        Compile => unimplemented!(),
+        Emit => Diagnostic::error(),
         Runtime => unimplemented!(),
         Panic => unimplemented!(),
         Traceback => unimplemented!(),

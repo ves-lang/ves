@@ -1,0 +1,12 @@
+// TODO: use different expressions after we implement more of them
+0, 1, 2
+
+%output
+
+
+|0000| PushNum32(0.0)
+|0001| PushNum32(1.0)
+|0002| PopN(2)
+|0003| PushNum32(2.0)
+|0004| Pop
+|0005| Return

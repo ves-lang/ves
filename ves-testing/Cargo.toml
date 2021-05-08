@@ -3,11 +3,10 @@ name = "ves-testing"
 version = "0.1.0"
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 ast2str = { git = "https://github.com/optimalstrategy/ast2str" }
 ves_error = { package = "ves-error", path = "../ves-error" }
 lazy_static = "1.4.0"
 regex = "1.4.6"
 pretty_assertions = "0.7.2"
+ves_testing_macro = { package = "ves-testing-macro", path = "./ves-testing-macro" }

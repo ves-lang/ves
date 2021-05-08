@@ -1,0 +1,12 @@
+{ mut a = 0; a++; }
+
+%output
+
+|0000| PushNum32(0.0)
+|0001| GetLocal(0)
+|0002| AddOne
+|0003| SetLocal(0)
+|0004| SubtractOne
+|0005| Pop
+|0006| Pop
+|0007| Return
