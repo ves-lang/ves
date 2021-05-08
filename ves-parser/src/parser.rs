@@ -1864,7 +1864,7 @@ fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::S
                                     span: span.clone(),
                                     kind: ast::ExprKind::Variable(Token::new(
                                         "self",
-                                        span.clone(),
+                                        span,
                                         TokenKind::Self_,
                                     )),
                                 },
