@@ -507,7 +507,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     /// ```
     fn emit_loop(&mut self, info: &'b Loop<'a>, span: Span) -> Result<()> {
         self.state.begin_loop();
-        let [start, end] = self.state.reserve_labels::<2>();
+        let [start, end] = self.state.reserve_labels();
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
         self.emit_stmt(&info.body)?;
@@ -552,7 +552,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     /// TODO: describe the layout for the loops with a binding
     fn emit_while_loop(&mut self, info: &'b While<'a>, span: Span) -> Result<()> {
         self.state.begin_loop();
-        let [start, exit, end] = self.state.reserve_labels::<3>();
+        let [start, exit, end] = self.state.reserve_labels();
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
         // TODO: while loops are also wrong (in the same way as if expr)
@@ -668,7 +668,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             }
         }
         self.state.begin_loop();
-        let [start, latch, body, exit, end] = self.state.reserve_labels::<5>();
+        let [start, latch, body, exit, end] = self.state.reserve_labels();
         self.state.add_control_label(&info.label, latch, end);
         self.state.builder.label(start);
         match info.iterator {
@@ -823,7 +823,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.state.add_local(init.name.lexeme.clone());
         }
         self.state.begin_loop();
-        let [start, latch, body, exit, end] = self.state.reserve_labels::<5>();
+        let [start, latch, body, exit, end] = self.state.reserve_labels();
         // Break and continue target the `latch` and `exit` labels
         self.state.add_control_label(&info.label, latch, end);
         self.state.builder.label(start);
@@ -952,6 +952,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 self.emit_expr(right, true)?;
                 self.state.builder.op(Opcode::CompareType, span);
             }
+        } else if matches!(op, BinOpKind::And | BinOpKind::Or) {
+            self.emit_logical_expr(op, right, span)?;
         } else {
             self.emit_expr(right, true)?;
             self.state.builder.op(
@@ -975,6 +977,33 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 },
                 span,
             );
+        }
+        Ok(())
+    }
+
+    fn emit_logical_expr(&mut self, op: BinOpKind, right: &'b Expr<'a>, span: Span) -> Result<()> {
+        match op {
+            BinOpKind::And => {
+                let end = self.state.reserve_label();
+                self.state
+                    .builder
+                    .op(Opcode::JumpIfFalse(end), span.clone());
+                self.state.op_pop(1, span);
+                self.emit_expr(right, true)?;
+                self.state.builder.label(end);
+            }
+            BinOpKind::Or => {
+                let [other, end] = self.state.reserve_labels();
+                self.state
+                    .builder
+                    .op(Opcode::JumpIfFalse(other), span.clone());
+                self.state.builder.op(Opcode::Jump(end), span.clone());
+                self.state.builder.label(other);
+                self.state.op_pop(1, span);
+                self.emit_expr(right, true)?;
+                self.state.builder.label(end)
+            }
+            _ => unreachable!(),
         }
         Ok(())
     }
