@@ -229,7 +229,7 @@ impl<T: VesGc> VmEnum<T> {
         let left = self.pop();
 
         if right.is_num() && left.is_num() {
-            if unsafe { left.as_num_unchecked() == 0.0 } {
+            if left.as_num_unchecked() == 0.0 {
                 self.error("Attempted to divide by zero".to_string());
                 return;
             }
@@ -263,7 +263,7 @@ impl<T: VesGc> VmEnum<T> {
             // Slow path
             let name = n.unbox().as_ptr().unwrap();
             let name = VesStrView::new(name);
-            let slot = match instance.get_property_slot(&name) {
+            let slot = match instance.get_slot_index(&name) {
                 Some(slot) => slot,
                 None => {
                     return self.error(format!("Object is missing the field `{}`.", name.str()))
@@ -298,7 +298,7 @@ impl<T: VesGc> VmEnum<T> {
             // Slow path
             let name = n.unbox().as_ptr().unwrap();
             let name = VesStrView::new(name);
-            let slot = match instance.get_property_slot(&name) {
+            let slot = match instance.get_slot_index(&name) {
                 Some(slot) => slot,
                 None => {
                     return self.error(format!("Object is missing the field `{}`.", name.str()))

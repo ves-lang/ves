@@ -1,6 +1,7 @@
 use std::{
     cell::UnsafeCell,
     fmt::{self, Display, Formatter},
+    ops::{Deref, DerefMut},
     vec::from_elem_in,
 };
 
@@ -11,7 +12,12 @@ use crate::{
 use ahash::RandomState;
 use hashbrown::HashMap;
 
-use super::{peel::Peeled, ves_str::view::VesStrView, Value};
+use super::{
+    cache_layer::{CacheLayer, PropertyLookup},
+    peel::Peeled,
+    ves_str::view::VesStrView,
+    Value,
+};
 
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
@@ -61,7 +67,6 @@ impl Eq for ViewKey {}
 pub struct VesStruct {
     // TODO: store name
     // TODO: static fields
-    // NOTE(compiler): static field should be stored in the meta type.
     methods: VesHashMap<ViewKey, GcObj>,
     fields: VesHashMap<ViewKey, u8>,
 }
@@ -84,93 +89,67 @@ unsafe impl Trace for VesStruct {
     }
 }
 
-#[derive(Debug)]
-pub struct VesInstance {
-    // Should also include bound methods (lazily copied by default).
-    fields: Vec<Value, ProxyAllocator>,
-    ty: Peeled<VesStruct>,
-}
-
-impl VesInstance {
-    pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
-        let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
-        Self {
-            fields,
-            ty: Peeled::new(ty, VesObject::as_struct_mut_unwrapped),
-        }
-    }
-
+impl PropertyLookup for Peeled<VesStruct> {
     #[inline]
-    pub fn ty_ptr(&self) -> &GcObj {
-        self.ty.peeled_ptr()
-    }
-
-    #[inline]
-    pub fn ty(&self) -> &VesStruct {
-        self.ty.get()
-    }
-
-    #[inline]
-    pub fn ty_mut(&mut self) -> &mut VesStruct {
-        self.ty.get_mut()
-    }
-
-    #[inline]
-    pub fn get_property_slot(&self, name: &VesStrView) -> Option<u8> {
-        self.ty
-            .get()
+    fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
+        self.get()
             .fields
             .get(&ViewKey {
                 view: UnsafeCell::new(*name),
             })
             .copied()
+            .map(|x| x as _)
     }
+}
 
-    #[inline]
-    pub fn get_property(&self, name: &VesStrView) -> Option<&Value> {
-        self.get_property_slot(name)
-            .map(|slot| &self.fields[slot as usize])
-    }
+#[derive(Debug)]
+pub struct VesInstance {
+    // Should also include bound methods (lazily copied by default).
+    fields: CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator>,
+}
 
-    #[inline]
-    pub fn get_property_mut(&mut self, name: &VesStrView) -> Option<&mut Value> {
-        let slot = self.get_property_slot(name);
-        if let Some(slot) = slot {
-            Some(self.fields.get_mut(slot as usize).unwrap())
-        } else {
-            None
+impl VesInstance {
+    pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
+        let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
+        let lookup = Peeled::new(ty, VesObject::as_struct_mut_unwrapped);
+        Self {
+            fields: CacheLayer::new(lookup, fields),
         }
     }
 
     #[inline]
-    pub fn get_by_slot_index(&self, slot: usize) -> Option<&Value> {
-        self.fields.get(slot)
+    pub fn ty_ptr(&self) -> &GcObj {
+        self.fields.lookup().peeled_ptr()
     }
 
     #[inline]
-    pub fn get_by_slot_index_unchecked(&self, slot: usize) -> &Value {
-        debug_assert!(slot < self.fields.len());
-        unsafe { self.fields.get_unchecked(slot) }
+    pub fn ty(&self) -> &VesStruct {
+        self.fields.lookup().get()
     }
 
     #[inline]
-    pub fn get_by_slot_index_unchecked_mut(&mut self, slot: usize) -> &mut Value {
-        debug_assert!(slot < self.fields.len());
-        unsafe { self.fields.get_unchecked_mut(slot) }
+    pub fn ty_mut(&mut self) -> &mut VesStruct {
+        self.fields.lookup_mut().get_mut()
     }
+}
 
-    #[inline]
-    pub fn get_by_slot_index_mut(&mut self, slot: usize) -> Option<&mut Value> {
-        self.fields.get_mut(slot)
+impl Deref for VesInstance {
+    type Target = CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.fields
+    }
+}
+
+impl DerefMut for VesInstance {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.fields
     }
 }
 
 unsafe impl Trace for VesInstance {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.ty, tracer);
-        for v in &mut self.fields {
-            v.trace(tracer);
-        }
+        Trace::trace(&mut self.fields, tracer);
     }
 }
 

@@ -222,7 +222,7 @@ impl<T: VesGc> VmEnum<T> {
         let left = self.pop();
 
         if right.is_num() && left.is_num() {
-            if unsafe { left.as_num_unchecked() == 0.0 } {
+            if left.as_num_unchecked() == 0.0 {
                 self.error("Attempted to divide by zero".to_string());
                 return;
             }
@@ -249,7 +249,9 @@ impl<T: VesGc> VmEnum<T> {
         let name = VesStrView::new(name);
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         match &mut *obj {
-            VesObject::Instance(obj) => *obj.get_property_mut(&name).unwrap() = self.pop().unbox(),
+            VesObject::Instance(obj) => {
+                *obj.get_slot_value_mut(&name).unwrap() = self.pop().unbox()
+            }
             _ => {
                 self.error("Only struct instances support field assignment".to_string());
             }
@@ -269,7 +271,7 @@ impl<T: VesGc> VmEnum<T> {
         };
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
-            VesObject::Instance(instance) => match instance.get_property(&name) {
+            VesObject::Instance(instance) => match instance.get_slot_value(&name) {
                 Some(r#ref) => self.push(NanBox::new(*r#ref)),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },

@@ -64,6 +64,13 @@ impl CallFrame {
         self.r#fn.as_fn().unwrap()
     }
 
+    #[cfg(not(feature = "fast"))]
+    pub fn constants(&self) -> &[Value] {
+        &self.func().chunk.constants[..]
+    }
+
+    #[cfg(feature = "fast")]
+    #[inline]
     pub fn constants(&self) -> &[Value] {
         unsafe { &self.chunk.as_ref().constants }
     }

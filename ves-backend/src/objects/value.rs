@@ -24,7 +24,8 @@ impl PartialEq for Value {
             (Value::Num(l), Value::Num(r)) => *l == *r,
             (Value::Bool(l), Value::Bool(r)) => *l == *r,
             (Value::Ref(l), Value::Ref(r)) => *l == *r,
-            _ => true,
+            (Value::None, Value::None) => true,
+            _ => false,
         }
     }
 }

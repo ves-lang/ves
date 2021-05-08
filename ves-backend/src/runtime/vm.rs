@@ -54,6 +54,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // TODO: cache the code pointer here for speed
         // let len = self.frame_unchecked().code_len();
         // let code = self.frame_unchecked().code().as_ptr();
+        println!("{:?}", self.frame().constants());
 
         while self.ip < self.frame_unchecked().code_len() {
             self.ip += 1;
@@ -168,7 +169,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn get_magic_method(&self, left: NanBox, name: &str) -> Result<GcObj, VesError> {
-        self.get_method(left, name).and_then(|obj| todo!())//if obj.as_fn().unwrap().is_magic_method());
+        self.get_method(left, name).and_then(|obj| todo!())
     }
 
     fn get_method(&self, left: NanBox, name: &str) -> Result<GcObj, VesError> {
@@ -314,7 +315,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[cfg(not(feature = "fast"))]
     #[inline]
     fn const_at(&self, idx: usize) -> NanBox {
-        match self.frame_unchecked().constants().get(idx) {
+        match self.frame().constants().get(idx) {
             Some(v) => NanBox::new(*v),
             None => panic!("MISSING CONSTANT AT {}", idx),
         }

@@ -1,3 +1,4 @@
+pub mod cache_layer;
 pub mod nanbox;
 mod peel;
 pub mod value;
