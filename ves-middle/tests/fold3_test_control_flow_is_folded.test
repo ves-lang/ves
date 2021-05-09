@@ -51,14 +51,14 @@ For
       name: "i"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Float(0.0)
   condition: ExprKind::Binary
     op: LessThan
     left: ExprKind::Variable
       name: "i"
     right: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Float(10.0)
   increment: Assignment
     name: "i"
     value: ExprKind::Binary
@@ -67,7 +67,7 @@ For
         name: "i"
       right: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Float(1.0)
   body: StmtKind::Block
     statements=
   label: "<@label: 159..162>"
@@ -79,13 +79,13 @@ ForEach
       values=
         Lit
           token: "1"
-          value: LitValue::Number(1.0)
+          value: LitValue::Float(1.0)
         Lit
           token: "\"arr prop\""
           value: LitValue::Str("arr prop")
         Lit
           token: "3"
-          value: LitValue::Number(3.0)
+          value: LitValue::Float(3.0)
   body: StmtKind::Block
     statements=
       StmtKind::Print

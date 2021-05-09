@@ -2,6 +2,7 @@ use crate::{
     ast::{self, Global, VarKind, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
+use bigdecimal::Num;
 use std::{collections::HashSet, convert::Into};
 use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
@@ -450,8 +451,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 } else {
                     literal!(
                         self,
-                        ast::LitValue::Number(1f64),
-                        Token::new("1", self.previous.span.clone(), TokenKind::Number)
+                        ast::LitValue::Integer(1),
+                        Token::new("1", self.previous.span.clone(), TokenKind::Float)
                     )
                 };
                 ast::IteratorKind::Range(ast::Range {
@@ -1507,17 +1508,66 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 kind: ast::ExprKind::Variable(self.previous.clone()),
             });
         }
-        // number literal
-        if self.match_(&TokenKind::Number) {
+        // float literal
+        if self.match_(&TokenKind::Float) {
             return Ok(literal!(
                 self,
-                ast::LitValue::Number(self.previous.lexeme.parse::<f64>().map_err(|_| {
-                    VesError::parse(
-                        "Failed to parse the number",
-                        self.previous.span.clone(),
-                        self.fid,
-                    )
-                })?)
+                match self.previous.lexeme.parse::<f64>() {
+                    Ok(n) => ast::LitValue::Float(n),
+                    Err(_) => match self.previous.lexeme.parse::<bigdecimal::BigDecimal>() {
+                        Ok(n) => ast::LitValue::BigFloat(n),
+                        Err(_) => {
+                            return Err(VesError::parse(
+                                "Failed to parse the float literal",
+                                self.previous.span.clone(),
+                                self.fid,
+                            ));
+                        }
+                    },
+                }
+            ));
+        }
+        if self.match_(&TokenKind::Integer) {
+            let lexeme = self.previous.lexeme.replace("_", "");
+            return Ok(literal!(
+                self,
+                match lexeme.parse::<i64>() {
+                    Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
+                    _ => match lexeme.parse::<num_bigint::BigInt>() {
+                        Ok(n) => ast::LitValue::BigInteger(n),
+                        Err(_) => {
+                            return Err(VesError::parse(
+                                "Failed to parse the float literal",
+                                self.previous.span.clone(),
+                                self.fid,
+                            ));
+                        }
+                    },
+                }
+            ));
+        }
+        if self.match_any(&[TokenKind::HexInt, TokenKind::BinInt]) {
+            let radix = if self.previous.kind == TokenKind::HexInt {
+                16
+            } else {
+                2
+            };
+            let lexeme = self.previous.lexeme.replace("_", "");
+            return Ok(literal!(
+                self,
+                match i64::from_str_radix(&lexeme, radix) {
+                    Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
+                    _ => match num_bigint::BigInt::from_str_radix(&lexeme, radix) {
+                        Ok(n) => ast::LitValue::BigInteger(n),
+                        Err(_) => {
+                            return Err(VesError::parse(
+                                "Failed to parse the float literal",
+                                self.previous.span.clone(),
+                                self.fid,
+                            ));
+                        }
+                    },
+                }
             ));
         }
         // string literal

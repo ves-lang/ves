@@ -9,7 +9,7 @@ StmtKind::ExprStmt
     values=
       Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
       Lit
         token: "\"a\""
         value: LitValue::Str("a")
@@ -34,10 +34,10 @@ StmtKind::ExprStmt
             values=
               Lit
                 token: "1"
-                value: LitValue::Number(1.0)
+                value: LitValue::Integer(1)
               Lit
                 token: "2"
-                value: LitValue::Number(2.0)
+                value: LitValue::Integer(2)
               Lit
                 token: "3"
-                value: LitValue::Number(3.0)
+                value: LitValue::Integer(3)

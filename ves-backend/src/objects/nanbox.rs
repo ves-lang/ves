@@ -2,7 +2,7 @@
 //!
 //! # Overview
 //! Ves have four primitive values whose sizes allow us to take advantage of NaN Boxing, enabling efficient storage and type checking:
-//! 1) Numbers  -- double precision floating point number (63 bits)
+//! 1) Floats  -- double precision floating point number (63 bits)
 //! 2) Booleans -- true/false (1 bit)
 //! 3) None     -- none ( bits, only needs a type tag)
 //! 4) Pointers -- reference-counted pointers to heap-allocated Ves objects (48 bits).
@@ -182,6 +182,14 @@ impl NanBox {
     #[inline]
     pub fn num(n: f64) -> Self {
         Self(n.to_bits())
+    }
+
+    pub fn int(n: i32) -> Self {
+        todo!()
+    }
+
+    pub fn int_48(n: i64) -> Option<Self> {
+        todo!()
     }
 
     #[inline]

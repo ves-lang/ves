@@ -66,7 +66,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::GetConst(idx) => self.get_const(idx),
                 Opcode::GetLocal(idx) => self.get_local(idx),
                 Opcode::SetLocal(idx) => self.set_local(idx),
-                Opcode::PushNum32(num) => self.push(NanBox::num(num as _)),
+                Opcode::PushInt32(num) => self.push(NanBox::int(num as _)),
                 Opcode::PushTrue => self.push(NanBox::r#true()),
                 Opcode::PushFalse => self.push(NanBox::r#false()),
                 Opcode::PushNone => self.push(NanBox::none()),

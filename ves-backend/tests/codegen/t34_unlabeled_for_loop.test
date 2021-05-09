@@ -5,10 +5,10 @@ for i = 0; i < 10; ++i {
 %output
 
 // @loop.pre_start:
-|0000| PushNum32(0.0)     // i = 0
+|0000| PushInt32(0)     // i = 0
 // @loop.start:
 |0001| GetLocal(0)        // get i
-|0002| PushNum32(10.0)    // push 10
+|0002| PushInt32(10)    // push 10
 |0003| LessThan           // i < 10
 |0004| JumpIfFalse(15)    // jump_if_false @loop.exit
 |0005| Pop                // pop result of condition

@@ -4,8 +4,8 @@
 
 // TODO: use an object instead
 
-|0000| PushNum32(0.0)
-|0001| PushNum32(0.0)
+|0000| PushInt32(0)
+|0001| PushInt32(0)
 |0002| HasProperty
 |0003| Pop
 |0004| Return

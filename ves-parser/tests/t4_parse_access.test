@@ -14,4 +14,4 @@ StmtKind::ExprStmt
       is_optional: true
     key: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)

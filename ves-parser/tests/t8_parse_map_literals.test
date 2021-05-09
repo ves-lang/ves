@@ -16,7 +16,7 @@ StmtKind::ExprStmt
             value: LitValue::Str("test")
           value: Lit
             token: "1.0"
-            value: LitValue::Number(1.0)
+            value: LitValue::Float(1.0)
 StmtKind::ExprStmt
   expr: Assignment
     name: "a"
@@ -28,7 +28,7 @@ StmtKind::ExprStmt
             value: LitValue::Str("test")
           value: Lit
             token: "1.0"
-            value: LitValue::Number(1.0)
+            value: LitValue::Float(1.0)
 StmtKind::ExprStmt
   expr: Assignment
     name: "a"
@@ -40,7 +40,7 @@ StmtKind::ExprStmt
             value: LitValue::Str("v")
           value: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
         MapEntry::Spread
           target: ExprKind::Variable
             name: "o"

@@ -60,7 +60,7 @@ StmtKind::ExprStmt
           field0: "b"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
           field2: false
       rest: None
     methods=
@@ -95,7 +95,7 @@ StmtKind::ExprStmt
                       field: "b"
                       value: Lit
                         token: "0"
-                        value: LitValue::Number(0.0)
+                        value: LitValue::Integer(0)
                 value: None
               otherwise: None
         kind: Initializer
@@ -128,7 +128,7 @@ StmtKind::ExprStmt
           field0: "b"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
           field2: false
       rest: None
     methods=
@@ -156,7 +156,7 @@ StmtKind::ExprStmt
           StmtKind::Return
             return_value: Lit
               token: "0"
-              value: LitValue::Number(0.0)
+              value: LitValue::Integer(0)
         kind: Method
     initializer: Initializer
       body: FnInfo
@@ -189,7 +189,7 @@ StmtKind::ExprStmt
                       field: "b"
                       value: Lit
                         token: "0"
-                        value: LitValue::Number(0.0)
+                        value: LitValue::Integer(0)
                 value: None
               otherwise: None
         kind: Initializer
@@ -200,7 +200,7 @@ StmtKind::ExprStmt
           field0: "sf"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
       methods=
         FnInfo
           name: "sm"
@@ -220,7 +220,7 @@ StmtKind::ExprStmt
             StmtKind::Return
               return_value: Lit
                 token: "0"
-                value: LitValue::Number(0.0)
+                value: LitValue::Integer(0)
           kind: Static
 StmtKind::ExprStmt
   expr: StructInfo

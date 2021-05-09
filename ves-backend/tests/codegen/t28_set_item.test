@@ -2,10 +2,10 @@
 
 %output
 
-|0000| PushNum32(0.0)
+|0000| PushInt32(0)
 |0001| GetLocal(0)
-|0002| PushNum32(0.0)
-|0003| PushNum32(5.0)
+|0002| PushInt32(0)
+|0003| PushInt32(5)
 |0004| SetItem
 |0005| Pop
 |0006| Pop

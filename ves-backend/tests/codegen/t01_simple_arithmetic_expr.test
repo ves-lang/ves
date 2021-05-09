@@ -2,14 +2,14 @@
 
 %output
 
-|0000| PushNum32(1.0)     // 1
-|0001| PushNum32(2.0)     // 2
-|0002| PushNum32(10.0)    // 10
-|0003| PushNum32(1.0)     // 
+|0000| PushInt32(1)     // 1
+|0001| PushInt32(2)     // 2
+|0002| PushInt32(10)    // 10
+|0003| PushInt32(1)     // 
 |0004| Negate             // -1
 |0005| Power              // 10 ** -1
 |0006| Multiply           // 2 * <above>
-|0007| PushNum32(2.0)     // 2
+|0007| PushInt32(2)     // 2
 |0008| Divide             // (2 * (10 ** -1)) / 2
 |0009| Add                // 1 + <above>
 |0010| Pop                // pop the expression value

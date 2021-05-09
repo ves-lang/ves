@@ -1465,14 +1465,20 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
     fn emit_lit(&mut self, lit: &'b Lit<'a>) -> Result<()> {
         let span = lit.token.span.clone();
-        match lit.value {
-            LitValue::Number(value) => match maybe_f32(value) {
+        match &lit.value {
+            LitValue::Float(value) => {
+                let offset = self.state.builder.constant((*value).into(), span.clone())?;
+                self.state.builder.op(Opcode::GetConst(offset), span);
+            }
+            LitValue::Integer(value) => match maybe_i32(*value) {
                 Some(value) => {
-                    self.state.builder.op(Opcode::PushNum32(value), span);
+                    self.state.builder.op(Opcode::PushInt32(value), span);
                 }
                 None => {
-                    let offset = self.state.builder.constant(value.into(), span.clone())?;
-                    self.state.builder.op(Opcode::GetConst(offset), span);
+                    // Guaranteed to be under 48 bits
+                    todo!()
+                    // let offset = self.state.builder.constant(value.into(), span.clone())?;
+                    // self.state.builder.op(Opcode::GetConst(offset), span);
                 }
             },
             LitValue::Bool(value) => {
@@ -1484,6 +1490,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     span,
                 );
             }
+            LitValue::BigInteger(i) => todo!(),
+            LitValue::BigFloat(f) => todo!(),
             LitValue::None => {
                 self.state.builder.op(Opcode::PushNone, span);
             }
@@ -1666,12 +1674,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 }
 
-/// Checks if `f64` fits within an `f32`, and converts it if so
-fn maybe_f32(value: f64) -> Option<f32> {
-    const MIN: f64 = f32::MIN as f64;
-    const MAX: f64 = f32::MAX as f64;
-    if (MIN..=MAX).contains(&value) || value.is_nan() || value.is_infinite() {
-        Some(value as f32)
+/// Checks if an `i64` fits within an `i32`, and converts it if so.
+fn maybe_i32(value: i64) -> Option<i32> {
+    const MIN: i64 = i32::MIN as i64;
+    const MAX: i64 = i32::MAX as i64;
+    if (MIN..=MAX).contains(&value) {
+        Some(value as i32)
     } else {
         None
     }

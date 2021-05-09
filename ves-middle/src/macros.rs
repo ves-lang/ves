@@ -3,14 +3,14 @@ macro_rules! unary_num_map {
     ($lit:expr, $op:tt) => {{
         use ves_parser::ast::LitValue;
         match $lit {
-            LitValue::Number(i) => LitValue::from($op i),
+            LitValue::Float(i) => LitValue::from($op i),
             rest => rest,
         }
     }};
     ($lit:expr, $f:expr) => {{
         use ves_parser::ast::LitValue;
         match $lit {
-            LitValue::Number(i) => LitValue::from(($f)(i)),
+            LitValue::Float(i) => LitValue::from(($f)(i)),
             rest => rest,
         }
     }};
@@ -21,7 +21,7 @@ macro_rules! binary_arithm_map {
     ($left:expr, $right:expr, +) => {{
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
-            (LitValue::Number(l), LitValue::Number(r)) => Some(LitValue::from(l + r)),
+            (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l + r)),
             (LitValue::Str(l), LitValue::Str(r)) => Some(
                 LitValue::Str(Cow::<'a, str>::from(format!("{}{}", l, r)))
                     .into(),
@@ -32,14 +32,14 @@ macro_rules! binary_arithm_map {
     ($left:expr, $right:expr, **) => {{
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
-            (LitValue::Number(l), LitValue::Number(r)) => Some(LitValue::from(l.powf(*r))),
+            (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l.powf(*r))),
             _ => None,
         }
     }};
     ($left:expr, $right:expr, $op:tt) => {{
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
-            (LitValue::Number(l), LitValue::Number(r)) => Some(LitValue::from(*l $op *r)),
+            (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(*l $op *r)),
             _ => None,
         }
     }};
@@ -51,7 +51,7 @@ macro_rules! binary_ord_map {
         use ves_parser::ast::LitValue;
         #[allow(clippy::float_cmp)]
         match (&$left, &$right) {
-            (LitValue::Number(l), LitValue::Number(r)) => Some(LitValue::from(l $op r)),
+            (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l $op r)),
             _ => None,
         }
     }};

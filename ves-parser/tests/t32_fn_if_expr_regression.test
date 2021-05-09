@@ -28,7 +28,7 @@ StmtKind::Var
                         name: "n"
                       right: Lit
                         token: "2"
-                        value: LitValue::Number(2.0)
+                        value: LitValue::Integer(2)
                     pattern: ConditionPattern::Value
                   then: DoBlock
                     statements=
@@ -48,7 +48,7 @@ StmtKind::Var
                               name: "n"
                             right: Lit
                               token: "1"
-                              value: LitValue::Number(1.0)
+                              value: LitValue::Integer(1)
                         tco: false
                         rest: false
                       right: Call
@@ -61,14 +61,14 @@ StmtKind::Var
                               name: "n"
                             right: Lit
                               token: "2"
-                              value: LitValue::Number(2.0)
+                              value: LitValue::Integer(2)
                         tco: false
                         rest: false
             kind: Function
         args=
           Lit
             token: "30"
-            value: LitValue::Number(30.0)
+            value: LitValue::Integer(30)
         tco: false
         rest: false
       n_uses: 0

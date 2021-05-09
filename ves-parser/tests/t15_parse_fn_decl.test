@@ -1,10 +1,10 @@
-fn name(a, b = 0, ...c) {}
-fn name(a, b = 0, ...c) => 0
-fn(a, b = 0, ...c) {}
-fn(a, b = 0, ...c) => 0
-fn(a, b = 0, ...c,) => 0
+fn name(a, b = 0.0, ...c) {}
+fn name(a, b = 0.0, ...c) => 0.0
+fn(a, b = 0.0, ...c) {}
+fn(a, b = 0.0, ...c) => 0.0
+fn(a, b = 0.0, ...c,) => 0.0
 fn(){}
-fn(b = 0) {}
+fn(b = 0.0) {}
 fn(...args) {}
 
 %output
@@ -21,8 +21,8 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: "c"
     body=
@@ -39,15 +39,15 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: "c"
     body=
       StmtKind::Return
         return_value: Lit
-          token: "0"
-          value: LitValue::Number(0.0)
+          token: "0.0"
+          value: LitValue::Float(0.0)
     kind: Function
 StmtKind::ExprStmt
   expr: FnInfo
@@ -61,8 +61,8 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: "c"
     body=
@@ -79,15 +79,15 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: "c"
     body=
       StmtKind::Return
         return_value: Lit
-          token: "0"
-          value: LitValue::Number(0.0)
+          token: "0.0"
+          value: LitValue::Float(0.0)
     kind: Function
 StmtKind::ExprStmt
   expr: FnInfo
@@ -101,15 +101,15 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: "c"
     body=
       StmtKind::Return
         return_value: Lit
-          token: "0"
-          value: LitValue::Number(0.0)
+          token: "0.0"
+          value: LitValue::Float(0.0)
     kind: Function
 StmtKind::ExprStmt
   expr: FnInfo
@@ -129,8 +129,8 @@ StmtKind::ExprStmt
         tuple
           field0: "b"
           field1: Lit
-            token: "0"
-            value: LitValue::Number(0.0)
+            token: "0.0"
+            value: LitValue::Float(0.0)
           field2: false
       rest: None
     body=

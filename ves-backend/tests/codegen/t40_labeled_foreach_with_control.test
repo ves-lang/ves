@@ -8,9 +8,9 @@
 %output
 
 // @first.pre_start:
-|0000| PushNum32(0.0)   // i
-|0001| PushNum32(10.0)  // first.[[END]]
-|0002| PushNum32(1.0)   // first.[[STEP]]
+|0000| PushInt32(0)   // i
+|0001| PushInt32(10)  // first.[[END]]
+|0002| PushInt32(1)   // first.[[STEP]]
 // @first.start:
 |0003| GetLocal(0)      // get i
 |0004| GetLocal(1)      // get first.[[END]]
@@ -27,9 +27,9 @@
 |0014| Jump(3)          // jump @first.start
 // @first.body:
 // @second.pre_start:
-|0015| PushNum32(0.0)   // j
-|0016| PushNum32(10.0)  // second.[[END]] 
-|0017| PushNum32(1.0)   // second.[[STEP]]
+|0015| PushInt32(0)   // j
+|0016| PushInt32(10)  // second.[[END]] 
+|0017| PushInt32(1)   // second.[[STEP]]
 // @second.start:
 |0018| GetLocal(3)      // get j
 |0019| GetLocal(4)      // get second.[[END]]

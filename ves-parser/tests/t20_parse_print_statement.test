@@ -10,26 +10,26 @@ print(a, b); print(c, d)
 StmtKind::Print
   value: Lit
     token: "1"
-    value: LitValue::Number(1.0)
+    value: LitValue::Integer(1)
 StmtKind::Print
   value: ExprKind::Comma
     operands=
       Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
       Lit
         token: "2"
-        value: LitValue::Number(2.0)
+        value: LitValue::Integer(2)
 StmtKind::Print
   value: DoBlock
     statements=
       StmtKind::Print
         value: Lit
           token: "3"
-          value: LitValue::Number(3.0)
+          value: LitValue::Integer(3)
     value: Lit
       token: "4"
-      value: LitValue::Number(4.0)
+      value: LitValue::Integer(4)
 StmtKind::Print
   value: FnInfo
     name: "[fn@4:7]"

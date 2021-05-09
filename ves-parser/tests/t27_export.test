@@ -50,7 +50,7 @@ StmtKind::Var
       kind: Let
       initializer: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
       n_uses: 0
 StmtKind::Var
   declarations=
@@ -59,7 +59,7 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
       n_uses: 0
 StmtKind::ExprStmt
   expr: FnInfo

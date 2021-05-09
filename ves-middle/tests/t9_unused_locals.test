@@ -27,6 +27,6 @@ StmtKind::ExprStmt
             kind: Let
             initializer: Lit
               token: "0"
-              value: LitValue::Number(0.0)
+              value: LitValue::Float(0.0)
             n_uses: 0
     kind: Function
