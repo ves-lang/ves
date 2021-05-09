@@ -999,6 +999,7 @@ name = "ves-middle"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "ibig",
  "lazy_static",
  "log",
  "pathdiff",

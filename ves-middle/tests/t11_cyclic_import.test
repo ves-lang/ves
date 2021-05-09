@@ -88,5 +88,5 @@ StmtKind::ExprStmt
   │ ╰─StmtKind::Return
   │   ╰─return_value: Lit
   │     ├─token: "7"
-  │     ╰─value: LitValue::Float(7.0)
+  │     ╰─value: LitValue::Integer(7)
   ╰─kind: Function

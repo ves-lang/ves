@@ -52,7 +52,7 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "0"
-        value: LitValue::Float(0.0)
+        value: LitValue::Integer(0)
       n_uses: 1
 StmtKind::Var
   declarations=
@@ -61,7 +61,7 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "1"
-        value: LitValue::Float(1.0)
+        value: LitValue::Integer(1)
       n_uses: 1
 StmtKind::Var
   declarations=
@@ -70,7 +70,7 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "3"
-        value: LitValue::Float(3.0)
+        value: LitValue::Integer(3)
       n_uses: 2
 StmtKind::Var
   declarations=
@@ -87,12 +87,12 @@ StmtKind::Var
               name: "a"
             right: Lit
               token: "3"
-              value: LitValue::Float(3.0)
+              value: LitValue::Integer(3)
           right: ExprKind::Binary
             op: Multiply
             left: Lit
               token: "1"
-              value: LitValue::Float(1.0)
+              value: LitValue::Integer(1)
             right: ExprKind::Variable
               name: "b"
         right: ExprKind::Variable
@@ -117,7 +117,7 @@ StmtKind::Var
         op: Divide
         left: Lit
           token: "<folded>"
-          value: LitValue::Float(1.0)
+          value: LitValue::Integer(1)
         right: ExprKind::Variable
           name: "f"
       n_uses: 0
@@ -125,14 +125,14 @@ StmtKind::_Empty
 StmtKind::Print
   value: Lit
     token: "<folded>"
-    value: LitValue::Float(56.0)
+    value: LitValue::Integer(56)
 StmtKind::_Empty
 StmtKind::_Empty
 StmtKind::_Empty
 StmtKind::Print
   value: Lit
     token: "<folded>"
-    value: LitValue::Float(207885634.66666666)
+    value: LitValue::Integer(207885634)
 StmtKind::Block
   statements=
     StmtKind::Var

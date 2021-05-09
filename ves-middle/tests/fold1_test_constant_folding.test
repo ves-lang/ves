@@ -17,7 +17,7 @@ StmtKind::Print
         value: LitValue::Float(7.871531640625001)
       Lit
         token: "<folded>"
-        value: LitValue::Float(3.0)
+        value: LitValue::Integer(3)
       Lit
         token: "<folded>"
         value: LitValue::Str("abcdef")
