@@ -110,6 +110,7 @@ pub const QNAN_BITS: u64 =      0b01111111_11111100_00000000_00000000_00000000_0
 pub mod mask {
     pub const TAG: u64 =        0b10000000_00000011_00000000_00000000_00000000_00000000_00000000_00000000;
     pub const QNAN: u64 =       0b11111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const ITAG: u64 =       0b01111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000;
     pub const PTR: u64 =        0b00000000_00000000_11111111_11111111_11111111_11111111_11111111_11111111;
 }
 #[rustfmt::skip]
@@ -117,6 +118,7 @@ pub mod tag {
     //                        HIGH BIT         LOW BITS
     //                            v               vv
     pub const FLOAT: u64 =      0b0_0000000000000_00_000000000000000000000000000000000000000000000000;
+    pub const INT: u64 =        0b0_1111111111111_00_000000000000000000000000000000000000000000000000;
     pub const NONE: u64 =       0b0_1111111111111_01_000000000000000000000000000000000000000000000000;
     pub const BOOL: u64 =       0b0_1111111111111_10_000000000000000000000000000000000000000000000000;
     pub const PTR: u64 =        0b1_1111111111111_01_000000000000000000000000000000000000000000000000;
@@ -137,9 +139,9 @@ pub struct NanBox(u64);
 impl NanBox {
     pub fn new(value: Value) -> NanBox {
         match value {
-            // Safety: Floats are stored as themselves so the transmute is perfectly safe
-            Value::Num(n) => NanBox(n.to_bits()),
-            Value::Bool(b) => NanBox(b as u64 | tag::BOOL),
+            Value::Int(v) => Self::int(v),
+            Value::Float(n) => Self::float(n),
+            Value::Bool(b) => Self::bool(b),
             Value::None => Self::none(),
             // Safety: The nanbox's drop makes sure to decrement the refcount.
             Value::Ref(obj) => Self::box_ptr(obj.ptr()),
@@ -187,30 +189,29 @@ impl NanBox {
     }
 
     #[inline]
-    pub fn num(n: f64) -> Self {
+    pub fn float(n: f64) -> Self {
+        // Safety: Floats are stored as themselves so the transmute is perfectly safe
         Self(n.to_bits())
     }
 
+    /// Safety: it is up to the user to ensure that `n` only uses 48 bits, and the sign bit.
+    #[inline]
     pub fn int(n: i32) -> Self {
-        todo!()
-    }
-
-    pub fn int_48(n: i64) -> Option<Self> {
-        todo!()
+        Self(n as u32 as u64 | tag::INT)
     }
 
     #[inline]
-    pub fn r#true() -> Self {
-        Self(tag::BOOL | 1)
+    pub fn bool(v: bool) -> Self {
+        Self((v as u64) | tag::BOOL)
     }
 
     #[inline]
-    pub fn r#false() -> Self {
-        Self(tag::BOOL)
+    pub fn is_int(&self) -> bool {
+        self.masked() == tag::INT
     }
 
     #[inline]
-    pub fn is_num(&self) -> bool {
+    pub fn is_float(&self) -> bool {
         (self.0 & QNAN_BITS) != QNAN_BITS
     }
 
@@ -250,13 +251,23 @@ impl NanBox {
         masked == tag::OK || masked == tag::ERR
     }
 
+    #[inline(always)]
+    pub fn as_int_unchecked(&self) -> i32 {
+        (self.0 | tag::INT) as u32 as i32
+    }
+
+    #[inline(always)]
+    pub fn into_int_unchecked(self) -> i32 {
+        (self.0 | tag::INT) as u32 as i32
+    }
+
     /// Unboxes the boxed value into a raw f64.
     ///
     /// # Safety
     /// The caller must ensure that the boxed value is an f64. Failure to do so will result in a NaN
     /// being returned.
     #[inline(always)]
-    pub fn as_num_unchecked(&self) -> f64 {
+    pub fn as_float_unchecked(&self) -> f64 {
         f64::from_bits(self.0)
     }
 
@@ -266,7 +277,7 @@ impl NanBox {
     /// The caller must ensure that the boxed value is an f64. Failure to do so may result in a memory leak
     /// and a NaN being returned.
     #[inline(always)]
-    pub unsafe fn into_num_unchecked(self) -> f64 {
+    pub unsafe fn into_float_unchecked(self) -> f64 {
         let this = std::mem::ManuallyDrop::new(self);
         f64::from_bits(this.0)
     }
@@ -284,15 +295,19 @@ impl NanBox {
     /// `Ok` or `Err` if the value is a pointer.
     #[inline]
     pub fn unbox_with_variant(self) -> (Value, NanBoxVariant) {
-        if self.is_num() {
+        if self.is_int() {
             (
-                Value::Num(unsafe { self.into_num_unchecked() }),
+                Value::Int((self.0 | tag::INT) as u32 as i32),
+                NanBoxVariant::Value,
+            )
+        } else if self.is_float() {
+            (
+                Value::Float(unsafe { self.into_float_unchecked() }),
                 NanBoxVariant::Value,
             )
         } else if self.is_none() {
             (Value::None, NanBoxVariant::Value)
         } else if self.is_bool() {
-            debug_assert!(self.is_bool());
             (Value::Bool(self.0 & 1 == 1), NanBoxVariant::Value)
         } else {
             let res = unsafe { self.unbox_pointer() };
@@ -343,13 +358,15 @@ impl std::fmt::Debug for NanBox {
             writeln!(
                 f,
                 "    tag     = {:064b} ({}),",
-                if self.is_num() {
+                if self.is_float() {
                     0
                 } else {
                     (self.0 & mask::QNAN) & (!QNAN_BITS)
                 },
-                if self.is_num() {
-                    "num"
+                if self.is_int() {
+                    "int"
+                } else if self.is_float() {
+                    "float"
                 } else if self.is_none() {
                     "none"
                 } else if self.is_ptr() {
@@ -405,20 +422,30 @@ mod tests {
     fn test_nanbox_predicates() {
         let none = NanBox::none();
         assert!(none.is_none());
-        assert!(!none.is_num());
+        assert!(!none.is_float());
         assert_eq!(none.0, tag::NONE);
         println!("{:#?}", none);
 
-        let num = NanBox::new(Value::Num(std::f64::consts::PI));
-        assert!(num.is_num());
-        assert!(!num.is_none());
-        assert_eq!(num.0, std::f64::consts::PI.to_bits());
-        println!("{:#?}", num);
+        let int = NanBox::new(Value::Int(-100));
+        assert!(int.is_int());
+        assert!(!int.is_none());
+        assert!(!int.is_bool());
+        assert!(!int.is_normal_ptr());
+        assert!(!int.is_ok());
+        assert!(!int.is_err());
+        assert!(!int.is_float());
+        println!("{:#?}", int);
+
+        let float = NanBox::new(Value::Float(std::f64::consts::PI));
+        assert!(float.is_float());
+        assert!(!float.is_none());
+        assert_eq!(float.0, std::f64::consts::PI.to_bits());
+        println!("{:#?}", float);
 
         for value in &[false, true] {
             let boolean = NanBox::new(Value::Bool(*value));
             assert!(boolean.is_bool());
-            assert!(!boolean.is_num());
+            assert!(!boolean.is_float());
             assert!(!boolean.is_none());
             assert!(!boolean.is_ptr());
             println!("{:#?}", boolean);
@@ -443,7 +470,7 @@ mod tests {
 
         let val = Value::from(ptr);
         let val = NanBox::new(val);
-        assert!(!val.is_num());
+        assert!(!val.is_float());
         assert!(!val.is_none());
         assert!(!val.is_bool());
         assert!(val.is_ptr());

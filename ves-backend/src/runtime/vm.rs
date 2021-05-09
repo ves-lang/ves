@@ -67,8 +67,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::GetLocal(idx) => self.get_local(idx),
                 Opcode::SetLocal(idx) => self.set_local(idx),
                 Opcode::PushInt32(num) => self.push(NanBox::int(num as _)),
-                Opcode::PushTrue => self.push(NanBox::r#true()),
-                Opcode::PushFalse => self.push(NanBox::r#false()),
+                Opcode::PushTrue => self.push(NanBox::bool(true)),
+                Opcode::PushFalse => self.push(NanBox::bool(false)),
                 Opcode::PushNone => self.push(NanBox::none()),
                 Opcode::GetGlobal(idx) => self.get_global(idx)?,
                 Opcode::GetUpvalue(_) => unimplemented!(),
@@ -160,10 +160,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_num() && right.is_num() {
+        if left.is_float() && right.is_float() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_num_unchecked() + right.as_num_unchecked(),
+                left.as_float_unchecked() + right.as_float_unchecked(),
             ));
             return Ok(());
         }
@@ -177,10 +177,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_num() && right.is_num() {
+        if left.is_float() && right.is_float() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_num_unchecked() - right.as_num_unchecked(),
+                left.as_float_unchecked() - right.as_float_unchecked(),
             ));
             return Ok(());
         }
@@ -194,10 +194,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_num() && right.is_num() {
+        if left.is_float() && right.is_float() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_num_unchecked() * right.as_num_unchecked(),
+                left.as_float_unchecked() * right.as_float_unchecked(),
             ));
             return Ok(());
         }
@@ -209,14 +209,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_num() && right.is_num() {
-            if right.as_num_unchecked() == 0.0 {
-                return Err(self.error("Attempted to divide by zero."));
-            }
-
+        if left.is_float() && right.is_float() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_num_unchecked() / right.as_num_unchecked(),
+                left.as_float_unchecked() / right.as_float_unchecked(),
             ));
             return Ok(());
         }
@@ -228,10 +224,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_num() && right.is_num() {
+        if left.is_float() && right.is_float() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_num_unchecked().powf(right.as_num_unchecked()),
+                left.as_float_unchecked().powf(right.as_float_unchecked()),
             ));
             return Ok(());
         }
@@ -242,9 +238,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn neg(&mut self) -> Result<(), VesError> {
         let operand = *self.peek();
 
-        if operand.is_num() {
+        if operand.is_float() {
             self.pop();
-            self.push(NanBox::from(-operand.as_num_unchecked()));
+            self.push(NanBox::from(-operand.as_float_unchecked()));
             return Ok(());
         }
 

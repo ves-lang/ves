@@ -1470,17 +1470,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 let offset = self.state.builder.constant((*value).into(), span.clone())?;
                 self.state.builder.op(Opcode::GetConst(offset), span);
             }
-            LitValue::Integer(value) => match maybe_i32(*value) {
-                Some(value) => {
-                    self.state.builder.op(Opcode::PushInt32(value), span);
-                }
-                None => {
-                    // Guaranteed to be under 48 bits
-                    todo!()
-                    // let offset = self.state.builder.constant(value.into(), span.clone())?;
-                    // self.state.builder.op(Opcode::GetConst(offset), span);
-                }
-            },
+            LitValue::Integer(value) => {
+                self.state.builder.op(Opcode::PushInt32(*value), span);
+            }
             LitValue::Bool(value) => {
                 self.state.builder.op(
                     match value {

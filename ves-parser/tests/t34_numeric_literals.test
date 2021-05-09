@@ -10,13 +10,13 @@
 10000000000000000000000000000000000000000000000000000000000n;
 0xABCDEF;
 0xA_B_C_D_E_F;
-0xDEAD_CAFE;
+0xCAFE;
 0x1_F331_D0D;
 0b1111_0000_0101_1010_1100_0011;
 0b000000;
 0b111111;
 0B00000000;
-0XFFFFFFFF;
+0X7FFFFFFF;
 0b000000000n;
 0x000000000n;
 0B000000000n;
@@ -74,8 +74,8 @@ StmtKind::ExprStmt
     value: LitValue::Integer(11259375)
 StmtKind::ExprStmt
   expr: Lit
-    token: "0xDEAD_CAFE"
-    value: LitValue::Integer(3735931646)
+    token: "0xCAFE"
+    value: LitValue::Integer(51966)
 StmtKind::ExprStmt
   expr: Lit
     token: "0x1_F331_D0D"
@@ -98,8 +98,8 @@ StmtKind::ExprStmt
     value: LitValue::Integer(0)
 StmtKind::ExprStmt
   expr: Lit
-    token: "0XFFFFFFFF"
-    value: LitValue::Integer(4294967295)
+    token: "0X7FFFFFFF"
+    value: LitValue::Integer(2147483647)
 StmtKind::ExprStmt
   expr: Lit
     token: "0b000000000n"

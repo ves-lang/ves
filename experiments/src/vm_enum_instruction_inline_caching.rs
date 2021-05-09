@@ -208,12 +208,7 @@ impl<T: VesGc> VmEnum<T> {
         if val.is_ptr() {
             return;
         }
-        let jmp = match val.unbox() {
-            Value::Num(n) => n != 0.0,
-            Value::Bool(b) => b,
-            Value::None => false,
-            Value::Ref(_) => unreachable!(),
-        };
+        let jmp = val.unbox().is_truthy();
         if !jmp {
             self.jmp(offset)
         }
@@ -227,9 +222,9 @@ impl<T: VesGc> VmEnum<T> {
         let right = self.pop();
         let left = self.pop();
 
-        if right.is_num() && left.is_num() {
-            self.push(NanBox::new(Value::Num(unsafe {
-                left.into_num_unchecked() + right.into_num_unchecked()
+        if right.is_float() && left.is_float() {
+            self.push(NanBox::new(Value::Float(unsafe {
+                left.into_float_unchecked() + right.into_float_unchecked()
             })));
             return;
         }
@@ -252,9 +247,9 @@ impl<T: VesGc> VmEnum<T> {
         let right = self.pop();
         let left = self.pop();
 
-        if right.is_num() && left.is_num() {
-            self.push(NanBox::new(Value::Num(unsafe {
-                left.into_num_unchecked() - right.into_num_unchecked()
+        if right.is_float() && left.is_float() {
+            self.push(NanBox::new(Value::Float(unsafe {
+                left.into_float_unchecked() - right.into_float_unchecked()
             })));
             return;
         }
@@ -270,9 +265,9 @@ impl<T: VesGc> VmEnum<T> {
         let right = self.pop();
         let left = self.pop();
 
-        if right.is_num() && left.is_num() {
-            self.push(NanBox::new(Value::Num(unsafe {
-                left.into_num_unchecked() * right.into_num_unchecked()
+        if right.is_float() && left.is_float() {
+            self.push(NanBox::new(Value::Float(unsafe {
+                left.into_float_unchecked() * right.into_float_unchecked()
             })));
             return;
         }
@@ -288,13 +283,13 @@ impl<T: VesGc> VmEnum<T> {
         let right = self.pop();
         let left = self.pop();
 
-        if right.is_num() && left.is_num() {
-            if left.as_num_unchecked() == 0.0 {
+        if right.is_float() && left.is_float() {
+            if left.as_float_unchecked() == 0.0 {
                 self.error("Attempted to divide by zero".to_string());
                 return;
             }
-            self.push(NanBox::new(Value::Num(unsafe {
-                left.into_num_unchecked() / right.into_num_unchecked()
+            self.push(NanBox::new(Value::Float(unsafe {
+                left.into_float_unchecked() / right.into_float_unchecked()
             })));
             return;
         }
@@ -508,9 +503,9 @@ mod tests {
         let mut vm = VmEnum::new(
             handle.clone(),
             vec![
-                NanBox::num(100.0),
-                NanBox::num(0.0),
-                NanBox::num(1.0),
+                NanBox::float(100.0),
+                NanBox::float(0.0),
+                NanBox::float(1.0),
                 NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
                 NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
                 NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
@@ -520,6 +515,6 @@ mod tests {
 
         vm.reset();
         let res = vm.run().unwrap().unbox();
-        assert_eq!(res, Value::Num(354224848179262000000.0));
+        assert_eq!(res, Value::Float(354224848179262000000.0));
     }
 }

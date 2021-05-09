@@ -237,8 +237,8 @@ pub enum UnOpKind {
 pub enum LitValue<'a> {
     /// A 64-bit floating pointer number.
     Float(f64),
-    /// A 48-bit integer literal.
-    Integer(i64),
+    /// A 32-bit integer literal.
+    Integer(i32),
     /// An arbitrary-precision integer literal.
     BigInteger(#[debug] IBig),
     /// A boolean.

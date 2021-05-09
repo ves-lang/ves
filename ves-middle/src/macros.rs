@@ -22,16 +22,14 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l + r)),
-            // TODO: allow adding an integer from the valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Float(l), LitValue::Integer(r)) if *r >= i32::MIN as i64 && *r <= i32::MAX as i64 => {
+            (LitValue::Float(l), LitValue::Integer(r)) => {
                 if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
                     Some(LitValue::from(l + r))
                 } else {
                     None
                 }
             }
-            // TODO: allow adding an integer from the valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Integer(l), LitValue::Float(r)) if *l >= i32::MIN as i64 && *l <= i32::MAX as i64 => {
+            (LitValue::Integer(l), LitValue::Float(r)) => {
                 if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
                     Some(LitValue::from(l + r))
                 } else {
@@ -53,16 +51,14 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l.powf(*r))),
-            // TODO: allow exponentiation with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Float(l), LitValue::Integer(r)) if *r >= i32::MIN as i64 && *r <= i32::MAX as i64 => {
+            (LitValue::Float(l), LitValue::Integer(r)) => {
                 if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
                     Some(LitValue::from(l.powf(r)))
                 } else {
                     None
                 }
             }
-            // TODO: allow exponentiation with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Integer(l), LitValue::Float(r)) if *l >= i32::MIN as i64 && *l <= i32::MAX as i64 => {
+            (LitValue::Integer(l), LitValue::Float(r)) => {
                 if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
                     Some(LitValue::from(l.powf(*r)))
                 } else {
@@ -92,16 +88,14 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(*l $op *r)),
-            // TODO: allow binary ops with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Float(l), LitValue::Integer(r)) if *r >= i32::MIN as i64 && *r <= i32::MAX as i64 => {
+            (LitValue::Float(l), LitValue::Integer(r)) => {
                 if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
                     Some(LitValue::from(l $op r))
                 } else {
                     None
                 }
             }
-            // TODO: allow binary ops with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Integer(l), LitValue::Float(r)) if *l >= i32::MIN as i64 && *l <= i32::MAX as i64 => {
+            (LitValue::Integer(l), LitValue::Float(r)) => {
                 if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
                     Some(LitValue::from(l $op r))
                 } else {
@@ -124,16 +118,14 @@ macro_rules! binary_ord_map {
         #[allow(clippy::float_cmp)]
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l $op r)),
-            // TODO: allow binary ops with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Float(l), LitValue::Integer(r)) if *r >= i32::MIN as i64 && *r <= i32::MAX as i64 => {
+            (LitValue::Float(l), LitValue::Integer(r)) => {
                 if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
                     Some(LitValue::from(*l $op r))
                 } else {
                     None
                 }
             }
-            // TODO: allow binary ops with integer from valid integer range range ((-2**42+1)..(2**48-1))
-            (LitValue::Integer(l), LitValue::Float(r)) if *l >= i32::MIN as i64 && *l <= i32::MAX as i64 => {
+            (LitValue::Integer(l), LitValue::Float(r)) => {
                 if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
                     Some(LitValue::from(l $op *r))
                 } else {

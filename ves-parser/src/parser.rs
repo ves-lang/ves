@@ -1535,7 +1535,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             return Ok(literal!(
                 self,
                 match lexeme.parse::<i64>() {
-                    Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
+                    Ok(n) if n >= i32::MIN as i64 && n <= i32::MAX as i64 =>
+                        ast::LitValue::Integer(n as i32),
                     // TODO: help message "Use big integer notation like this ____n"
                     Ok(_) =>
                         return Err(VesError::parse(
@@ -1582,7 +1583,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             return Ok(literal!(
                 self,
                 match i64::from_str_radix(&lexeme, radix) {
-                    Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
+                    Ok(n) if n >= i32::MIN as i64 && n <= i32::MAX as i64 =>
+                        ast::LitValue::Integer(n as i32),
                     Ok(_) =>
                         return Err(VesError::parse(
                             "Integer is too large",
