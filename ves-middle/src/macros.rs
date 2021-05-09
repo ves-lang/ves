@@ -22,20 +22,8 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l + r)),
-            (LitValue::Float(l), LitValue::Integer(r)) => {
-                if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
-                    Some(LitValue::from(l + r))
-                } else {
-                    None
-                }
-            }
-            (LitValue::Integer(l), LitValue::Float(r)) => {
-                if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
-                    Some(LitValue::from(l + r))
-                } else {
-                    None
-                }
-            }
+            (LitValue::Float(l), LitValue::Integer(r)) => Some(LitValue::from(*l + (*r as f64))),
+            (LitValue::Integer(l), LitValue::Float(r)) => Some(LitValue::from((*l as f64) + *r)),
             (LitValue::Integer(l), LitValue::Integer(r)) => Some(LitValue::Integer(l + r)),
             (LitValue::Integer(l), LitValue::BigInteger(r)) => Some(LitValue::BigInteger(ibig::IBig::from(*l) + r)),
             (LitValue::BigInteger(l), LitValue::BigInteger(r)) => Some(LitValue::BigInteger(l + r)),
@@ -51,20 +39,8 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l.powf(*r))),
-            (LitValue::Float(l), LitValue::Integer(r)) => {
-                if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
-                    Some(LitValue::from(l.powf(r)))
-                } else {
-                    None
-                }
-            }
-            (LitValue::Integer(l), LitValue::Float(r)) => {
-                if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
-                    Some(LitValue::from(l.powf(*r)))
-                } else {
-                    None
-                }
-            }
+            (LitValue::Float(l), LitValue::Integer(r)) => Some(LitValue::from(l.powf(*r as f64))),
+            (LitValue::Integer(l), LitValue::Float(r)) => Some(LitValue::from((*l as f64).powf(*r))),
             (LitValue::Integer(l), LitValue::Integer(r)) if *r >= 0 => Some(LitValue::Integer(l.pow(*r as u32))),
             (LitValue::Integer(l), LitValue::BigInteger(r)) if r <= &ibig::IBig::from(u16::MAX) => {
                 if let Ok(e) = std::convert::TryInto::<u64>::try_into(r.clone()) {
@@ -88,20 +64,8 @@ macro_rules! binary_arithm_map {
         use ves_parser::ast::LitValue;
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(*l $op *r)),
-            (LitValue::Float(l), LitValue::Integer(r)) => {
-                if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
-                    Some(LitValue::from(l $op r))
-                } else {
-                    None
-                }
-            }
-            (LitValue::Integer(l), LitValue::Float(r)) => {
-                if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
-                    Some(LitValue::from(l $op r))
-                } else {
-                    None
-                }
-            }
+            (LitValue::Float(l), LitValue::Integer(r)) => Some(LitValue::from(*l $op (*r as f64))),
+            (LitValue::Integer(l), LitValue::Float(r)) => Some(LitValue::from((*l as f64) $op *r)),
             (LitValue::Integer(l), LitValue::Integer(r)) => Some(LitValue::Integer(l $op r)),
             (LitValue::Integer(l), LitValue::BigInteger(r)) => Some(LitValue::BigInteger(ibig::IBig::from(*l) $op r)),
             (LitValue::BigInteger(l), LitValue::BigInteger(r)) => Some(LitValue::BigInteger(l $op r)),
@@ -118,20 +82,8 @@ macro_rules! binary_ord_map {
         #[allow(clippy::float_cmp)]
         match (&$left, &$right) {
             (LitValue::Float(l), LitValue::Float(r)) => Some(LitValue::from(l $op r)),
-            (LitValue::Float(l), LitValue::Integer(r)) => {
-                if let Ok(r) = std::convert::TryInto::<f64>::try_into(*r as i32) {
-                    Some(LitValue::from(*l $op r))
-                } else {
-                    None
-                }
-            }
-            (LitValue::Integer(l), LitValue::Float(r)) => {
-                if let Ok(l) = std::convert::TryInto::<f64>::try_into(*l as i32) {
-                    Some(LitValue::from(l $op *r))
-                } else {
-                    None
-                }
-            }
+            (LitValue::Float(l), LitValue::Integer(r)) => Some(LitValue::from(*l $op (*r as f64))),
+            (LitValue::Integer(l), LitValue::Float(r)) => Some(LitValue::from((*l as f64) $op *r)),
             (LitValue::Integer(l), LitValue::Integer(r)) => Some(LitValue::from(*l $op *r)),
             (LitValue::Integer(l), LitValue::BigInteger(r)) => Some(LitValue::from(&ibig::IBig::from(*l) $op r)),
             (LitValue::BigInteger(l), LitValue::BigInteger(r)) => Some(LitValue::from(l $op r)),
