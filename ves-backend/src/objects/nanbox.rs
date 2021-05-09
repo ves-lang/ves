@@ -104,8 +104,8 @@ use crate::gc::{VesPtr, VesRawPtr, VesRef};
 
 use super::value::Value;
 
-pub const QNAN: u64 = 0b01111111_11111100_00000000_00000000_00000000_00000000_00000000_00000000;
-
+#[rustfmt::skip]
+pub const QNAN_BITS: u64 =      0b01111111_11111100_00000000_00000000_00000000_00000000_00000000_00000000;
 #[rustfmt::skip]
 pub mod mask {
     pub const TAG: u64 =        0b10000000_00000011_00000000_00000000_00000000_00000000_00000000_00000000;
@@ -211,7 +211,7 @@ impl NanBox {
 
     #[inline]
     pub fn is_num(&self) -> bool {
-        (self.0 & QNAN) != QNAN
+        (self.0 & QNAN_BITS) != QNAN_BITS
     }
 
     #[inline]
@@ -346,7 +346,7 @@ impl std::fmt::Debug for NanBox {
                 if self.is_num() {
                     0
                 } else {
-                    (self.0 & mask::QNAN) & (!QNAN)
+                    (self.0 & mask::QNAN) & (!QNAN_BITS)
                 },
                 if self.is_num() {
                     "num"
