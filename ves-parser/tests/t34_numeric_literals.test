@@ -17,6 +17,10 @@
 0b111111;
 0B00000000;
 0XFFFFFFFF;
+0b000000000n;
+0x000000000n;
+0B000000000n;
+0X000000000n;
 
 %output ok
 
@@ -96,3 +100,19 @@ StmtKind::ExprStmt
   expr: Lit
     token: "0XFFFFFFFF"
     value: LitValue::Integer(4294967295)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0b000000000n"
+    value: LitValue::BigInteger(0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0x000000000n"
+    value: LitValue::BigInteger(0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0B000000000n"
+    value: LitValue::BigInteger(0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0X000000000n"
+    value: LitValue::BigInteger(0)

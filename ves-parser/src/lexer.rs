@@ -178,6 +178,12 @@ pub enum TokenKind<'a> {
     /// An arbitrary-length integer literal, e.g. `111_222_777n`.
     #[regex("[0-9]([0-9_]*[0-9])?n")]
     BigInt,
+    /// An arbitrary-length binary integer literal, e.g. `0b000100101n`.
+    #[regex("0[xX][0-9a-fA-F][0-9a-fA-F_]*[0-9aA-fF]?n")]
+    BigHexInt,
+    /// An arbitrary-length hexadecimal integer literal, e.g. `0xFFFFFFFFn`.
+    #[regex("0[bB][01][01_]*[01]?n")]
+    BigBinInt,
     /// No value (same as nil/null)
     #[token("none")]
     None,
@@ -930,6 +936,9 @@ mod tests {
         0b1111_0000_0101_1010_1100_0011
         0b000000
         0b111111
+
+        0b000000000n
+        0x000000000n
 "#;
         assert_eq!(
             test_tokenize(source),
@@ -953,6 +962,8 @@ mod tests {
                 token!(BinInt, "0b1111_0000_0101_1010_1100_0011"),
                 token!(BinInt, "0b000000"),
                 token!(BinInt, "0b111111"),
+                token!(BigBinInt, "0b000000000n"),
+                token!(BigHexInt, "0x000000000n"),
             ]
         )
     }

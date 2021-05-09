@@ -1530,6 +1530,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
         // integer literal
         if self.match_(&TokenKind::Integer) {
+            check_trailing_underscore(&self.previous, self.fid)?;
             let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "i");
             return Ok(literal!(
                 self,
@@ -1553,6 +1554,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
         // arbitrary length integer literal
         if self.match_(&TokenKind::BigInt) {
+            check_trailing_underscore(&self.previous, self.fid)?;
             let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "n");
             return Ok(literal!(
                 self,
@@ -1569,6 +1571,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
         // hex or binary integer literal
         if self.match_any(&[TokenKind::HexInt, TokenKind::BinInt]) {
+            check_trailing_underscore(&self.previous, self.fid)?;
             let radix = if self.previous.kind == TokenKind::HexInt {
                 16
             } else {
@@ -1586,6 +1589,29 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                             self.previous.span.clone(),
                             self.fid,
                         )),
+                    _ =>
+                        return Err(VesError::parse(
+                            "Failed to parse literal",
+                            self.previous.span.clone(),
+                            self.fid
+                        )),
+                }
+            ));
+        }
+        // hex or binary big integer literal
+        if self.match_any(&[TokenKind::BigHexInt, TokenKind::BigBinInt]) {
+            check_trailing_underscore(&self.previous, self.fid)?;
+            let radix = if self.previous.kind == TokenKind::BigHexInt {
+                16
+            } else {
+                2
+            };
+            let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "n");
+            let lexeme = lexeme.strip_any_prefix(&["0b", "0x", "0B", "0X"]);
+            return Ok(literal!(
+                self,
+                match IBig::from_str_radix(&lexeme, radix) {
+                    Ok(n) => ast::LitValue::BigInteger(n),
                     _ =>
                         return Err(VesError::parse(
                             "Failed to parse literal",
@@ -1915,6 +1941,18 @@ fn strip_underscore_and_suffix(input: &str, suffix: &str) -> String {
         out.extend(&[c]);
     }
     out
+}
+
+fn check_trailing_underscore(token: &Token<'_>, file_id: FileId) -> ParseResult<()> {
+    if token.lexeme.ends_with('_') {
+        Err(VesError::parse(
+            "Trailing underscores are invalid in numeric literals",
+            token.span.clone(),
+            file_id,
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::Stmt<'a> {

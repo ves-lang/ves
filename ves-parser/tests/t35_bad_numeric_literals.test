@@ -1,0 +1,37 @@
+562949953421311;
+9999999999999999999999999;
+0b00__;
+0x00__;
+100__;
+
+%output err
+
+error: Integer is too large
+  ┌─ <source: #212bee18bc47d5c9>:1:1
+  │
+1 │ 562949953421311;
+  │ ^^^^^^^^^^^^^^^
+
+error: Failed to parse an integer
+  ┌─ <source: #212bee18bc47d5c9>:2:1
+  │
+2 │ 9999999999999999999999999;
+  │ ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Trailing underscores are invalid in numeric literals
+  ┌─ <source: #212bee18bc47d5c9>:3:1
+  │
+3 │ 0b00__;
+  │ ^^^^^^
+
+error: Trailing underscores are invalid in numeric literals
+  ┌─ <source: #212bee18bc47d5c9>:4:1
+  │
+4 │ 0x00__;
+  │ ^^^^^^
+
+error: Trailing underscores are invalid in numeric literals
+  ┌─ <source: #212bee18bc47d5c9>:5:1
+  │
+5 │ 100__;
+  │ ^^^^^
