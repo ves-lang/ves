@@ -1,3 +1,4 @@
+// TODO: update this to reflect changes
 //! A NanBox implementation inspired by <https://github.com/Marwes/nanbox> and <http://craftinginterpreters.com/optimization.html>. See the last link for more info.
 //!
 //! # Overview
@@ -95,6 +96,7 @@
 //! │11111111_11111111_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX_XXXXXXXX│
 //! └───────────────────────────────────────────────────────────────────────┘
 //! ```
+#![allow(clippy::unusual_byte_groupings)]
 
 use std::ptr::NonNull;
 
@@ -102,20 +104,23 @@ use crate::gc::{VesPtr, VesRawPtr, VesRef};
 
 use super::value::Value;
 
-// The size of a pointer on 64-bit systems.
-const TAG_SHIFT: u64 = 48;
-const HIGH_BIT: u64 = 1 << 63;
-const QNAN: u64 = 0x7ffc000000000000;
-const TAG_MASK: u64 = HIGH_BIT | (0b11 << TAG_SHIFT);
-const QNAN_TAG_MASK: u64 = QNAN | TAG_MASK;
-const PTR_MASK: u64 = (1 << TAG_SHIFT) - 1;
+pub const QNAN: u64 = 0b01111111_11111100_00000000_00000000_00000000_00000000_00000000_00000000;
 
-pub const NUM_TAG: u64 = 0;
-pub const NONE_TAG: u64 = QNAN ^ (0b01 << TAG_SHIFT);
-pub const BOOL_TAG: u64 = QNAN ^ (0b10 << TAG_SHIFT);
-pub const PTR_TAG: u64 = HIGH_BIT | QNAN ^ (0b01 << TAG_SHIFT);
-pub const PTR_OK_TAG: u64 = HIGH_BIT | QNAN ^ (0b10 << TAG_SHIFT);
-pub const PTR_ERR_TAG: u64 = HIGH_BIT | QNAN ^ (0b11 << TAG_SHIFT);
+#[rustfmt::skip]
+pub mod mask {
+    pub const TAG: u64 =        0b10000000_00000011_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const QNAN: u64 =       0b11111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const PTR: u64 =        0b00000000_00000000_11111111_11111111_11111111_11111111_11111111_11111111;
+}
+#[rustfmt::skip]
+pub mod tag {
+    pub const FLOAT: u64 =      0b00000000_00000000_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const NONE: u64 =       0b01111111_11111101_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const BOOL: u64 =       0b01111111_11111110_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const PTR: u64 =        0b11111111_11111101_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const OK: u64 =         0b11111111_11111110_00000000_00000000_00000000_00000000_00000000_00000000;
+    pub const ERR: u64 =        0b11111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NanBoxVariant {
@@ -132,7 +137,7 @@ impl NanBox {
         match value {
             // Safety: Floats are stored as themselves so the transmute is perfectly safe
             Value::Num(n) => NanBox(n.to_bits()),
-            Value::Bool(b) => NanBox(b as u64 | BOOL_TAG),
+            Value::Bool(b) => NanBox(b as u64 | tag::BOOL),
             Value::None => Self::none(),
             // Safety: The nanbox's drop makes sure to decrement the refcount.
             Value::Ref(obj) => Self::box_ptr(obj.ptr()),
@@ -143,11 +148,11 @@ impl NanBox {
         match ptr {
             Value::Ref(ptr) => {
                 let raw = ptr.ptr().as_ptr() as u64;
-                let masked = raw & PTR_MASK;
+                let masked = raw & mask::PTR;
                 let tag = match variant {
-                    NanBoxVariant::Value => PTR_TAG,
-                    NanBoxVariant::Ok => PTR_OK_TAG,
-                    NanBoxVariant::Err => PTR_ERR_TAG,
+                    NanBoxVariant::Value => tag::PTR,
+                    NanBoxVariant::Ok => tag::OK,
+                    NanBoxVariant::Err => tag::ERR,
                 };
                 NanBox(tag | masked)
             }
@@ -160,13 +165,13 @@ impl NanBox {
     #[inline]
     fn box_ptr(ptr: VesPtr) -> Self {
         let raw = ptr.as_ptr() as u64;
-        let masked = raw & PTR_MASK;
-        NanBox(PTR_TAG | masked)
+        let masked = raw & mask::PTR;
+        NanBox(tag::PTR | masked)
     }
 
     #[inline]
     fn masked(&self) -> u64 {
-        self.0 & QNAN_TAG_MASK
+        self.0 & mask::QNAN
     }
 
     #[inline]
@@ -176,7 +181,7 @@ impl NanBox {
 
     #[inline]
     pub fn none() -> Self {
-        Self(NONE_TAG)
+        Self(tag::NONE)
     }
 
     #[inline]
@@ -194,12 +199,12 @@ impl NanBox {
 
     #[inline]
     pub fn r#true() -> Self {
-        Self(BOOL_TAG | 1)
+        Self(tag::BOOL | 1)
     }
 
     #[inline]
     pub fn r#false() -> Self {
-        Self(BOOL_TAG)
+        Self(tag::BOOL)
     }
 
     #[inline]
@@ -209,38 +214,38 @@ impl NanBox {
 
     #[inline]
     pub fn is_none(&self) -> bool {
-        self.0 == NONE_TAG
+        self.0 == tag::NONE
     }
 
     #[inline]
     pub fn is_bool(&self) -> bool {
-        self.masked() == BOOL_TAG
+        self.masked() == tag::BOOL
     }
 
     #[inline]
     pub fn is_ptr(&self) -> bool {
-        self.masked() >= PTR_TAG
+        self.masked() >= tag::PTR
     }
 
     #[inline]
     pub fn is_normal_ptr(&self) -> bool {
-        self.masked() == PTR_TAG
+        self.masked() == tag::PTR
     }
 
     #[inline]
     pub fn is_ok(&self) -> bool {
-        self.masked() == PTR_OK_TAG
+        self.masked() == tag::OK
     }
 
     #[inline]
     pub fn is_err(&self) -> bool {
-        self.masked() == PTR_ERR_TAG
+        self.masked() == tag::ERR
     }
 
     #[inline]
     pub fn is_result_variant(&self) -> bool {
         let masked = self.masked();
-        masked == PTR_OK_TAG || masked == PTR_ERR_TAG
+        masked == tag::OK || masked == tag::ERR
     }
 
     /// Unboxes the boxed value into a raw f64.
@@ -304,15 +309,15 @@ impl NanBox {
         debug_assert!(self.is_ptr());
 
         let masked = self.masked();
-        let ptr = (self.0 & PTR_MASK) as VesRawPtr;
+        let ptr = (self.0 & mask::PTR) as VesRawPtr;
         debug_assert!(!ptr.is_null());
 
         let ptr = unsafe { VesRef::new(NonNull::new_unchecked(ptr)) };
         let variant = match masked {
-            PTR_TAG => NanBoxVariant::Value,
-            PTR_OK_TAG => NanBoxVariant::Ok,
+            tag::PTR => NanBoxVariant::Value,
+            tag::OK => NanBoxVariant::Ok,
             _ => {
-                debug_assert_eq!(masked, PTR_ERR_TAG);
+                debug_assert_eq!(masked, tag::ERR);
                 NanBoxVariant::Err
             }
         };
@@ -339,7 +344,7 @@ impl std::fmt::Debug for NanBox {
                 if self.is_num() {
                     0
                 } else {
-                    (self.0 & QNAN_TAG_MASK) & (!QNAN)
+                    (self.0 & mask::QNAN) & (!QNAN)
                 },
                 if self.is_num() {
                     "num"
@@ -384,47 +389,13 @@ mod tests {
 
     use super::*;
 
-    #[allow(clippy::unusual_byte_groupings)]
     #[test]
-    fn test_nanbox_tags() {
-        println!("{:064b}", QNAN);
-        println!("{:064b}", TAG_MASK);
-        println!("{:064b}", QNAN_TAG_MASK);
-        println!("{:064b}", NUM_TAG);
-        println!("{:064b}", NONE_TAG);
-        println!("{:064b}", BOOL_TAG);
-        println!("{:064b}", PTR_TAG);
-
-        assert_eq!(NUM_TAG, 0);
-        assert_eq!(
-            NONE_TAG,
-            0b01111111_11111101_00000000_00000000_00000000_00000000_00000000_00000000
-        );
-        assert_eq!(
-            BOOL_TAG,
-            0b01111111_11111110_00000000_00000000_00000000_00000000_00000000_00000000
-        );
-        assert_eq!(
-            PTR_TAG,
-            0b11111111_11111101_00000000_00000000_00000000_00000000_00000000_00000000
-        );
-        assert_eq!(
-            PTR_OK_TAG,
-            0b11111111_11111110_00000000_00000000_00000000_00000000_00000000_00000000
-        );
-        assert_eq!(
-            PTR_ERR_TAG,
-            0b11111111_11111111_00000000_00000000_00000000_00000000_00000000_00000000
-        );
-    }
-
-    #[test]
-    fn test_ptr_masking() {
+    fn test_mask_ptr() {
         let ptr = 0x944fc8669b86u64 as *const i32;
         let raw = ptr as u64;
-        let masked = raw & PTR_MASK;
-        let tagged = PTR_TAG | masked;
-        let unmasked = tagged & PTR_MASK;
+        let masked = raw & mask::PTR;
+        let tagged = tag::PTR | masked;
+        let unmasked = tagged & mask::PTR;
         assert_eq!(raw, unmasked);
     }
 
@@ -433,7 +404,7 @@ mod tests {
         let none = NanBox::none();
         assert!(none.is_none());
         assert!(!none.is_num());
-        assert_eq!(none.0, NONE_TAG);
+        assert_eq!(none.0, tag::NONE);
         println!("{:#?}", none);
 
         let num = NanBox::new(Value::Num(std::f64::consts::PI));
