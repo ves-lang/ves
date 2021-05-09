@@ -160,9 +160,10 @@ pub enum TokenKind<'a> {
     /// TODO: underscores
     /// TODO: allow '0.' and '.0' in a way that is not ambiguous with ranges
     #[regex(
-        "[0-9]+[Ee][+-]?[0-9]+|([0-9]+\\.[0-9]+([Ee][+-]?[0-9]+)?)|NaN|inf",
+        "([0-9]+[Ee][+-]?[0-9]+|([0-9]+\\.[0-9]+([Ee][+-]?[0-9]+)?))f?|NaN|inf",
         priority = 2
     )]
+    #[regex("[0-9]+f")]
     Float,
     /// A hexadecimal integer literal, e.g. `0x123_ABC`.
     #[regex("0[xX][0-9a-fA-F][0-9a-fA-F_]*[0-9aA-fF]?")]
@@ -172,7 +173,11 @@ pub enum TokenKind<'a> {
     BinInt,
     /// A normal integer literal, e.g. `111_222_777`.
     #[regex("[0-9]([0-9_]*[0-9])?")]
+    #[regex("[0-9]([0-9_]*[0-9])?i")]
     Integer,
+    /// An arbitrary-length integer literal, e.g. `111_222_777n`.
+    #[regex("[0-9]([0-9_]*[0-9])?n")]
+    BigInt,
     /// No value (same as nil/null)
     #[token("none")]
     None,
@@ -908,11 +913,19 @@ mod tests {
         999_999_999
         999_999_999_999_999
         999_999_999_999_999_999_999
+
+        1.0
+        1e300
+
+        1e300f
+        100f
+        100i
+        100n
         
         0xABCDEF
         0xA_B_C_D_E_F
         0xDEAD_CAFE
-        0x1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D
+        0x1_F331_D0D
         
         0b1111_0000_0101_1010_1100_0011
         0b000000
@@ -927,10 +940,16 @@ mod tests {
                 token!(Integer, "999_999_999"),
                 token!(Integer, "999_999_999_999_999"),
                 token!(Integer, "999_999_999_999_999_999_999"),
+                token!(Float, "1.0"),
+                token!(Float, "1e300"),
+                token!(Float, "1e300f"),
+                token!(Float, "100f"),
+                token!(Integer, "100i"),
+                token!(BigInt, "100n"),
                 token!(HexInt, "0xABCDEF"),
                 token!(HexInt, "0xA_B_C_D_E_F"),
                 token!(HexInt, "0xDEAD_CAFE"),
-                token!(HexInt, "0x1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D_1_F331_D34D"),
+                token!(HexInt, "0x1_F331_D0D"),
                 token!(BinInt, "0b1111_0000_0101_1010_1100_0011"),
                 token!(BinInt, "0b000000"),
                 token!(BinInt, "0b111111"),

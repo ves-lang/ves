@@ -447,7 +447,6 @@ impl<'a> ConstantFolder<'a> {
                 LitValue::Bool(b) => *b,
                 LitValue::None => false,
                 LitValue::Str(_) => true,
-                LitValue::BigFloat(_) => lit.value.is_zero(),
                 LitValue::BigInteger(_) => lit.value.is_zero(),
             }),
             _ => None,

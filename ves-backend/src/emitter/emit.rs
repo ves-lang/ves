@@ -1491,7 +1491,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 );
             }
             LitValue::BigInteger(i) => todo!(),
-            LitValue::BigFloat(f) => todo!(),
             LitValue::None => {
                 self.state.builder.op(Opcode::PushNone, span);
             }

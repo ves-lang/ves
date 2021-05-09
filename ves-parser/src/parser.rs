@@ -2,7 +2,7 @@ use crate::{
     ast::{self, Global, VarKind, AST},
     lexer::{self, Lexer, NextTokenExt, Token, TokenKind},
 };
-use bigdecimal::Num;
+use ibig::IBig;
 use std::{collections::HashSet, convert::Into};
 use ves_error::{ErrCtx, FileId, Span, VesError, VesFileDatabase};
 
@@ -1510,63 +1510,88 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         }
         // float literal
         if self.match_(&TokenKind::Float) {
+            let lexeme = self
+                .previous
+                .lexeme
+                .strip_suffix('f')
+                .unwrap_or(&self.previous.lexeme);
             return Ok(literal!(
                 self,
-                match self.previous.lexeme.parse::<f64>() {
+                match lexeme.parse::<f64>() {
                     Ok(n) => ast::LitValue::Float(n),
-                    Err(_) => match self.previous.lexeme.parse::<bigdecimal::BigDecimal>() {
-                        Ok(n) => ast::LitValue::BigFloat(n),
-                        Err(_) => {
-                            return Err(VesError::parse(
-                                "Failed to parse the float literal",
-                                self.previous.span.clone(),
-                                self.fid,
-                            ));
-                        }
-                    },
+                    Err(_) =>
+                        return Err(VesError::parse(
+                            "Failed to parse the float literal",
+                            self.previous.span.clone(),
+                            self.fid,
+                        )),
                 }
             ));
         }
+        // integer literal
         if self.match_(&TokenKind::Integer) {
-            let lexeme = self.previous.lexeme.replace("_", "");
+            let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "i");
             return Ok(literal!(
                 self,
                 match lexeme.parse::<i64>() {
                     Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
-                    _ => match lexeme.parse::<num_bigint::BigInt>() {
-                        Ok(n) => ast::LitValue::BigInteger(n),
-                        Err(_) => {
-                            return Err(VesError::parse(
-                                "Failed to parse the float literal",
-                                self.previous.span.clone(),
-                                self.fid,
-                            ));
-                        }
-                    },
+                    // TODO: help message "Use big integer notation like this ____n"
+                    Ok(_) =>
+                        return Err(VesError::parse(
+                            "Integer is too large",
+                            self.previous.span.clone(),
+                            self.fid,
+                        )),
+                    _ =>
+                        return Err(VesError::parse(
+                            "Failed to parse an integer",
+                            self.previous.span.clone(),
+                            self.fid
+                        )),
                 }
             ));
         }
+        // arbitrary length integer literal
+        if self.match_(&TokenKind::BigInt) {
+            let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "n");
+            return Ok(literal!(
+                self,
+                match lexeme.parse::<IBig>() {
+                    Ok(n) => ast::LitValue::BigInteger(n),
+                    _ =>
+                        return Err(VesError::parse(
+                            "Failed to parse a BigInt",
+                            self.previous.span.clone(),
+                            self.fid,
+                        )),
+                }
+            ));
+        }
+        // hex or binary integer literal
         if self.match_any(&[TokenKind::HexInt, TokenKind::BinInt]) {
             let radix = if self.previous.kind == TokenKind::HexInt {
                 16
             } else {
                 2
             };
-            let lexeme = self.previous.lexeme.replace("_", "");
+            let lexeme = strip_underscore_and_suffix(self.previous.lexeme.as_ref(), "");
+            let lexeme = lexeme.strip_any_prefix(&["0b", "0x", "0B", "0X"]);
             return Ok(literal!(
                 self,
                 match i64::from_str_radix(&lexeme, radix) {
                     Ok(n) if n < (2i64.pow(48) - 1) => ast::LitValue::Integer(n),
-                    _ => match num_bigint::BigInt::from_str_radix(&lexeme, radix) {
-                        Ok(n) => ast::LitValue::BigInteger(n),
-                        Err(_) => {
-                            return Err(VesError::parse(
-                                "Failed to parse the float literal",
-                                self.previous.span.clone(),
-                                self.fid,
-                            ));
-                        }
-                    },
+                    Ok(_) =>
+                        return Err(VesError::parse(
+                            "Integer is too large",
+                            self.previous.span.clone(),
+                            self.fid,
+                        )),
+                    _ =>
+                        return Err(VesError::parse(
+                            "Failed to parse literal",
+                            self.previous.span.clone(),
+                            self.fid
+                        )),
                 }
             ));
         }
@@ -1864,6 +1889,32 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     fn at_end(&self) -> bool {
         self.current.kind == TokenKind::EOF
     }
+}
+
+trait StripAnyPrefix {
+    fn strip_any_prefix(self, prefixes: &[&str]) -> Self;
+}
+impl StripAnyPrefix for &str {
+    fn strip_any_prefix(self, prefixes: &[&str]) -> Self {
+        for prefix in prefixes {
+            if let Some(v) = self.strip_prefix(prefix) {
+                return v;
+            }
+        }
+        self
+    }
+}
+
+fn strip_underscore_and_suffix(input: &str, suffix: &str) -> String {
+    let input = input.strip_suffix(suffix).unwrap_or(input);
+    let mut out = String::with_capacity(input.len());
+    for c in input.chars() {
+        if c == '_' {
+            continue;
+        }
+        out.extend(&[c]);
+    }
+    out
 }
 
 fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::Stmt<'a> {

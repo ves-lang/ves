@@ -1,0 +1,98 @@
+123_321;
+1_2_3_4_5;
+999_999_999;
+1.0;
+1e300;
+1e300f;
+100f;
+100i;
+100n;
+10000000000000000000000000000000000000000000000000000000000n;
+0xABCDEF;
+0xA_B_C_D_E_F;
+0xDEAD_CAFE;
+0x1_F331_D0D;
+0b1111_0000_0101_1010_1100_0011;
+0b000000;
+0b111111;
+0B00000000;
+0XFFFFFFFF;
+
+%output ok
+
+StmtKind::ExprStmt
+  expr: Lit
+    token: "123_321"
+    value: LitValue::Integer(123321)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "1_2_3_4_5"
+    value: LitValue::Integer(12345)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "999_999_999"
+    value: LitValue::Integer(999999999)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "1.0"
+    value: LitValue::Float(1.0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "1e300"
+    value: LitValue::Float(1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "1e300f"
+    value: LitValue::Float(1000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "100f"
+    value: LitValue::Float(100.0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "100i"
+    value: LitValue::Integer(100)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "100n"
+    value: LitValue::BigInteger(100)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "10000000000000000000000000000000000000000000000000000000000n"
+    value: LitValue::BigInteger(10000000000000000000000000000000000000000000000000000000000)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0xABCDEF"
+    value: LitValue::Integer(11259375)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0xA_B_C_D_E_F"
+    value: LitValue::Integer(11259375)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0xDEAD_CAFE"
+    value: LitValue::Integer(3735931646)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0x1_F331_D0D"
+    value: LitValue::Integer(523443469)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0b1111_0000_0101_1010_1100_0011"
+    value: LitValue::Integer(15751875)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0b000000"
+    value: LitValue::Integer(0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0b111111"
+    value: LitValue::Integer(63)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0B00000000"
+    value: LitValue::Integer(0)
+StmtKind::ExprStmt
+  expr: Lit
+    token: "0XFFFFFFFF"
+    value: LitValue::Integer(4294967295)

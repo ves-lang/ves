@@ -11,7 +11,7 @@ ves_error = { package = "ves-error", path = "../ves-error" }
 plain-msgbox = { git = "https://github.com/optimalstrategy/plain-msgbox" }
 ast2str = { git = "https://github.com/optimalstrategy/ast2str" }
 num-bigint = "0.4.0"
-bigdecimal = "0.2.0"
+ibig = "0.3.2"
 
 [dev-dependencies]
 pretty_assertions = "0.7.2"

@@ -5,8 +5,7 @@ use ves_error::{FileId, Files, VesFileDatabase};
 
 use crate::lexer::{Span, Token, TokenKind};
 
-pub use bigdecimal::{BigDecimal, Zero};
-pub use num_bigint::BigInt;
+pub use ibig::IBig;
 
 pub type Ptr<T> = Box<T>;
 pub type ExprPtr<'a> = Ptr<Expr<'a>>;
@@ -240,11 +239,8 @@ pub enum LitValue<'a> {
     Float(f64),
     /// A 48-bit integer literal.
     Integer(i64),
-    // QQQ(compiler): Should we store BigInt/BigFloat here or wait until we reach the emitter to allocate them using the proxy allocator?
-    /// An arbitrary-precision heap-allocated float literal.
-    BigFloat(#[debug] BigDecimal),
-    /// An arbitrary-precision heap-allocated integer literal.
-    BigInteger(#[debug] BigInt),
+    /// An arbitrary-precision integer literal.
+    BigInteger(#[debug] IBig),
     /// A boolean.
     Bool(bool),
     /// A `none` value.
@@ -258,7 +254,6 @@ impl<'a> std::fmt::Debug for LitValue<'a> {
         match self {
             LitValue::Float(n) => write!(f, "LitValue::Float({:?})", n),
             LitValue::Integer(n) => write!(f, "LitValue::Integer({:?})", n),
-            LitValue::BigFloat(n) => write!(f, "LitValue::BigFloat({:?})", n),
             LitValue::BigInteger(n) => write!(f, "LitValue::BigInteger({:?})", n),
             LitValue::Bool(b) => write!(f, "LitValue::Bool({:?})", b),
             LitValue::None => write!(f, "LitValue::None"),
@@ -809,7 +804,6 @@ impl<'a> LitValue<'a> {
         match self {
             LitValue::Float(_) => !self.is_zero(),
             LitValue::Integer(_) => !self.is_zero(),
-            LitValue::BigFloat(_) => !self.is_zero(),
             LitValue::BigInteger(_) => !self.is_zero(),
             LitValue::Bool(b) => *b,
             LitValue::None => false,
@@ -831,9 +825,8 @@ impl<'a> LitValue<'a> {
         } else if let LitValue::Integer(n) = self {
             *n == 0
         } else if let LitValue::BigInteger(n) = self {
-            n == &Zero::zero()
-        } else if let LitValue::BigFloat(n) = self {
-            n == &Zero::zero()
+            // IBig doesn't allocate for numbers larger than u64
+            n == &IBig::default()
         } else {
             false
         }
