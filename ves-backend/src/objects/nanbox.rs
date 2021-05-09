@@ -253,12 +253,12 @@ impl NanBox {
 
     #[inline(always)]
     pub fn as_int_unchecked(&self) -> i32 {
-        (self.0 | tag::INT) as u32 as i32
+        self.0 as i32
     }
 
     #[inline(always)]
     pub fn into_int_unchecked(self) -> i32 {
-        (self.0 | tag::INT) as u32 as i32
+        self.0 as i32
     }
 
     /// Unboxes the boxed value into a raw f64.
@@ -416,6 +416,22 @@ mod tests {
         let tagged = tag::PTR | masked;
         let unmasked = tagged & mask::PTR;
         assert_eq!(raw, unmasked);
+    }
+
+    #[test]
+    fn test_nanbox_i32() {
+        let numbers = vec![i32::MIN, -1000, -55, -1, 0, 1, 55, 1000, i32::MAX];
+        for n in numbers {
+            let b = NanBox::int(n);
+            assert!(b.is_int());
+            assert!(!b.is_float());
+            assert!(!b.is_none());
+            assert!(!b.is_bool());
+            assert!(!b.is_normal_ptr());
+            assert!(!b.is_ok());
+            assert!(!b.is_err());
+            assert_eq!(b.into_int_unchecked(), n, "{:#?}", b);
+        }
     }
 
     #[test]
