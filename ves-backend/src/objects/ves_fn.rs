@@ -6,7 +6,7 @@ use ves_error::FileId;
 use crate::{
     emitter::{builder::Chunk, emit::UpvalueInfo},
     gc::{GcObj, Trace},
-    value::{Error, FromVes, IntoVes},
+    value::{FromVes, IntoVes, RuntimeError},
     Value, VesObject,
 };
 
@@ -130,13 +130,13 @@ pub struct Args<'v>(&'v mut Vec<Value>);
 macro_rules! impl_try_from_args_for_tuple {
     () => {
         impl<'v> TryFrom<Args<'v>> for () {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(_: Args<'v>) -> Result<(), Self::Error> {
                 Ok(())
             }
         }
         impl<'v> TryFrom<Args<'v>> for (&'v [Value],) {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(args: Args<'v>) -> Result<(&'v [Value],), Self::Error> {
                 let args = args.0;
                 Ok((&args[0..args.len()],))
@@ -149,11 +149,11 @@ macro_rules! impl_try_from_args_for_tuple {
         where
             $name: FromVes,
         {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(args: Args<'v>) -> Result<($name,), Self::Error> {
                 let args = args.0;
                 if args.len() != 1 {
-                    return Err(Error::new(format!("Arity mismatch: expected {}, got {}", 1, args.len())));
+                    return Err(RuntimeError::new(format!("Arity mismatch: expected {}, got {}", 1, args.len())));
                 }
                 args.reverse();
                 let $name = $name::from_ves(args.pop().unwrap())?;
@@ -165,11 +165,11 @@ macro_rules! impl_try_from_args_for_tuple {
         where
             $name: FromVes
         {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(args: Args<'v>) -> Result<($name, &'v [Value]), Self::Error> {
                 let args = args.0;
                 if args.len() < 1 {
-                    return Err(Error::new(format!("Arity mismatch: expected at least {}, got {}", 1, args.len())));
+                    return Err(RuntimeError::new(format!("Arity mismatch: expected at least {}, got {}", 1, args.len())));
                 }
                 args.reverse();
                 let $name = $name::from_ves(args.pop().unwrap())?;
@@ -184,12 +184,12 @@ macro_rules! impl_try_from_args_for_tuple {
         where
             $($name: FromVes,)*
         {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(args: Args<'v>) -> Result<($($name),*,), Self::Error> {
                 let arity = $size;
                 let args = args.0;
                 if args.len() != arity {
-                    return Err(Error::new(format!("Arity mismatch: expected {}, got {}", arity, args.len())));
+                    return Err(RuntimeError::new(format!("Arity mismatch: expected {}, got {}", arity, args.len())));
                 }
                 args.reverse();
                 $(let $name = $name::from_ves(args.pop().unwrap())?;)*
@@ -201,12 +201,12 @@ macro_rules! impl_try_from_args_for_tuple {
         where
             $($name: FromVes,)*
         {
-            type Error = Error;
+            type Error = RuntimeError;
             fn try_from(args: Args<'v>) -> Result<($($name),*, &'v [Value]), Self::Error> {
                 let arity = $size;
                 let args = args.0;
                 if args.len() < arity {
-                    return Err(Error::new(format!("Arity mismatch: expected at least {}, got {}", arity, args.len())));
+                    return Err(RuntimeError::new(format!("Arity mismatch: expected at least {}, got {}", arity, args.len())));
                 }
                 args.reverse();
                 $(let $name = $name::from_ves(args.pop().unwrap())?;)*
@@ -235,15 +235,15 @@ where
     A: TryFrom<Args<'v>>,
 {
     // TODO: accept some kind of VmInterface here, for allocating objects and so on
-    fn ves_call(&self, args: Args<'v>) -> Result<Value, Error>;
+    fn ves_call(&self, args: Args<'v>) -> Result<Value, RuntimeError>;
 }
 impl<'v, A, R, F> Callable<'v, A> for F
 where
-    A: TryFrom<Args<'v>, Error = Error>,
+    A: TryFrom<Args<'v>, Error = RuntimeError>,
     R: IntoVes,
-    F: Fn(A) -> Result<R, Error>,
+    F: Fn(A) -> Result<R, RuntimeError>,
 {
-    fn ves_call(&self, args: Args<'v>) -> Result<Value, Error> {
+    fn ves_call(&self, args: Args<'v>) -> Result<Value, RuntimeError> {
         let args: A = args.try_into()?;
         (*self)(args).map(|v| v.into_ves())
     }
@@ -281,12 +281,12 @@ mod tests {
             Value::Int(2 * 6)
         );
 
-        fn actually_fallible(_: ()) -> Result<()> {
-            Err(Error::new("Something went wrong"))
+        fn fallible(_: ()) -> Result<()> {
+            Err(RuntimeError::new("Something went wrong"))
         }
         assert_eq!(
-            actually_fallible.ves_call(Args(&mut vec![])).unwrap_err(),
-            Error::new("Something went wrong")
+            fallible.ves_call(Args(&mut vec![])).unwrap_err(),
+            RuntimeError::new("Something went wrong")
         );
     }
 }

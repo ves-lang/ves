@@ -129,7 +129,7 @@ pub enum VesErrorKind {
 }
 
 /// A ves error. Contains the span, message, and source file id.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct VesError {
     /// The span of the error as a byte range in the source code.
     pub span: Span,

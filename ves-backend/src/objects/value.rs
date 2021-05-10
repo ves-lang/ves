@@ -1,21 +1,27 @@
 //! Contains the implementation of the Ves [`Value`] type.
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{self, Debug, Display, Formatter};
+
+use ves_error::{FileId, VesError};
 
 use crate::gc::{Trace, VesRef};
 
-pub type Result<T> = std::result::Result<T, Error>;
-/// A Ves runtime error constructed in case of a panic
-#[derive(Debug, Clone, PartialEq)]
-pub struct Error {
-    // QQQ(moscow): does this need to be a VesStr/VesStrView?
-    // TODO: backtrace
-    message: String,
+// TODO: this is a stub for the user-facing error type
+// It doesn't make sense to use the same VesError type, which we also use during compilation,
+// as the runtime error type, because they have slightly different requirements.
+// Runtime errors should collect backtraces, possibly displaying current stack, disassembly,
+// or other similar info about the error that occurred. They should also be easy to construct
+// by the user without any info about the currently executing file or span (which is required by VesError)
+#[derive(Clone, PartialEq)]
+pub struct RuntimeError(pub VesError);
+pub type Result<T> = std::result::Result<T, RuntimeError>;
+impl RuntimeError {
+    pub fn new<S: Into<String>>(msg: S) -> Self {
+        Self(VesError::runtime(msg, 0..0, FileId::anon()))
+    }
 }
-impl Error {
-    pub fn new<S: Into<String>>(message: S) -> Self {
-        Self {
-            message: message.into(),
-        }
+impl Debug for RuntimeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
     }
 }
 
@@ -139,7 +145,7 @@ impl FromVes for i32 {
     fn from_ves(value: Value) -> Result<Self> {
         match value {
             Value::Int(v) => Ok(v),
-            _ => Err(Error::new("Invalid type")),
+            _ => Err(RuntimeError::new("Invalid type")),
         }
     }
 }
@@ -147,7 +153,7 @@ impl FromVes for f64 {
     fn from_ves(value: Value) -> Result<Self> {
         match value {
             Value::Float(v) => Ok(v),
-            _ => Err(Error::new("Invalid type")),
+            _ => Err(RuntimeError::new("Invalid type")),
         }
     }
 }
@@ -155,7 +161,7 @@ impl FromVes for bool {
     fn from_ves(value: Value) -> Result<Self> {
         match value {
             Value::Bool(v) => Ok(v),
-            _ => Err(Error::new("Invalid type")),
+            _ => Err(RuntimeError::new("Invalid type")),
         }
     }
 }
@@ -163,7 +169,7 @@ impl FromVes for () {
     fn from_ves(value: Value) -> Result<Self> {
         match value {
             Value::None => Ok(()),
-            _ => Err(Error::new("Invalid type")),
+            _ => Err(RuntimeError::new("Invalid type")),
         }
     }
 }
@@ -171,7 +177,7 @@ impl FromVes for VesRef {
     fn from_ves(value: Value) -> Result<Self> {
         match value {
             Value::Ref(v) => Ok(v),
-            _ => Err(Error::new("Invalid type")),
+            _ => Err(RuntimeError::new("Invalid type")),
         }
     }
 }
@@ -201,11 +207,11 @@ unsafe impl Trace for Value {
 impl Display for Value {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Int(v) => v.fmt(f),
-            Value::Float(v) => v.fmt(f),
-            Value::Bool(v) => v.fmt(f),
+            Value::Int(v) => Display::fmt(v, f),
+            Value::Float(v) => Display::fmt(v, f),
+            Value::Bool(v) => Display::fmt(v, f),
             Value::None => write!(f, "none"),
-            Value::Ref(v) => (*v).fmt(f),
+            Value::Ref(v) => Display::fmt(&**v, f),
         }
     }
 }
