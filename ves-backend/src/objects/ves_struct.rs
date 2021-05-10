@@ -41,7 +41,9 @@ impl From<GcObj> for ViewKey {
 
             crate::VesObject::Instance(_) => panic!("Unexpected object type: instance"),
             crate::VesObject::Struct(_) => panic!("Unexpected object type: struct"),
-            crate::VesObject::Fn(_) => panic!("Unexpected object type: fn"),
+            crate::VesObject::Fn(_) | crate::VesObject::FnNative(_) => {
+                panic!("Unexpected object type: fn")
+            }
             crate::VesObject::Closure(_) => panic!("Unexpected object type: closure"),
             crate::VesObject::ClosureDescriptor(_) => {
                 panic!("Unexpected object type: closure descriptor")

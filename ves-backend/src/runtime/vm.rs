@@ -1,8 +1,8 @@
 use ves_error::VesError;
 
 use crate::{
-    gc::{GcHandle, GcObj, VesGc},
-    NanBox, Value,
+    gc::{GcHandle, GcObj, Roots, Trace, VesGc},
+    NanBox, Value, VesObject,
 };
 
 use super::{call_frame::CallFrame, VmGlobals};
@@ -10,6 +10,12 @@ use super::{call_frame::CallFrame, VmGlobals};
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
 const DEBUG_STACK_PRINT_SIZE: usize = 5;
+
+pub trait VmInterface {
+    fn alloc(&mut self, obj: VesObject) -> GcObj;
+    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError>;
+    fn create_error(&mut self, msg: String) -> VesError;
+}
 
 pub struct Vm<T: VesGc, W = std::io::Stdout> {
     gc: GcHandle<T>,
@@ -21,6 +27,32 @@ pub struct Vm<T: VesGc, W = std::io::Stdout> {
     // TODO: look at the asm for this vs Option<NonNull<CallFrame/>> + unwrap_unchecked()
     frame: *mut CallFrame,
     writer: W,
+}
+
+impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
+    fn alloc(&mut self, obj: VesObject) -> GcObj {
+        // TODO: don't panic on allocation failure
+        self.gc
+            .alloc(
+                obj,
+                Roots {
+                    stack: &mut self.stack,
+                    data: self
+                        .call_stack
+                        .iter_mut()
+                        .map(|frame| frame as &mut dyn Trace),
+                },
+            )
+            .expect("Failed to allocate the object")
+    }
+
+    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError> {
+        todo!("calling arbitrary functions isn't supported yet: {:?}", obj);
+    }
+
+    fn create_error(&mut self, msg: String) -> VesError {
+        self.error(msg)
+    }
 }
 
 impl<T: VesGc, W: std::io::Write> Vm<T, W> {
