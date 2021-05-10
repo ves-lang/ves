@@ -1,16 +1,23 @@
 use ves_error::VesError;
 
 use crate::{
-    gc::{GcHandle, GcObj, VesGc},
-    NanBox, Value,
+    gc::{GcHandle, GcObj, Roots, Trace, VesGc},
+    NanBox, Value, VesObject,
 };
 
 use super::{call_frame::CallFrame, VmGlobals};
 
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
+const DEBUG_STACK_PRINT_SIZE: usize = 5;
 
-pub struct Vm<T: VesGc, W> {
+pub trait VmInterface {
+    fn alloc(&mut self, obj: VesObject) -> GcObj;
+    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError>;
+    fn create_error(&mut self, msg: String) -> VesError;
+}
+
+pub struct Vm<T: VesGc, W = std::io::Stdout> {
     gc: GcHandle<T>,
     globals: VmGlobals,
     stack: Vec<NanBox>,
@@ -20,6 +27,32 @@ pub struct Vm<T: VesGc, W> {
     // TODO: look at the asm for this vs Option<NonNull<CallFrame/>> + unwrap_unchecked()
     frame: *mut CallFrame,
     writer: W,
+}
+
+impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
+    fn alloc(&mut self, obj: VesObject) -> GcObj {
+        // TODO: don't panic on allocation failure
+        self.gc
+            .alloc(
+                obj,
+                Roots {
+                    stack: &mut self.stack,
+                    data: self
+                        .call_stack
+                        .iter_mut()
+                        .map(|frame| frame as &mut dyn Trace),
+                },
+            )
+            .expect("Failed to allocate the object")
+    }
+
+    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError> {
+        todo!("calling arbitrary functions isn't supported yet: {:?}", obj);
+    }
+
+    fn create_error(&mut self, msg: String) -> VesError {
+        self.error(msg)
+    }
 }
 
 impl<T: VesGc, W: std::io::Write> Vm<T, W> {
@@ -56,14 +89,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // let code = self.frame_unchecked().code().as_ptr();
 
         while self.ip < self.frame_unchecked().code_len() {
+            #[cfg(feature = "vm-debug")]
+            {
+                self.debug_inst();
+            }
             self.ip += 1;
             match self.frame_unchecked().inst(self.ip - 1) {
                 Opcode::GetConst(idx) => self.get_const(idx),
                 Opcode::GetLocal(idx) => self.get_local(idx),
                 Opcode::SetLocal(idx) => self.set_local(idx),
-                Opcode::PushNum32(num) => self.push(NanBox::num(num as _)),
-                Opcode::PushTrue => self.push(NanBox::r#true()),
-                Opcode::PushFalse => self.push(NanBox::r#false()),
+                Opcode::PushInt32(num) => self.push(NanBox::int(num as _)),
+                Opcode::PushTrue => self.push(NanBox::bool(true)),
+                Opcode::PushFalse => self.push(NanBox::bool(false)),
                 Opcode::PushNone => self.push(NanBox::none()),
                 Opcode::GetGlobal(idx) => self.get_global(idx)?,
                 Opcode::GetUpvalue(_) => unimplemented!(),
@@ -75,17 +112,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::SetProp(_) => unimplemented!(),
                 Opcode::GetItem => unimplemented!(),
                 Opcode::SetItem => unimplemented!(),
-                Opcode::Add => unimplemented!(),
-                Opcode::AddOne => unimplemented!(),
-                Opcode::Subtract => unimplemented!(),
-                Opcode::SubtractOne => unimplemented!(),
-                Opcode::Multiply => unimplemented!(),
-                Opcode::Divide => unimplemented!(),
+                Opcode::Add => self.add()?,
+                Opcode::Subtract => self.sub()?,
+                Opcode::Multiply => self.mul()?,
+                Opcode::Divide => self.div()?,
                 Opcode::Remainder => unimplemented!(),
-                Opcode::Power => unimplemented!(),
-                Opcode::Negate => unimplemented!(),
-                Opcode::And => unimplemented!(),
-                Opcode::Or => unimplemented!(),
+                Opcode::Power => self.pow()?,
+                Opcode::Negate => self.neg()?,
+                Opcode::AddOne => unimplemented!(),
+                Opcode::SubtractOne => unimplemented!(),
                 Opcode::Not => unimplemented!(),
                 Opcode::Equal => unimplemented!(),
                 Opcode::NotEqual => unimplemented!(),
@@ -149,6 +184,111 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
 
         Ok(())
+    }
+
+    pub fn add(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        if left.is_float() && right.is_num() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.as_float_unchecked() + right.to_float_unchecked(),
+            ));
+            return Ok(());
+        } else if left.is_num() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.to_float_unchecked() + right.as_float_unchecked(),
+            ));
+            return Ok(());
+        } else if left.is_int() && right.is_int() {
+            self.pop_n(2);
+            let result = left.as_int_unchecked() as i64 + right.as_int_unchecked() as i64;
+            if result as i32 as i64 != result {
+                unimplemented!("Allocate a big int here");
+            }
+            self.push(NanBox::from(result as i32));
+            return Ok(());
+        }
+
+        // TODO: use a function-level inline cache here.
+        // if self.get_magic_method(left, name)? {}
+        todo!()
+    }
+
+    fn sub(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        if left.is_float() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.as_float_unchecked() - right.as_float_unchecked(),
+            ));
+            return Ok(());
+        }
+
+        // TODO: use a function-level inline cache here.
+        // if self.get_magic_method(left, name)? {}
+        todo!()
+    }
+
+    fn mul(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        if left.is_float() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.as_float_unchecked() * right.as_float_unchecked(),
+            ));
+            return Ok(());
+        }
+
+        todo!()
+    }
+
+    fn div(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        if left.is_float() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.as_float_unchecked() / right.as_float_unchecked(),
+            ));
+            return Ok(());
+        }
+
+        todo!()
+    }
+
+    fn pow(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        if left.is_float() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.as_float_unchecked().powf(right.as_float_unchecked()),
+            ));
+            return Ok(());
+        }
+
+        todo!()
+    }
+
+    fn neg(&mut self) -> Result<(), VesError> {
+        let operand = *self.peek();
+
+        if operand.is_float() {
+            self.pop();
+            self.push(NanBox::from(-operand.as_float_unchecked()));
+            return Ok(());
+        }
+
+        todo!()
     }
 
     fn get_const(&mut self, idx: u32) {
@@ -277,6 +417,47 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
+    #[cfg(not(feature = "fast"))]
+    #[inline]
+    pub fn peek(&self) -> &NanBox {
+        match self.stack.last() {
+            Some(v) => v,
+            None => panic!(
+                "STACK UNDERFLOW AT ip={} in {}",
+                self.ip,
+                self.frame().func().name()
+            ),
+        }
+    }
+
+    #[cfg(feature = "fast")]
+    #[inline]
+    pub fn peek(&self) -> &NanBox {
+        let at = self.stack.len() - 1;
+        unsafe { self.stack.get_unchecked(at) }
+    }
+
+    #[cfg(not(feature = "fast"))]
+    #[inline]
+    pub fn peek_at(&self, at: usize) -> &NanBox {
+        let at = self.stack.len() - at - 1;
+        match self.stack.get(at) {
+            Some(v) => v,
+            None => panic!(
+                "STACK UNDERFLOW AT ip={} in {}",
+                self.ip,
+                self.frame().func().name()
+            ),
+        }
+    }
+
+    #[cfg(feature = "fast")]
+    #[inline]
+    pub fn peek_at(&self, at: usize) -> &NanBox {
+        let at = self.stack.len() - at - 1;
+        unsafe { self.stack.get_unchecked(at) }
+    }
+
     #[inline(always)]
     fn frame_unchecked(&self) -> &CallFrame {
         unsafe { &*self.frame }
@@ -290,7 +471,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[cfg(not(feature = "fast"))]
     #[inline]
     fn const_at(&self, idx: usize) -> NanBox {
-        match self.frame_unchecked().constants().get(idx) {
+        match self.frame().constants().get(idx) {
             Some(v) => NanBox::new(*v),
             None => panic!("MISSING CONSTANT AT {}", idx),
         }
@@ -299,7 +480,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[cfg(feature = "fast")]
     #[inline]
     fn const_at(&self, idx: usize) -> &Value {
-        unsafe { self.frame_unchecked().chunk().constants.get_unchecked(idx) }
+        unsafe { self.frame_unchecked().constants().get_unchecked(idx) }
     }
 
     fn push_frame(&mut self, frame: CallFrame) -> Result<(), VesError> {
@@ -345,5 +526,29 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let id = self.frame().file_id();
         let span = self.frame().span(self.ip);
         VesError::runtime(msg, span, id).with_function(self.frame().func().name().to_string())
+    }
+
+    #[allow(unused)]
+    fn debug_inst(&self) {
+        let op = self.frame().inst(self.ip);
+        println!(
+            "[ip={:<03} in {:<08}] {:<016} [{}{}]",
+            self.ip,
+            self.frame().func().name(),
+            format!("{:?}", op),
+            if self.stack.len() >= DEBUG_STACK_PRINT_SIZE {
+                format!("... x {}, ", self.stack.len())
+            } else {
+                String::new()
+            },
+            self.stack
+                .iter()
+                .rev()
+                .take(DEBUG_STACK_PRINT_SIZE)
+                .rev()
+                .map(|v| format!("{:?}", v.unbox()))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 }

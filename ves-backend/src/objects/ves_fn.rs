@@ -47,19 +47,47 @@ pub struct ClosureDescriptor {
     pub upvalues: Vec<UpvalueInfo>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Arity {
+    /// The number of positional arguments this function accepts.
+    pub positional: u32,
+    /// The number of default arguments this function accepts.
+    pub default: u32,
+    /// Whether or not this function accepts rest arguments.
+    pub rest: bool,
+}
+
+impl Arity {
+    pub fn none() -> Self {
+        Self {
+            positional: 0,
+            default: 0,
+            rest: false,
+        }
+    }
+}
+
+impl std::fmt::Display for Arity {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "[pos = {}, def = {}, rest =  {}]",
+            self.positional, self.default, self.rest
+        )
+    }
+}
+
 #[derive(Debug)]
 pub struct VesFn {
-    // QQQ: use a stringview instead?
     pub name: VesStrView,
-    /// How many positional arguments this function accepts
-    pub positionals: u32,
-    /// How many default arguments this function accepts
-    pub defaults: u32,
-    /// Whether or not this function accepts rest arguments
-    pub rest: bool,
+    /// The arity of the function
+    pub arity: Arity,
+    /// The function's code.
     pub chunk: Chunk,
     /// This function's source file ID
     pub file_id: FileId,
+    /// Specifies whether the function is a magic method.
+    pub is_magic_method: bool,
 }
 
 impl VesFn {

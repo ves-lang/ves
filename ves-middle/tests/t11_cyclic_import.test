@@ -40,7 +40,7 @@ StmtKind::Var
     ├─kind: Let
     ├─initializer: Lit
     │ ├─token: "3.141592"
-    │ ╰─value: LitValue::Number(3.141592)
+    │ ╰─value: LitValue::Float(3.141592)
     ╰─n_uses: 1
 Import
 ├─import: ImportStmt::Direct
@@ -88,5 +88,5 @@ StmtKind::ExprStmt
   │ ╰─StmtKind::Return
   │   ╰─return_value: Lit
   │     ├─token: "7"
-  │     ╰─value: LitValue::Number(7.0)
+  │     ╰─value: LitValue::Integer(7)
   ╰─kind: Function

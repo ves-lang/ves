@@ -19,7 +19,7 @@ while ok(thing) = value {
 |0006| JumpIfFalse(16)  // if false jump @while.end
 |0007| Pop              // pop <condition> result
 |0008| GetLocal(0)      // get thing
-|0009| PushNum32(1.0)   // push 1
+|0009| PushInt32(1)   // push 1
 |0010| Add              // let sum = thing + 1
 |0011| GetLocal(1)      // get sum
 |0012| Print            // print(sum)

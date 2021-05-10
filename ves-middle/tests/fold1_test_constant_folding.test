@@ -14,10 +14,10 @@ StmtKind::Print
     operands=
       Lit
         token: "<folded>"
-        value: LitValue::Number(7.871531640625001)
+        value: LitValue::Float(7.871531640625001)
       Lit
         token: "<folded>"
-        value: LitValue::Number(3.0)
+        value: LitValue::Integer(3)
       Lit
         token: "<folded>"
         value: LitValue::Str("abcdef")

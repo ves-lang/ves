@@ -19,19 +19,19 @@ StmtKind::ExprStmt
           field0: "x"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
           field2: false
         tuple
           field0: "y"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
           field2: false
         tuple
           field0: "z"
           field1: Lit
             token: "0"
-            value: LitValue::Number(0.0)
+            value: LitValue::Integer(0)
           field2: false
       rest: None
     methods=
@@ -134,7 +134,7 @@ StmtKind::ExprStmt
                       field: "x"
                       value: Lit
                         token: "0"
-                        value: LitValue::Number(0.0)
+                        value: LitValue::Integer(0)
                 value: None
               otherwise: None
           StmtKind::ExprStmt
@@ -160,7 +160,7 @@ StmtKind::ExprStmt
                       field: "y"
                       value: Lit
                         token: "0"
-                        value: LitValue::Number(0.0)
+                        value: LitValue::Integer(0)
                 value: None
               otherwise: None
           StmtKind::ExprStmt
@@ -186,7 +186,7 @@ StmtKind::ExprStmt
                       field: "z"
                       value: Lit
                         token: "0"
-                        value: LitValue::Number(0.0)
+                        value: LitValue::Integer(0)
                 value: None
               otherwise: None
         kind: Initializer

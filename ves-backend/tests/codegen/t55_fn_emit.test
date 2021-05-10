@@ -29,31 +29,31 @@ test3(1, 2, 3);
 |0013| Call(0)          // test0()
 |0014| Pop
 |0015| GetGlobal(1)
-|0016| PushNum32(1.0)
+|0016| PushInt32(1)
 |0017| Call(1)          // test1(1)
 |0018| Pop
 |0019| GetGlobal(2)
-|0020| PushNum32(1.0)   
+|0020| PushInt32(1)   
 |0021| Call(1)          // test2(1)
 |0022| Pop
 |0023| GetGlobal(2)
-|0024| PushNum32(1.0)
-|0025| PushNum32(2.0)
+|0024| PushInt32(1)
+|0025| PushInt32(2)
 |0026| Call(2)          // test2(1, 2)
 |0027| Pop
 |0028| GetGlobal(3)
-|0029| PushNum32(1.0)
+|0029| PushInt32(1)
 |0030| Call(1)          // test3(1)
 |0031| Pop
 |0032| GetGlobal(3)
-|0033| PushNum32(1.0)
-|0034| PushNum32(2.0)
+|0033| PushInt32(1)
+|0034| PushInt32(2)
 |0035| Call(2)          // test3(1, 2)
 |0036| Pop
 |0037| GetGlobal(3)
-|0038| PushNum32(1.0)
-|0039| PushNum32(2.0)
-|0040| PushNum32(3.0)
+|0038| PushInt32(1)
+|0039| PushInt32(2)
+|0040| PushInt32(3)
 |0041| Call(3)          // test3(1, 2, 3)
 |0042| Pop
 |0043| Return
@@ -73,7 +73,7 @@ test3(1, 2, 3);
 |0002| IsNone
 |0003| JumpIfFalse(9)   // if b is none jump @other
 |0004| Pop
-|0005| PushNum32(0.0)
+|0005| PushInt32(0)
 |0006| SetLocal(2)      // b = 0
 |0007| Pop
 |0008| Jump(10)         // jump @end
@@ -92,7 +92,7 @@ test3(1, 2, 3);
 |0002| IsNone
 |0003| JumpIfFalse(9)   // if b is none jump @other
 |0004| Pop
-|0005| PushNum32(0.0)
+|0005| PushInt32(0)
 |0006| SetLocal(2)      // b = 0
 |0007| Pop
 |0008| Jump(10)         // jump @end

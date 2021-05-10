@@ -20,7 +20,7 @@ if ok(thing) = value {
 |0007| JumpIfFalse(16)  // if false jump @if.other
 |0008| Pop              // pop <condition> result
 |0009| GetLocal(1)      // get thing
-|0010| PushNum32(1.0)   // push 1
+|0010| PushInt32(1)   // push 1
 |0011| Add              // let sum = thing + 1
 |0012| GetLocal(2)      // get sum
 |0013| Print            // print(sum)

@@ -160,10 +160,30 @@ pub enum TokenKind<'a> {
     /// TODO: underscores
     /// TODO: allow '0.' and '.0' in a way that is not ambiguous with ranges
     #[regex(
-        "(((([0-9]+)(\\.[0-9]+)?)([Ee][+-]?[0-9]+)?)|(NaN)|(inf))",
+        "([0-9]+[Ee][+-]?[0-9]+|([0-9]+\\.[0-9]+([Ee][+-]?[0-9]+)?))f?|NaN|inf",
         priority = 2
     )]
-    Number,
+    #[regex("[0-9]+f")]
+    Float,
+    /// A hexadecimal integer literal, e.g. `0x123_ABC`.
+    #[regex("0[xX][0-9a-fA-F][0-9a-fA-F_]*[0-9aA-fF]?")]
+    HexInt,
+    /// A binary integer literal, e.g. `0b010_110_111`.
+    #[regex("0[bB][01][01_]*[01]?")]
+    BinInt,
+    /// A normal integer literal, e.g. `111_222_777`.
+    #[regex("[0-9]([0-9_]*[0-9])?")]
+    #[regex("[0-9]([0-9_]*[0-9])?i")]
+    Integer,
+    /// An arbitrary-length integer literal, e.g. `111_222_777n`.
+    #[regex("[0-9]([0-9_]*[0-9])?n")]
+    BigInt,
+    /// An arbitrary-length binary integer literal, e.g. `0b000100101n`.
+    #[regex("0[xX][0-9a-fA-F][0-9a-fA-F_]*[0-9aA-fF]?n")]
+    BigHexInt,
+    /// An arbitrary-length hexadecimal integer literal, e.g. `0xFFFFFFFFn`.
+    #[regex("0[bB][01][01_]*[01]?n")]
+    BigBinInt,
     /// No value (same as nil/null)
     #[token("none")]
     None,
@@ -636,8 +656,8 @@ mod tests {
             vec![
                 token!(Identifier, "ident"), token!(Dot, "."), token!(Identifier, "ident"),
                 token!(Identifier, "ident"), token!(MaybeDot, "?."), token!(Identifier, "ident"),
-                token!(Number, "0"), token!(Range, ".."), token!(Number, "0"),
-                token!(Number, "0"), token!(Range, "..="), token!(Number, "0"),
+                token!(Integer, "0"), token!(Range, ".."), token!(Integer, "0"),
+                token!(Integer, "0"), token!(Range, "..="), token!(Integer, "0"),
                 token!(Ellipsis, "..."), token!(Identifier, "ident")
             ]
         );
@@ -662,7 +682,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(Number, "0.0"), token!(Range, ".."), token!(Number, "1.0")
+                token!(Float, "0.0"), token!(Range, ".."), token!(Float, "1.0")
             ]
         );
     }
@@ -673,7 +693,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(Number, "0"), token!(Range, ".."), token!(Number, "1")
+                token!(Integer, "0"), token!(Range, ".."), token!(Integer, "1")
             ]
         );
     }
@@ -753,7 +773,7 @@ mod tests {
                 assert_eq!(
                     actual_inner,
                     vec![
-                        token!(Number, "1"), token!(Plus, "+"), token!(Number, "1"),
+                        token!(Integer, "1"), token!(Plus, "+"), token!(Integer, "1"),
                     ]
                 );
             }
@@ -859,7 +879,7 @@ mod tests {
             test_tokenize(SOURCE),
             vec![
                 token!(LeftBracket, "["),
-                token!(Number, "0"),
+                token!(Integer, "0"),
                 token!(Comma, ","),
                 token!(String, "\"a\""),
                 token!(Comma, ","),
@@ -886,7 +906,64 @@ mod tests {
                 token!(Let, "let"),
                 token!(Identifier, "v"),
                 token!(Equal, "="),
-                token!(Number, "0"),
+                token!(Integer, "0"),
+            ]
+        )
+    }
+
+    #[test]
+    fn numeric_literals() {
+        let source: &str = r#"123
+        123_321
+        1_2_3_4_5
+        999_999_999
+        999_999_999_999_999
+        999_999_999_999_999_999_999
+
+        1.0
+        1e300
+
+        1e300f
+        100f
+        100i
+        100n
+        
+        0xABCDEF
+        0xA_B_C_D_E_F
+        0xDEAD_CAFE
+        0x1_F331_D0D
+        
+        0b1111_0000_0101_1010_1100_0011
+        0b000000
+        0b111111
+
+        0b000000000n
+        0x000000000n
+"#;
+        assert_eq!(
+            test_tokenize(source),
+            vec![
+                token!(Integer, "123"),
+                token!(Integer, "123_321"),
+                token!(Integer, "1_2_3_4_5"),
+                token!(Integer, "999_999_999"),
+                token!(Integer, "999_999_999_999_999"),
+                token!(Integer, "999_999_999_999_999_999_999"),
+                token!(Float, "1.0"),
+                token!(Float, "1e300"),
+                token!(Float, "1e300f"),
+                token!(Float, "100f"),
+                token!(Integer, "100i"),
+                token!(BigInt, "100n"),
+                token!(HexInt, "0xABCDEF"),
+                token!(HexInt, "0xA_B_C_D_E_F"),
+                token!(HexInt, "0xDEAD_CAFE"),
+                token!(HexInt, "0x1_F331_D0D"),
+                token!(BinInt, "0b1111_0000_0101_1010_1100_0011"),
+                token!(BinInt, "0b000000"),
+                token!(BinInt, "0b111111"),
+                token!(BigBinInt, "0b000000000n"),
+                token!(BigHexInt, "0x000000000n"),
             ]
         )
     }

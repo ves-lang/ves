@@ -36,13 +36,13 @@ ForEach
   iterator: Range
     start: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     end: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Integer(10)
     step: Lit
       token: "1"
-      value: LitValue::Number(1.0)
+      value: LitValue::Integer(1)
     inclusive: true
   body: StmtKind::Block
     statements=
@@ -52,13 +52,13 @@ ForEach
   iterator: Range
     start: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     end: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Integer(10)
     step: Lit
       token: "1"
-      value: LitValue::Number(1.0)
+      value: LitValue::Integer(1)
     inclusive: false
   body: StmtKind::Block
     statements=
@@ -70,10 +70,10 @@ ForEach
       name: "start"
     end: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Integer(10)
     step: Lit
       token: "1"
-      value: LitValue::Number(1.0)
+      value: LitValue::Integer(1)
     inclusive: false
   body: StmtKind::Block
     statements=
@@ -83,12 +83,12 @@ ForEach
   iterator: Range
     start: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     end: ExprKind::Variable
       name: "end"
     step: Lit
       token: "1"
-      value: LitValue::Number(1.0)
+      value: LitValue::Integer(1)
     inclusive: false
   body: StmtKind::Block
     statements=
@@ -102,7 +102,7 @@ ForEach
       name: "end"
     step: Lit
       token: "1"
-      value: LitValue::Number(1.0)
+      value: LitValue::Integer(1)
     inclusive: false
   body: StmtKind::Block
     statements=
@@ -112,13 +112,13 @@ ForEach
   iterator: Range
     start: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     end: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Integer(10)
     step: Lit
       token: "5"
-      value: LitValue::Number(5.0)
+      value: LitValue::Integer(5)
     inclusive: false
   body: StmtKind::Block
     statements=
@@ -128,13 +128,13 @@ ForEach
   iterator: Range
     start: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     end: Lit
       token: "10"
-      value: LitValue::Number(10.0)
+      value: LitValue::Integer(10)
     step: Lit
       token: "5"
-      value: LitValue::Number(5.0)
+      value: LitValue::Integer(5)
     inclusive: true
   body: StmtKind::Block
     statements=
@@ -152,7 +152,7 @@ For
       name: "i"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
   condition: None
   increment: None
   body: StmtKind::Block
@@ -164,7 +164,7 @@ For
       name: "i"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
   condition: Lit
     token: "true"
     value: LitValue::Bool(true)
@@ -215,22 +215,22 @@ For
       name: "a"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
     Assignment
       name: "b"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
     Assignment
       name: "c"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
     Assignment
       name: "d"
       value: Lit
         token: "0"
-        value: LitValue::Number(0.0)
+        value: LitValue::Integer(0)
   condition: None
   increment: None
   body: StmtKind::Block

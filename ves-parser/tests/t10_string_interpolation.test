@@ -20,10 +20,10 @@ StmtKind::ExprStmt
           op: Add
           left: Lit
             token: "2"
-            value: LitValue::Number(2.0)
+            value: LitValue::Integer(2)
           right: Lit
             token: "2"
-            value: LitValue::Number(2.0)
+            value: LitValue::Integer(2)
 StmtKind::ExprStmt
   expr: FString
     fragments=
@@ -63,10 +63,10 @@ StmtKind::ExprStmt
           op: Add
           left: Lit
             token: "2"
-            value: LitValue::Number(2.0)
+            value: LitValue::Integer(2)
           right: Lit
             token: "2"
-            value: LitValue::Number(2.0)
+            value: LitValue::Integer(2)
 StmtKind::ExprStmt
   expr: FString
     fragments=

@@ -7,7 +7,7 @@ StmtKind::ExprStmt
     op: Or
     left: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)
     right: Lit
       token: "0"
-      value: LitValue::Number(0.0)
+      value: LitValue::Integer(0)

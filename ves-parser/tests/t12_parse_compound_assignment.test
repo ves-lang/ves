@@ -17,4 +17,4 @@ StmtKind::ExprStmt
             name: "b"
           right: Lit
             token: "5"
-            value: LitValue::Number(5.0)
+            value: LitValue::Integer(5)

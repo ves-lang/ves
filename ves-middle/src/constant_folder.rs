@@ -441,11 +441,13 @@ impl<'a> ConstantFolder<'a> {
 
     fn is_truthy_condition(&mut self, cond: &Condition<'a>) -> Option<bool> {
         match &cond.value.kind {
-            ExprKind::Lit(lit) => Some(match lit.value {
-                LitValue::Number(f) => f != 0.0,
-                LitValue::Bool(b) => b,
+            ExprKind::Lit(lit) => Some(match &lit.value {
+                LitValue::Float(f) => *f != 0.0,
+                LitValue::Integer(n) => *n != 0,
+                LitValue::Bool(b) => *b,
                 LitValue::None => false,
                 LitValue::Str(_) => true,
+                LitValue::BigInteger(_) => lit.value.is_zero(),
             }),
             _ => None,
         }

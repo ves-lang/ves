@@ -4,7 +4,7 @@ use ves_error::{FileId, Span};
 
 use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
-    gc::GcObj,
+    gc::{GcObj, Trace},
     objects::ves_fn::VesFn,
     Value,
 };
@@ -64,6 +64,13 @@ impl CallFrame {
         self.r#fn.as_fn().unwrap()
     }
 
+    #[cfg(not(feature = "fast"))]
+    pub fn constants(&self) -> &[Value] {
+        &self.func().chunk.constants[..]
+    }
+
+    #[cfg(feature = "fast")]
+    #[inline]
     pub fn constants(&self) -> &[Value] {
         unsafe { &self.chunk.as_ref().constants }
     }
@@ -83,5 +90,21 @@ impl CallFrame {
     #[inline]
     pub fn inst(&self, idx: usize) -> Opcode {
         self.code()[idx]
+    }
+}
+
+unsafe impl Trace for CallFrame {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.r#fn, tracer);
+        for func in &mut self.defer_stack {
+            Trace::trace(func, tracer);
+        }
+    }
+
+    fn after_forwarding(&mut self) {
+        self.r#fn.after_forwarding();
+        for func in &mut self.defer_stack {
+            func.after_forwarding();
+        }
     }
 }

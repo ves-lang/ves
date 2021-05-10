@@ -10,23 +10,23 @@ StmtKind::ExprStmt
       op: Divide
       left: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
       right: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
     right: ExprKind::Binary
       op: Multiply
       left: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
       right: ExprKind::Binary
         op: Power
         left: Lit
           token: "1"
-          value: LitValue::Number(1.0)
+          value: LitValue::Integer(1)
         right: Lit
           token: "2"
-          value: LitValue::Number(2.0)
+          value: LitValue::Integer(2)
 StmtKind::ExprStmt
   expr: ExprKind::Binary
     op: Add
@@ -34,12 +34,12 @@ StmtKind::ExprStmt
       op: Remainder
       left: Lit
         token: "10"
-        value: LitValue::Number(10.0)
+        value: LitValue::Integer(10)
       right: Lit
         token: "7"
-        value: LitValue::Number(7.0)
+        value: LitValue::Integer(7)
     right: ExprKind::Unary
       op: Negate
       operand: Lit
         token: "3"
-        value: LitValue::Number(3.0)
+        value: LitValue::Integer(3)

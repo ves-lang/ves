@@ -5,9 +5,9 @@ for i in 0..10, 2 {
 %output
 
 // @loop.pre_start:
-|0000| PushNum32(0.0)   // i
-|0001| PushNum32(10.0)  // [[END]]
-|0002| PushNum32(2.0)   // [[STEP]]
+|0000| PushInt32(0)   // i
+|0001| PushInt32(10)  // [[END]]
+|0002| PushInt32(2)   // [[STEP]]
 // @loop.start:
 |0003| GetLocal(0)      // get i
 |0004| GetLocal(1)      // get [[END]]

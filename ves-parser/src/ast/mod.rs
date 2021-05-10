@@ -5,6 +5,8 @@ use ves_error::{FileId, Files, VesFileDatabase};
 
 use crate::lexer::{Span, Token, TokenKind};
 
+pub use ibig::IBig;
+
 pub type Ptr<T> = Box<T>;
 pub type ExprPtr<'a> = Ptr<Expr<'a>>;
 pub type StmtPtr<'a> = Ptr<Stmt<'a>>;
@@ -234,7 +236,11 @@ pub enum UnOpKind {
 #[derive(Clone, PartialEq, AstToStr)]
 pub enum LitValue<'a> {
     /// A 64-bit floating pointer number.
-    Number(f64),
+    Float(f64),
+    /// A 32-bit integer literal.
+    Integer(i32),
+    /// An arbitrary-precision integer literal.
+    BigInteger(#[debug] IBig),
     /// A boolean.
     Bool(bool),
     /// A `none` value.
@@ -246,7 +252,9 @@ pub enum LitValue<'a> {
 impl<'a> std::fmt::Debug for LitValue<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LitValue::Number(n) => write!(f, "LitValue::Number({:?})", n),
+            LitValue::Float(n) => write!(f, "LitValue::Float({:?})", n),
+            LitValue::Integer(n) => write!(f, "LitValue::Integer({:?})", n),
+            LitValue::BigInteger(n) => write!(f, "LitValue::BigInteger({:?})", n),
             LitValue::Bool(b) => write!(f, "LitValue::Bool({:?})", b),
             LitValue::None => write!(f, "LitValue::None"),
             LitValue::Str(s) => write!(f, "LitValue::Str({:?})", s),
@@ -794,7 +802,9 @@ impl<'a> ExprKind<'a> {
 impl<'a> LitValue<'a> {
     pub fn is_truthy(&self) -> bool {
         match self {
-            LitValue::Number(_) => !self.is_zero(),
+            LitValue::Float(_) => !self.is_zero(),
+            LitValue::Integer(_) => !self.is_zero(),
+            LitValue::BigInteger(_) => !self.is_zero(),
             LitValue::Bool(b) => *b,
             LitValue::None => false,
             LitValue::Str(_) => true,
@@ -802,7 +812,7 @@ impl<'a> LitValue<'a> {
     }
 
     pub fn is_number(&self) -> bool {
-        matches!(self, LitValue::Number(_))
+        matches!(self, LitValue::Float(_))
     }
 
     pub fn is_boolean(&self) -> bool {
@@ -810,8 +820,13 @@ impl<'a> LitValue<'a> {
     }
 
     pub fn is_zero(&self) -> bool {
-        if let LitValue::Number(n) = self {
+        if let LitValue::Float(n) = self {
             *n == 0.0
+        } else if let LitValue::Integer(n) = self {
+            *n == 0
+        } else if let LitValue::BigInteger(n) = self {
+            // IBig doesn't allocate for numbers larger than u64
+            n == &IBig::default()
         } else {
             false
         }
@@ -829,7 +844,7 @@ macro_rules! gen_from_for_enum {
     };
 }
 
-gen_from_for_enum!(f64, LitValue<'a>, Number);
+gen_from_for_enum!(f64, LitValue<'a>, Float);
 gen_from_for_enum!(bool, LitValue<'a>, Bool);
 gen_from_for_enum!(Cow<'a, str>, LitValue<'a>, Str);
 

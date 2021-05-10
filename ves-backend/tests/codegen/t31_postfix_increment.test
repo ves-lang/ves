@@ -2,7 +2,7 @@
 
 %output
 
-|0000| PushNum32(0.0)
+|0000| PushInt32(0)
 |0001| GetLocal(0)
 |0002| AddOne
 |0003| SetLocal(0)

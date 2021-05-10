@@ -3,7 +3,8 @@ use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use crate::{
     gc::{GcObj, VesGc},
     objects::{
-        ves_fn::{ClosureDescriptor, VesFn},
+        ves_fn::{Arity, ClosureDescriptor, VesFn},
+        ves_int::VesInt,
         ves_str::view::VesStrView,
     },
     Span, Value, VesObject,
@@ -397,11 +398,10 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
         let f = VesFn {
             name: VesStrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
-            positionals: 0,
-            defaults: 0,
-            rest: false,
+            arity: Arity::none(),
             chunk: self.state.finish(),
             file_id: self.ast.file_id,
+            is_magic_method: false,
         };
         let ptr = self.ctx.gc.alloc_permanent(VesObject::Fn(f));
         Ok(ptr)
@@ -989,15 +989,13 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     BinOpKind::Divide => Opcode::Divide,
                     BinOpKind::Remainder => Opcode::Remainder,
                     BinOpKind::Power => Opcode::Power,
-                    BinOpKind::And => Opcode::And,
-                    BinOpKind::Or => Opcode::Or,
                     BinOpKind::Equal => Opcode::Equal,
                     BinOpKind::NotEqual => Opcode::NotEqual,
                     BinOpKind::LessThan => Opcode::LessThan,
                     BinOpKind::LessEqual => Opcode::LessEqual,
                     BinOpKind::GreaterThan => Opcode::GreaterThan,
                     BinOpKind::GreaterEqual => Opcode::GreaterEqual,
-                    BinOpKind::Is => unreachable!(),
+                    BinOpKind::And | BinOpKind::Or | BinOpKind::Is => unreachable!(),
                 },
                 span,
             );
@@ -1207,11 +1205,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         let fn_constant_index = self.state.builder.constant(
             self.ctx.alloc_value(VesFn {
                 name: VesStrView::new(name),
-                positionals: info.params.positional.len() as u32,
-                defaults: info.params.default.len() as u32,
-                rest: info.params.rest.is_some(),
+                arity: Arity {
+                    positional: info.params.positional.len() as u32,
+                    default: info.params.default.len() as u32,
+                    rest: info.params.rest.is_some(),
+                },
                 chunk,
                 file_id: self.ast.file_id,
+                is_magic_method: info.kind == FnKind::MagicMethod,
             }),
             span.clone(),
         )?;
@@ -1463,16 +1464,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
     fn emit_lit(&mut self, lit: &'b Lit<'a>) -> Result<()> {
         let span = lit.token.span.clone();
-        match lit.value {
-            LitValue::Number(value) => match maybe_f32(value) {
-                Some(value) => {
-                    self.state.builder.op(Opcode::PushNum32(value), span);
-                }
-                None => {
-                    let offset = self.state.builder.constant(value.into(), span.clone())?;
-                    self.state.builder.op(Opcode::GetConst(offset), span);
-                }
-            },
+        match &lit.value {
+            LitValue::Float(value) => {
+                let offset = self.state.builder.constant((*value).into(), span.clone())?;
+                self.state.builder.op(Opcode::GetConst(offset), span);
+            }
+            LitValue::Integer(value) => {
+                self.state.builder.op(Opcode::PushInt32(*value), span);
+            }
             LitValue::Bool(value) => {
                 self.state.builder.op(
                     match value {
@@ -1481,6 +1480,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     },
                     span,
                 );
+            }
+            LitValue::BigInteger(i) => {
+                let int = VesInt::new(i.clone(), self.ctx.vtables.int.clone(), self.ctx.gc.proxy());
+                let int = self.ctx.alloc_value(int);
+                let offset = self.state.builder.constant(int, span.clone())?;
+                self.state.builder.op(Opcode::GetConst(offset), span);
             }
             LitValue::None => {
                 self.state.builder.op(Opcode::PushNone, span);
@@ -1664,12 +1669,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 }
 
-/// Checks if `f64` fits within an `f32`, and converts it if so
-fn maybe_f32(value: f64) -> Option<f32> {
-    const MIN: f64 = f32::MIN as f64;
-    const MAX: f64 = f32::MAX as f64;
-    if (MIN..=MAX).contains(&value) || value.is_nan() || value.is_infinite() {
-        Some(value as f32)
+/// Checks if an `i64` fits within an `i32`, and converts it if so.
+fn maybe_i32(value: i64) -> Option<i32> {
+    const MIN: i64 = i32::MIN as i64;
+    const MAX: i64 = i32::MAX as i64;
+    if (MIN..=MAX).contains(&value) {
+        Some(value as i32)
     } else {
         None
     }
@@ -1690,7 +1695,10 @@ mod suite {
     }
 
     mod _impl {
-        use crate::gc::{DefaultGc, GcHandle};
+        use crate::{
+            emitter::VTables,
+            gc::{DefaultGc, GcHandle},
+        };
 
         use super::*;
         use ves_error::VesFileDatabase;
@@ -1745,6 +1753,7 @@ mod suite {
             Resolver::new().resolve(&mut ast).unwrap();
             let gc = GcHandle::new(DefaultGc::default());
             let mut out = String::new();
+            let mut vtables = VTables::init(gc.clone());
             chunk_concat(
                 &mut out,
                 &Emitter::new(
@@ -1753,6 +1762,7 @@ mod suite {
                         // we mustn't move the Gc into here since it may get dropped
                         gc: gc.clone(),
                         strings: &mut HashMap::new(),
+                        vtables: &mut vtables,
                     },
                 )
                 .emit()

@@ -38,7 +38,7 @@ struct T3(a = 0) {
 |0007| JumpIfFalse(17)  // if false jump @other
 |0008| Pop              // pop <condition> result
 |0009| GetLocal(0)      // get self
-|0010| PushNum32(0.0)   // push 0
+|0010| PushInt32(0)   // push 0
 |0011| SetProp(0)       // self.a = 0
 |0012| Data(0)          //
 |0013| Data(0)          //
@@ -61,7 +61,7 @@ struct T3(a = 0) {
 |0007| JumpIfFalse(17)  // if false jump @other
 |0008| Pop              // pop <condition> result
 |0009| GetLocal(0)      // get self
-|0010| PushNum32(0.0)   // push 0
+|0010| PushInt32(0)   // push 0
 |0011| SetProp(0)       // self.a = 0
 |0012| Data(0)          //
 |0013| Data(0)          //

@@ -11,7 +11,7 @@
 |0000| CreateStruct
 |0001| CreateClosure(<fn T.sm>, 1)
 |0002| AddStaticMethod(2)
-|0003| PushNum32(0.0)
+|0003| PushInt32(0)
 |0004| AddStaticField(3)
 |0005| CreateClosure(<fn T.init>, 1)
 |0006| AddMethod(4)

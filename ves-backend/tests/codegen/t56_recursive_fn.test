@@ -30,7 +30,7 @@ test3(0);
 |0010| SetGlobal(1)
 |0011| Pop
 |0012| GetGlobal(1)
-|0013| PushNum32(0.0)
+|0013| PushInt32(0)
 |0014| Call(1)          // (fn test3() { ... })(0);
 |0015| Pop
 |0016| Return
@@ -50,7 +50,7 @@ test3(0);
 |0005| Return
 >>>>>> test3
 |0000| CreateClosure(<fn test4>, 1)
-|0001| PushNum32(1.0)
+|0001| PushInt32(1)
 |0002| Call(1)          // (fn test4(b) { ... })(1);
 |0003| Pop              // pop result
 |0004| PopN(2)          // pop a, receiver
@@ -58,11 +58,11 @@ test3(0);
 |0006| Return
 >>>>>> test4
 |0000| GetGlobal(1)
-|0001| PushNum32(2.0)
+|0001| PushInt32(2)
 |0002| Call(1)          // test3(2);
 |0003| Pop              // pop result
 |0004| GetUpvalue(0)
-|0005| PushNum32(3.0)
+|0005| PushInt32(3)
 |0006| Call(1)          // test4(3);
 |0007| Pop              // pop result
 |0008| PopN(2)          // pop b, receiver

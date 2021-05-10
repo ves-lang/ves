@@ -22,26 +22,26 @@ mut a = 10
 
 %output
 
-|0000| PushNum32(10.0)  // push 10
+|0000| PushInt32(10)  // push 10
 |0001| SetGlobal(0)     // mut a = 10
 |0002| Pop              // pop (a = 10)
 // @first.start:
 |0003| GetGlobal(0)     // get a
-|0004| PushNum32(0.0)   // push 0
+|0004| PushInt32(0)   // push 0
 |0005| GreaterThan      // a > 0
 |0006| JumpIfFalse(52)  // jump @first.exit
 |0007| Pop              // pop (a > 0)
 |0008| GetGlobal(0)     // get a
-|0009| PushNum32(1.0)   // push 1
+|0009| PushInt32(1)   // push 1
 |0010| Subtract         // b = a - 1
 // @second.start:
 |0011| GetLocal(0)      // get b
-|0012| PushNum32(0.0)   // push 0
+|0012| PushInt32(0)   // push 0
 |0013| GreaterThan      // b > 0
 |0014| JumpIfFalse(28)  // jump @second.exit
 |0015| Pop              // pop (b > 0)
 |0016| GetLocal(0)      // get b
-|0017| PushNum32(1.0)   // push 1
+|0017| PushInt32(1)   // push 1
 |0018| Subtract         // mut c = b - 1
 |0019| GetLocal(1)      // get c
 |0020| SetLocal(0)      // b = c
@@ -57,12 +57,12 @@ mut a = 10
 // @second.end:
 // @third.start:
 |0029| GetLocal(0)      // get b
-|0030| PushNum32(0.0)   // push 0
+|0030| PushInt32(0)   // push 0
 |0031| GreaterThan      // b > 0
 |0032| JumpIfFalse(46)  // jump @third.exit
 |0033| Pop              // pop (b > 0)
 |0034| GetLocal(0)      // get b
-|0035| PushNum32(1.0)   // push 1
+|0035| PushInt32(1)   // push 1
 |0036| Subtract         // mut d = b - 1
 |0037| GetLocal(1)      // get d
 |0038| SetLocal(0)      // b = d

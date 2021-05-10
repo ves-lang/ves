@@ -16,7 +16,7 @@ StmtKind::Var
       kind: Let
       initializer: Lit
         token: "5"
-        value: LitValue::Number(5.0)
+        value: LitValue::Integer(5)
       n_uses: 0
 StmtKind::Var
   declarations=
@@ -25,7 +25,7 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "10"
-        value: LitValue::Number(10.0)
+        value: LitValue::Integer(10)
       n_uses: 0
 StmtKind::Var
   declarations=
@@ -69,21 +69,21 @@ StmtKind::Var
       kind: Mut
       initializer: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
       n_uses: 0
     Var
       name: "m2"
       kind: Mut
       initializer: Lit
         token: "2"
-        value: LitValue::Number(2.0)
+        value: LitValue::Integer(2)
       n_uses: 0
     Var
       name: "m3"
       kind: Mut
       initializer: Lit
         token: "3"
-        value: LitValue::Number(3.0)
+        value: LitValue::Integer(3)
       n_uses: 0
 StmtKind::Var
   declarations=
@@ -92,19 +92,19 @@ StmtKind::Var
       kind: Let
       initializer: Lit
         token: "1"
-        value: LitValue::Number(1.0)
+        value: LitValue::Integer(1)
       n_uses: 0
     Var
       name: "l2"
       kind: Let
       initializer: Lit
         token: "2"
-        value: LitValue::Number(2.0)
+        value: LitValue::Integer(2)
       n_uses: 0
     Var
       name: "l3"
       kind: Let
       initializer: Lit
         token: "3"
-        value: LitValue::Number(3.0)
+        value: LitValue::Integer(3)
       n_uses: 0

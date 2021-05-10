@@ -190,6 +190,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_fn_assert"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "27d614f23f34f7b5165a77dc1591f497e2518f9cec4b4f4b92bfc4dc6cf7a190"
+
+[[package]]
 name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -389,6 +395,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "322f4de77956e22ed0e5032c359a0f1273f1f7f0d79bfa3b8ffbc730d7fbcc5c"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "ibig"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61c5022ee7f7a2feb0bd2fdc4b8ec882cd14903cebf33e7c1847e3f3a282f8b7"
+dependencies = [
+ "cfg-if",
+ "const_fn_assert",
+ "num-traits",
+ "rand",
+ "static_assertions",
 ]
 
 [[package]]
@@ -912,6 +931,7 @@ dependencies = [
  "ahash",
  "const-random",
  "hashbrown 0.11.2",
+ "ibig",
  "pretty_assertions",
  "rand",
  "static_assertions",
@@ -935,6 +955,7 @@ name = "ves-middle"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "ibig",
  "lazy_static",
  "log",
  "pathdiff",
@@ -950,6 +971,7 @@ name = "ves-parser"
 version = "0.1.0"
 dependencies = [
  "ast2str",
+ "ibig",
  "logos",
  "plain-msgbox",
  "pretty_assertions",

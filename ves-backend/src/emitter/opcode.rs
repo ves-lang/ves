@@ -46,7 +46,7 @@ pub enum Opcode {
     /// Top of the stack should be: [object, key, value]
     SetItem,
     /// Instruction for pushing numeric values which fit within f32 onto the stack
-    PushNum32(/* value */ f32),
+    PushInt32(/* value */ i32),
     /// Push `true` onto the stack
     PushTrue,
     /// Push `false` onto the stack
@@ -71,10 +71,6 @@ pub enum Opcode {
     Power,
     /// Negate an operand
     Negate,
-    /// Logical '&&'
-    And,
-    /// Logical '||'
-    Or,
     /// Logical '!'
     Not,
     /// Check if operands are equal
