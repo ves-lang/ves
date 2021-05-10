@@ -3,7 +3,8 @@
     box_patterns,
     allocator_api,
     linked_list_cursors,
-    core_intrinsics
+    core_intrinsics,
+    test
 )]
 #![allow(
     clippy::new_without_default,

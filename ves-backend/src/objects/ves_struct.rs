@@ -23,7 +23,7 @@ pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
 pub struct ViewKey {
-    view: UnsafeCell<VesStrView>,
+    pub(super) view: UnsafeCell<VesStrView>,
 }
 
 impl std::fmt::Debug for ViewKey {
@@ -38,12 +38,16 @@ impl From<GcObj> for ViewKey {
             crate::VesObject::Str(_) => ViewKey {
                 view: UnsafeCell::new(VesStrView::new(obj)),
             },
+
             crate::VesObject::Instance(_) => panic!("Unexpected object type: instance"),
             crate::VesObject::Struct(_) => panic!("Unexpected object type: struct"),
             crate::VesObject::Fn(_) => panic!("Unexpected object type: fn"),
             crate::VesObject::Closure(_) => panic!("Unexpected object type: closure"),
             crate::VesObject::ClosureDescriptor(_) => {
                 panic!("Unexpected object type: closure descriptor")
+            }
+            VesObject::Int(_) => {
+                panic!("Unexpected object type: big integer")
             }
         }
     }
@@ -77,12 +81,18 @@ impl VesStruct {
     }
 }
 
-unsafe impl Trace for VesStruct {
+unsafe impl Trace for VesHashMap<ViewKey, GcObj> {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        for (name, v) in &mut self.methods {
+        for (name, v) in self {
             Trace::trace(unsafe { &mut *name.view.get() }, tracer);
             Trace::trace(v, tracer);
         }
+    }
+}
+
+unsafe impl Trace for VesStruct {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.methods, tracer);
         for (name, _) in &mut self.fields {
             Trace::trace(unsafe { &mut *name.view.get() }, tracer);
         }

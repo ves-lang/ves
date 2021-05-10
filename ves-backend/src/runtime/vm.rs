@@ -11,7 +11,7 @@ pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
 const DEBUG_STACK_PRINT_SIZE: usize = 5;
 
-pub struct Vm<T: VesGc, W> {
+pub struct Vm<T: VesGc, W = std::io::Stdout> {
     gc: GcHandle<T>,
     globals: VmGlobals,
     stack: Vec<NanBox>,
@@ -156,15 +156,29 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
-    fn add(&mut self) -> Result<(), VesError> {
+    pub fn add(&mut self) -> Result<(), VesError> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_float() {
+        if left.is_float() && right.is_num() {
             self.pop_n(2);
             self.push(NanBox::from(
-                left.as_float_unchecked() + right.as_float_unchecked(),
+                left.as_float_unchecked() + right.to_float_unchecked(),
             ));
+            return Ok(());
+        } else if left.is_num() && right.is_float() {
+            self.pop_n(2);
+            self.push(NanBox::from(
+                left.to_float_unchecked() + right.as_float_unchecked(),
+            ));
+            return Ok(());
+        } else if left.is_int() && right.is_int() {
+            self.pop_n(2);
+            let result = left.as_int_unchecked() as i64 + right.as_int_unchecked() as i64;
+            if result as i32 as i64 != result {
+                unimplemented!("Allocate a big int here");
+            }
+            self.push(NanBox::from(result as i32));
             return Ok(());
         }
 

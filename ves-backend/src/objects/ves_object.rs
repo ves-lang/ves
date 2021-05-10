@@ -12,13 +12,18 @@ use crate::{
     },
 };
 
-use super::ves_fn::{ClosureDescriptor, VesClosure, VesFn};
+use super::{
+    ves_fn::{ClosureDescriptor, VesClosure, VesFn},
+    ves_int::VesInt,
+};
 
 /// QQQ: should the contained values be Cc or just Box?
 #[derive(Debug)]
 pub enum VesObject {
     /// An immutable string.
     Str(VesStr),
+    /// A heap-allocated arbitrary precision integer.
+    Int(VesInt),
     /// A ves struct instance.
     Instance(VesInstance),
     /// A struct type instance.
@@ -138,10 +143,17 @@ impl From<VesFn> for VesObject {
     }
 }
 
+impl From<VesInt> for VesObject {
+    fn from(v: VesInt) -> Self {
+        Self::Int(v)
+    }
+}
+
 unsafe impl Trace for VesObject {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         match self {
             VesObject::Str(s) => s.trace(tracer),
+            VesObject::Int(s) => s.trace(tracer),
             VesObject::Instance(i) => Trace::trace(i, tracer),
             VesObject::Struct(s) => Trace::trace(s, tracer),
             VesObject::Fn(f) => f.trace(tracer),
@@ -154,6 +166,7 @@ unsafe impl Trace for VesObject {
     fn after_forwarding(&mut self) {
         match self {
             VesObject::Str(s) => s.after_forwarding(),
+            VesObject::Int(i) => i.after_forwarding(),
             VesObject::Instance(i) => i.after_forwarding(),
             VesObject::Struct(s) => s.after_forwarding(),
             VesObject::Fn(f) => f.after_forwarding(),
@@ -168,6 +181,7 @@ impl Display for VesObject {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             VesObject::Str(v) => v.fmt(f),
+            VesObject::Int(v) => v.fmt(f),
             VesObject::Instance(v) => v.fmt(f),
             VesObject::Struct(v) => v.fmt(f),
             VesObject::Fn(v) => v.fmt(f),

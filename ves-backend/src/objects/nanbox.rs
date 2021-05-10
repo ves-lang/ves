@@ -216,6 +216,20 @@ impl NanBox {
     }
 
     #[inline]
+    pub fn is_num(&self) -> bool {
+        (self.0 & mask::TAG) == 0
+    }
+
+    #[inline]
+    pub fn to_float_unchecked(self) -> f64 {
+        if self.is_float() {
+            self.as_float_unchecked()
+        } else {
+            self.as_int_unchecked() as f64
+        }
+    }
+
+    #[inline]
     pub fn is_none(&self) -> bool {
         self.0 == tag::NONE
     }

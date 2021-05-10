@@ -4,6 +4,7 @@ use crate::{
     gc::{GcObj, VesGc},
     objects::{
         ves_fn::{ClosureDescriptor, VesFn},
+        ves_int::VesInt,
         ves_str::view::VesStrView,
     },
     Span, Value, VesObject,
@@ -1482,7 +1483,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     span,
                 );
             }
-            LitValue::BigInteger(i) => todo!(),
+            LitValue::BigInteger(i) => {
+                let int = VesInt::new(i.clone(), self.ctx.vtables.int.clone(), self.ctx.gc.proxy());
+                let int = self.ctx.alloc_value(int);
+                let offset = self.state.builder.constant(int, span.clone())?;
+                self.state.builder.op(Opcode::GetConst(offset), span);
+            }
             LitValue::None => {
                 self.state.builder.op(Opcode::PushNone, span);
             }
@@ -1691,7 +1697,10 @@ mod suite {
     }
 
     mod _impl {
-        use crate::gc::{DefaultGc, GcHandle};
+        use crate::{
+            emitter::VTables,
+            gc::{DefaultGc, GcHandle},
+        };
 
         use super::*;
         use ves_error::VesFileDatabase;
@@ -1746,6 +1755,7 @@ mod suite {
             Resolver::new().resolve(&mut ast).unwrap();
             let gc = GcHandle::new(DefaultGc::default());
             let mut out = String::new();
+            let mut vtables = VTables::init(gc.clone());
             chunk_concat(
                 &mut out,
                 &Emitter::new(
@@ -1754,6 +1764,7 @@ mod suite {
                         // we mustn't move the Gc into here since it may get dropped
                         gc: gc.clone(),
                         strings: &mut HashMap::new(),
+                        vtables: &mut vtables,
                     },
                 )
                 .emit()

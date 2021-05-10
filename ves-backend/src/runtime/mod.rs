@@ -117,7 +117,7 @@ pub mod suite {
         };
 
         use crate::{
-            emitter::{emit::Emitter, CompilationContext},
+            emitter::{emit::Emitter, CompilationContext, VTables},
             gc::{DefaultGc, GcHandle},
             runtime::{vm::Vm, VmGlobals},
         };
@@ -143,13 +143,14 @@ pub mod suite {
             }
 
             let gc = GcHandle::new(DefaultGc::default());
-
+            let mut vtables = VTables::init(gc.clone());
             let mut result = mid.map_modules(|ast| {
                 Emitter::new(
                     ast,
                     CompilationContext {
                         gc: gc.clone(),
                         strings: &mut HashMap::new(),
+                        vtables: &mut vtables,
                     },
                 )
                 .emit()
