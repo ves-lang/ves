@@ -1666,17 +1666,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 }
 
-/// Checks if an `i64` fits within an `i32`, and converts it if so.
-fn maybe_i32(value: i64) -> Option<i32> {
-    const MIN: i64 = i32::MIN as i64;
-    const MAX: i64 = i32::MAX as i64;
-    if (MIN..=MAX).contains(&value) {
-        Some(value as i32)
-    } else {
-        None
-    }
-}
-
 #[cfg(test)]
 #[ves_testing::ves_test_suite]
 mod suite {

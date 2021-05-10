@@ -40,7 +40,7 @@ fn generate_arrays<const N_SAMPLES: usize, const N_KEYS: usize>(
     (output, all_keys)
 }
 
-fn vec_to_map<H>(v: &Vec<Vec<Entry<String, usize>>>) -> Vec<H>
+fn vec_to_map<H>(v: &[Vec<Entry<String, usize>>]) -> Vec<H>
 where
     H: FromIterator<(String, usize)>,
 {
@@ -53,7 +53,7 @@ where
     out
 }
 
-fn run_linear_search(b: &mut Bencher, data: &Vec<Vec<Entry<String, usize>>>, keys: &Vec<String>) {
+fn run_linear_search(b: &mut Bencher, data: &[Vec<Entry<String, usize>>], keys: &[String]) {
     let mut rng = thread_rng();
     let n_objects = data.len();
     let n_keys = keys.len();
@@ -75,8 +75,8 @@ fn run_linear_search(b: &mut Bencher, data: &Vec<Vec<Entry<String, usize>>>, key
 
 fn run_hashmap_search<H: BuildHasher>(
     b: &mut Bencher,
-    data: &Vec<HashMap<String, usize, H>>,
-    keys: &Vec<String>,
+    data: &[HashMap<String, usize, H>],
+    keys: &[String],
 ) {
     let mut rng = thread_rng();
     let n_objects = data.len();
