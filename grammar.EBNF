@@ -48,7 +48,6 @@ loop_stmt = "loop" block ;
 
 control_stmt = ( "break" | "continue" ) label ;
 
-# TODO: allow binding in condition
 condition = ( ( "ok" | "err" ) "(" IDENTIFIER ")" "=" )? expression ;
 
 defer_stmt = "defer" ( block | call );
