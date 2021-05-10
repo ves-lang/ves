@@ -100,7 +100,10 @@
 
 use std::ptr::NonNull;
 
-use crate::gc::{VesPtr, VesRawPtr, VesRef};
+use crate::{
+    gc::{VesPtr, VesRawPtr, VesRef},
+    value::IntoVes,
+};
 
 use super::value::Value;
 
@@ -356,9 +359,9 @@ impl NanBox {
     }
 }
 
-impl<V: Into<Value>> From<V> for NanBox {
+impl<V: IntoVes> From<V> for NanBox {
     fn from(value: V) -> Self {
-        NanBox::new(value.into())
+        NanBox::new(value.into_ves())
     }
 }
 
@@ -418,7 +421,10 @@ impl std::fmt::Debug for NanBox {
 
 #[cfg(test)]
 mod tests {
-    use crate::gc::{Roots, VesGc};
+    use crate::{
+        gc::{Roots, VesGc},
+        value::IntoVes,
+    };
 
     use super::*;
 
@@ -498,7 +504,7 @@ mod tests {
         let mut gc = crate::gc::naive::NaiveMarkAndSweep::default();
         let ptr = alloc!(gc, "a string");
 
-        let val = Value::from(ptr);
+        let val = ptr.into_ves();
         let val = NanBox::new(val);
         assert!(!val.is_float());
         assert!(!val.is_none());

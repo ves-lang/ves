@@ -16,9 +16,9 @@ fn get_enum_vm() -> vm_enum::VmEnum<gc::DefaultGc> {
             NanBox::float(100.0),
             NanBox::float(0.0),
             NanBox::float(1.0),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+            NanBox::from(handle.alloc_permanent("a")),
+            NanBox::from(handle.alloc_permanent("b")),
+            NanBox::from(handle.alloc_permanent("n")),
         ],
         {
             vec![
@@ -75,9 +75,9 @@ fn get_enum_ic_vm() -> vm_enum_inline_caching::VmEnum<gc::DefaultGc> {
             NanBox::float(100.0),
             NanBox::float(0.0),
             NanBox::float(1.0),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+            NanBox::from(handle.alloc_permanent("a")),
+            NanBox::from(handle.alloc_permanent("b")),
+            NanBox::from(handle.alloc_permanent("n")),
         ],
         {
             vec![
@@ -133,9 +133,9 @@ fn get_enum_inst_ic_vm() -> vm_enum_instruction_inline_caching::VmEnum<gc::Defau
             NanBox::float(100.0),
             NanBox::float(0.0),
             NanBox::float(1.0),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+            NanBox::from(handle.alloc_permanent("a")),
+            NanBox::from(handle.alloc_permanent("b")),
+            NanBox::from(handle.alloc_permanent("n")),
         ],
         Vec::from(vm_enum_instruction_inline_caching::FIB_INSTS),
     )
@@ -151,9 +151,9 @@ fn get_byte_vm() -> vm_bytes::VmBytes<gc::DefaultGc> {
             NanBox::float(100.0),
             NanBox::float(0.0),
             NanBox::float(1.0),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
-            NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+            NanBox::from(handle.alloc_permanent("a")),
+            NanBox::from(handle.alloc_permanent("b")),
+            NanBox::from(handle.alloc_permanent("n")),
         ],
         vec![
             Inst::Alloc as _,

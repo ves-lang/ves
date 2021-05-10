@@ -7,6 +7,7 @@ use crate::{
         ves_int::VesInt,
         ves_str::view::VesStrView,
     },
+    value::IntoVes,
     Span, Value, VesObject,
 };
 
@@ -674,7 +675,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 let iter = self
                     .state
                     .builder
-                    .constant(self.ctx.alloc_or_intern("iter").into(), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("iter").into_ves(), span.clone())?;
                 self.state.builder.get_magic(iter, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
 
@@ -687,7 +688,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 let next = self
                     .state
                     .builder
-                    .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
                 self.state.builder.get_magic(next, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
             }
@@ -727,7 +728,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 let done = self
                     .state
                     .builder
-                    .constant(self.ctx.alloc_or_intern("done").into(), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("done").into_ves(), span.clone())?;
                 self.state.builder.get_magic(done, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 self.state.builder.op(Opcode::Not, span.clone());
@@ -769,7 +770,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 let next = self
                     .state
                     .builder
-                    .constant(self.ctx.alloc_or_intern("next").into(), span.clone())?;
+                    .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
                 self.state.builder.get_magic(next, span.clone());
                 self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
@@ -1066,7 +1067,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 Some(name) => {
                     // TODO: how to *not* to_string here?
                     let name_index = self.state.builder.constant(
-                        self.ctx.alloc_or_intern(name.to_string()).into(),
+                        self.ctx.alloc_or_intern(name.to_string()).into_ves(),
                         span.clone(),
                     )?;
                     self.state
@@ -1078,7 +1079,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     let name_index = self.state.builder.constant(
                         self.ctx
                             .alloc_or_intern(method.name.lexeme.to_string())
-                            .into(),
+                            .into_ves(),
                         span.clone(),
                     )?;
                     self.state
@@ -1091,7 +1092,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         for method in info.r#static.methods.iter() {
             self.emit_fn_expr(method, span.clone(), true)?;
             let name_index = self.state.builder.constant(
-                self.ctx.alloc_or_intern(method.name.lexeme.clone()).into(),
+                self.ctx
+                    .alloc_or_intern(method.name.lexeme.clone())
+                    .into_ves(),
                 span.clone(),
             )?;
             self.state
@@ -1106,7 +1109,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 self.state.builder.op(Opcode::PushNone, span.clone());
             }
             let name_index = self.state.builder.constant(
-                self.ctx.alloc_or_intern(field.0.lexeme.clone()).into(),
+                self.ctx.alloc_or_intern(field.0.lexeme.clone()).into_ves(),
                 span.clone(),
             )?;
             self.state
@@ -1118,7 +1121,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             let name_index = self
                 .state
                 .builder
-                .constant(self.ctx.alloc_or_intern("init").into(), span.clone())?;
+                .constant(self.ctx.alloc_or_intern("init").into_ves(), span.clone())?;
             self.emit_fn_expr(&initializer.body, span.clone(), true)?;
             self.state
                 .builder
@@ -1466,7 +1469,10 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         let span = lit.token.span.clone();
         match &lit.value {
             LitValue::Float(value) => {
-                let offset = self.state.builder.constant((*value).into(), span.clone())?;
+                let offset = self
+                    .state
+                    .builder
+                    .constant((*value).into_ves(), span.clone())?;
                 self.state.builder.op(Opcode::GetConst(offset), span);
             }
             LitValue::Integer(value) => {
@@ -1509,7 +1515,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     ) -> Result<()> {
         self.emit_expr(node, true)?;
         let offset = self.state.builder.constant(
-            self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
+            self.ctx.alloc_or_intern(name.lexeme.clone()).into_ves(),
             span.clone(),
         )?;
         // TODO: try to speculatively populate the cache
@@ -1535,7 +1541,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.emit_expr(node, true)?;
         self.emit_expr(value, true)?;
         let offset = self.state.builder.constant(
-            self.ctx.alloc_or_intern(name.lexeme.clone()).into(),
+            self.ctx.alloc_or_intern(name.lexeme.clone()).into_ves(),
             span.clone(),
         )?;
         // TODO: try to speculatively populate the cache
@@ -1639,7 +1645,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 // FIXME: stub before heap values are available
                 self.state.builder.op(add_or_sub_one, span.clone());
                 let offset = self.state.builder.constant(
-                    self.ctx.alloc_or_intern(get.field.lexeme.clone()).into(),
+                    self.ctx
+                        .alloc_or_intern(get.field.lexeme.clone())
+                        .into_ves(),
                     span.clone(),
                 )?;
                 self.state.builder.set_prop(offset, span.clone());

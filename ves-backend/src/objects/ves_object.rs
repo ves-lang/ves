@@ -30,7 +30,6 @@ pub type FnNative = dyn Fn(
     Vec<crate::NanBox>,
 ) -> Result<Value, VesError>;
 
-/// QQQ: should the contained values be Cc or just Box?
 pub enum VesObject {
     /// An immutable string.
     Str(VesStr),
@@ -50,8 +49,31 @@ pub enum VesObject {
     ClosureDescriptor(ClosureDescriptor),
 }
 
-// TODO: unsafe unchecked getters
 impl VesObject {
+    pub fn as_str(&self) -> Option<&VesStr> {
+        if let Self::Str(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_fn(&self) -> Option<&VesFn> {
+        if let Self::Fn(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_int(&self) -> Option<&VesInt> {
+        if let Self::Int(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
     pub fn as_instance(&self) -> Option<&VesInstance> {
         if let Self::Instance(v) = self {
             Some(v)
@@ -68,19 +90,91 @@ impl VesObject {
         }
     }
 
-    pub fn as_str(&self) -> Option<&VesStr> {
-        if let Self::Str(v) = self {
+    pub fn as_fn_native(&self) -> Option<&FnNative> {
+        if let Self::FnNative(v) = self {
             Some(v)
         } else {
             None
         }
     }
 
-    pub fn as_fn(&self) -> Option<&VesFn> {
-        if let Self::Fn(v) = self {
+    pub fn as_closure(&self) -> Option<&VesClosure> {
+        if let Self::Closure(v) = self {
             Some(v)
         } else {
             None
+        }
+    }
+
+    pub fn as_closure_descriptor(&self) -> Option<&ClosureDescriptor> {
+        if let Self::ClosureDescriptor(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_str_unchecked(&self) -> &VesStr {
+        if let Self::Str(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Str", self);
+        }
+    }
+
+    pub fn as_fn_unchecked(&self) -> &VesFn {
+        if let Self::Fn(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Fn", self);
+        }
+    }
+
+    pub fn as_int_unchecked(&self) -> &VesInt {
+        if let Self::Int(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Int", self);
+        }
+    }
+
+    pub fn as_instance_unchecked(&self) -> &VesInstance {
+        if let Self::Instance(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Instance", self);
+        }
+    }
+
+    pub fn as_struct_unchecked(&self) -> &VesStruct {
+        if let Self::Struct(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Struct", self);
+        }
+    }
+
+    pub fn as_fn_native_unchecked(&self) -> &FnNative {
+        if let Self::FnNative(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as FnNative", self);
+        }
+    }
+
+    pub fn as_closure_unchecked(&self) -> &VesClosure {
+        if let Self::Closure(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as Closure", self);
+        }
+    }
+
+    pub fn as_closure_descriptor_unchecked(&self) -> &ClosureDescriptor {
+        if let Self::ClosureDescriptor(v) = self {
+            v
+        } else {
+            panic!("Attempted to unwrap {:?} as ClosureDescriptor", self);
         }
     }
 

@@ -3,6 +3,22 @@ use std::fmt::{self, Display, Formatter};
 
 use crate::gc::{Trace, VesRef};
 
+pub type Result<T> = std::result::Result<T, Error>;
+/// A Ves runtime error constructed in case of a panic
+#[derive(Debug, Clone, PartialEq)]
+pub struct Error {
+    // QQQ(moscow): does this need to be a VesStr/VesStrView?
+    // TODO: backtrace
+    message: String,
+}
+impl Error {
+    pub fn new<S: Into<String>>(message: S) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
 #[derive(Debug, Clone, Copy)]
@@ -70,27 +86,101 @@ impl Value {
     }
 }
 
-impl From<VesRef> for Value {
-    fn from(ptr: VesRef) -> Self {
-        Self::Ref(ptr)
+pub trait IntoVes {
+    /// May not fail
+    fn into_ves(self) -> Value;
+}
+impl IntoVes for Value {
+    fn into_ves(self) -> Value {
+        self
+    }
+}
+impl IntoVes for i32 {
+    fn into_ves(self) -> Value {
+        Value::Int(self)
+    }
+}
+impl IntoVes for f64 {
+    fn into_ves(self) -> Value {
+        Value::Float(self)
+    }
+}
+impl IntoVes for () {
+    fn into_ves(self) -> Value {
+        Value::None
+    }
+}
+impl IntoVes for bool {
+    fn into_ves(self) -> Value {
+        Value::Bool(self)
+    }
+}
+impl IntoVes for VesRef {
+    fn into_ves(self) -> Value {
+        Value::Ref(self)
+    }
+}
+impl<T: IntoVes> IntoVes for Option<T> {
+    fn into_ves(self) -> Value {
+        match self {
+            Some(v) => v.into_ves(),
+            None => Value::None,
+        }
     }
 }
 
-impl From<i32> for Value {
-    fn from(v: i32) -> Self {
-        Value::Int(v)
+pub trait FromVes
+where
+    Self: Sized,
+{
+    fn from_ves(v: Value) -> Result<Self>;
+}
+impl FromVes for i32 {
+    fn from_ves(value: Value) -> Result<Self> {
+        match value {
+            Value::Int(v) => Ok(v),
+            _ => Err(Error::new("Invalid type")),
+        }
     }
 }
-
-impl From<f64> for Value {
-    fn from(f: f64) -> Self {
-        Value::Float(f)
+impl FromVes for f64 {
+    fn from_ves(value: Value) -> Result<Self> {
+        match value {
+            Value::Float(v) => Ok(v),
+            _ => Err(Error::new("Invalid type")),
+        }
     }
 }
-
-impl From<bool> for Value {
-    fn from(b: bool) -> Self {
-        Value::Bool(b)
+impl FromVes for bool {
+    fn from_ves(value: Value) -> Result<Self> {
+        match value {
+            Value::Bool(v) => Ok(v),
+            _ => Err(Error::new("Invalid type")),
+        }
+    }
+}
+impl FromVes for () {
+    fn from_ves(value: Value) -> Result<Self> {
+        match value {
+            Value::None => Ok(()),
+            _ => Err(Error::new("Invalid type")),
+        }
+    }
+}
+impl FromVes for VesRef {
+    fn from_ves(value: Value) -> Result<Self> {
+        match value {
+            Value::Ref(v) => Ok(v),
+            _ => Err(Error::new("Invalid type")),
+        }
+    }
+}
+impl<T: FromVes> FromVes for Option<T> {
+    fn from_ves(v: Value) -> Result<Self> {
+        match v {
+            Value::None => Ok(None),
+            _ => Some(FromVes::from_ves(v)).transpose(),
+        }
     }
 }
 

@@ -170,7 +170,7 @@ impl<T: VesGc> VmBytes<T> {
 
         let ptr = self.alloc(instance);
 
-        self.push(NanBox::new(Value::from(ptr)));
+        self.push(NanBox::from(ptr));
     }
 
     fn alloc(&mut self, o: impl Into<VesObject>) -> GcObj {
@@ -220,7 +220,7 @@ impl<T: VesGc> VmBytes<T> {
             (Value::Ref(l), Value::Ref(r)) => match (&*l, &*r) {
                 (VesObject::Str(l), VesObject::Str(r)) => {
                     let ptr = self.alloc(l.clone_inner().into_owned() + r);
-                    self.push(NanBox::new(Value::from(ptr)));
+                    self.push(NanBox::from(ptr));
                 }
                 _ => self.error(format!("Cannot add objects `{:?}` and `{:?}`", left, right)),
             },
@@ -404,9 +404,9 @@ mod tests {
                 NanBox::float(100.0),
                 NanBox::float(0.0),
                 NanBox::float(1.0),
-                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("a"))),
-                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("b"))),
-                NanBox::new(ves_backend::Value::from(handle.alloc_permanent("n"))),
+                NanBox::from(handle.alloc_permanent("a")),
+                NanBox::from(handle.alloc_permanent("b")),
+                NanBox::from(handle.alloc_permanent("n")),
             ],
             vec![
                 Inst::Alloc as _,
