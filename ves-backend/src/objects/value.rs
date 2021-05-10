@@ -5,12 +5,7 @@ use ves_error::{FileId, VesError};
 
 use crate::gc::{Trace, VesRef};
 
-// TODO: this is a stub for the user-facing error type
-// It doesn't make sense to use the same VesError type, which we also use during compilation,
-// as the runtime error type, because they have slightly different requirements.
-// Runtime errors should collect backtraces, possibly displaying current stack, disassembly,
-// or other similar info about the error that occurred. They should also be easy to construct
-// by the user without any info about the currently executing file or span (which is required by VesError)
+// TODO: user-facing error type
 #[derive(Clone, PartialEq)]
 pub struct RuntimeError(pub VesError);
 pub type Result<T> = std::result::Result<T, RuntimeError>;
