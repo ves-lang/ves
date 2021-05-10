@@ -34,7 +34,7 @@ pub fn build_diagnostic<
         UnusedLocal => Diagnostic::warning(),
         Warning => Diagnostic::warning(),
         Emit => Diagnostic::error(),
-        Runtime => unimplemented!(),
+        Runtime => Diagnostic::error(),
         Panic => unimplemented!(),
         Traceback => unimplemented!(),
     };

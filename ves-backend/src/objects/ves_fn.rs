@@ -1,12 +1,20 @@
-use std::convert::{TryFrom, TryInto};
-use std::fmt::{self, Display, Formatter};
+use std::{
+    borrow::Cow,
+    convert::{TryFrom, TryInto},
+};
+use std::{
+    fmt::{self, Display, Formatter},
+    marker::PhantomData,
+};
 
 use ves_error::FileId;
 
 use crate::{
     emitter::{builder::Chunk, emit::UpvalueInfo},
     gc::{GcObj, Trace},
+    runtime::vm::VmInterface,
     value::{FromVes, IntoVes, RuntimeError},
+    ves_object::FnNative,
     Value, VesObject,
 };
 
@@ -126,7 +134,8 @@ impl Display for ClosureDescriptor {
     }
 }
 
-pub struct Args<'v>(&'v mut Vec<Value>);
+pub struct Args<'v>(pub(crate) &'v mut Vec<Value>);
+
 macro_rules! impl_try_from_args_for_tuple {
     () => {
         impl<'v> TryFrom<Args<'v>> for () {
@@ -230,44 +239,160 @@ impl_try_from_args_for_tuple!(10, A, B, C, D, E, F, G, H, I, J);
 impl_try_from_args_for_tuple!(11, A, B, C, D, E, F, G, H, I, J, K);
 impl_try_from_args_for_tuple!(12, A, B, C, D, E, F, G, H, I, J, K, L);
 
-trait Callable<'v, A>
+pub trait Callable<'v, A>
 where
     A: TryFrom<Args<'v>>,
 {
     // TODO: accept some kind of VmInterface here, for allocating objects and so on
-    fn ves_call(&self, args: Args<'v>) -> Result<Value, RuntimeError>;
+    fn ves_call(&self, vm: &'v mut dyn VmInterface, args: Args<'v>) -> Result<Value, RuntimeError>;
 }
+
 impl<'v, A, R, F> Callable<'v, A> for F
 where
     A: TryFrom<Args<'v>, Error = RuntimeError>,
     R: IntoVes,
-    F: Fn(A) -> Result<R, RuntimeError>,
+    F: Fn(&'v mut dyn VmInterface, A) -> Result<R, RuntimeError>,
 {
-    fn ves_call(&self, args: Args<'v>) -> Result<Value, RuntimeError> {
+    fn ves_call(&self, vm: &'v mut dyn VmInterface, args: Args<'v>) -> Result<Value, RuntimeError> {
         let args: A = args.try_into()?;
-        (*self)(args).map(|v| v.into_ves())
+        (*self)(vm, args).map(|v| v.into_ves())
+    }
+}
+
+pub struct CallableWrapper<C, A> {
+    func: C,
+    name: Cow<'static, str>,
+    is_magic: bool,
+    _args: PhantomData<A>,
+}
+
+impl<C, A> CallableWrapper<C, A> {
+    pub fn new(func: C) -> Self {
+        Self {
+            func,
+            name: "<fn: native>".into(),
+            is_magic: false,
+            _args: PhantomData,
+        }
+    }
+
+    pub fn with_name(func: C, name: impl Into<Cow<'static, str>>) -> Self {
+        Self {
+            func,
+            name: name.into(),
+            is_magic: false,
+            _args: PhantomData,
+        }
+    }
+
+    pub fn with_name_and_magic(
+        func: C,
+        name: impl Into<Cow<'static, str>>,
+        is_magic: bool,
+    ) -> Self {
+        Self {
+            func,
+            name: name.into(),
+            is_magic,
+            _args: PhantomData,
+        }
+    }
+}
+
+pub fn wrap<A, R, F>(f: F, name: &'static str) -> CallableWrapper<F, A>
+where
+    F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError>,
+    A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
+    R: IntoVes,
+{
+    CallableWrapper::with_name(f, name)
+}
+
+pub fn wrap_with_magic<A, R, F>(f: F, name: &'static str, is_magic: bool) -> CallableWrapper<F, A>
+where
+    F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError>,
+    A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
+    R: IntoVes,
+{
+    CallableWrapper::with_name_and_magic(f, name, is_magic)
+}
+
+pub fn wrap_native<A, R, F>(f: F, name: &'static str, is_magic: bool) -> Box<dyn FnNative>
+where
+    F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError> + 'static,
+    A: for<'v> TryFrom<Args<'v>, Error = RuntimeError> + 'static,
+    R: IntoVes,
+{
+    Box::new(wrap_with_magic(f, name, is_magic))
+}
+
+unsafe impl<'v, C, A> Trace for CallableWrapper<C, A>
+where
+    C: Callable<'v, A>,
+    A: TryFrom<Args<'v>, Error = RuntimeError>,
+{
+    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+}
+
+impl<A, C> crate::ves_object::FnNative for CallableWrapper<C, A>
+where
+    C: for<'v> Callable<'v, A>,
+    A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
+{
+    fn call<'a>(
+        &mut self,
+        vm: &'a mut dyn crate::runtime::vm::VmInterface,
+        args: Args<'a>,
+    ) -> Result<Value, ves_error::VesError> {
+        self.func
+            .ves_call(vm, args)
+            .map_err(|e| vm.create_error(e.0.msg))
+    }
+
+    fn name(&self) -> &Cow<'static, str> {
+        &self.name
+    }
+
+    fn is_magic(&self) -> bool {
+        self.is_magic
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::value::Result;
+    use crate::{
+        gc::{DefaultGc, GcHandle},
+        runtime::{vm::Vm, VmGlobals},
+        value::Result,
+    };
 
     use super::*;
 
     #[test]
     fn calling_native() {
-        fn something((a, b, c, va): (i32, i32, Option<i32>, &[Value])) -> Result<i32> {
+        fn something(
+            _: &mut dyn VmInterface,
+            (a, b, c, va): (i32, i32, Option<i32>, &[Value]),
+        ) -> Result<i32> {
             let mut out = a + b * c.unwrap_or(0);
             for arg in va.iter() {
                 out += i32::from_ves(*arg).unwrap();
             }
             Ok(out)
         }
+
+        let handle = GcHandle::new(DefaultGc::default());
+        let mut vm = Vm::<_, std::io::Stdout>::new(handle, VmGlobals::new(vec![]));
         let mut args = vec![Value::Int(2), Value::Int(5), Value::Int(3)];
-        assert_eq!(something.ves_call(Args(&mut args)).unwrap(), Value::Int(17));
+        assert_eq!(
+            something.ves_call(&mut vm, Args(&mut args)).unwrap(),
+            Value::Int(17)
+        );
         let mut args = vec![Value::Int(2), Value::Int(5), Value::None];
-        assert_eq!(something.ves_call(Args(&mut args)).unwrap(), Value::Int(2));
+        assert_eq!(
+            something.ves_call(&mut vm, Args(&mut args)).unwrap(),
+            Value::Int(2)
+        );
         let mut args = vec![
             Value::Int(2),
             Value::Int(2),
@@ -277,16 +402,23 @@ mod tests {
             Value::Int(2),
         ];
         assert_eq!(
-            something.ves_call(Args(&mut args)).unwrap(),
+            something.ves_call(&mut vm, Args(&mut args)).unwrap(),
             Value::Int(2 * 6)
         );
 
-        fn fallible(_: ()) -> Result<()> {
+        fn fallible(_: &mut dyn VmInterface, _: ()) -> Result<()> {
             Err(RuntimeError::new("Something went wrong"))
         }
         assert_eq!(
-            fallible.ves_call(Args(&mut vec![])).unwrap_err(),
+            fallible.ves_call(&mut vm, Args(&mut vec![])).unwrap_err(),
             RuntimeError::new("Something went wrong")
         );
+
+        let wrapper = wrap(fallible, "fallible");
+        assert_eq!(wrapper.name(), "fallible");
+
+        let wrapper = wrap_native(fallible, "fallible", false);
+        assert_eq!(wrapper.name(), "fallible");
+        assert!(!wrapper.is_magic());
     }
 }

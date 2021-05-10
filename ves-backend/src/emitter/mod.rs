@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     gc::{GcHandle, GcObj, VesGc},
-    objects::ves_int::{IntVTableLookup, VesIntVTable},
+    objects::ves_int::IntVTableLookup,
     Value, VesObject,
 };
 
@@ -20,7 +20,7 @@ pub struct VTables {
 impl VTables {
     pub fn init<T: VesGc>(gc: GcHandle<T>) -> Self {
         Self {
-            int: IntVTableLookup::new(VesIntVTable::init(gc)),
+            int: IntVTableLookup::create(gc),
         }
     }
 }

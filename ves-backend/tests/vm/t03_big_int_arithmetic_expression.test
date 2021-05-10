@@ -1,0 +1,7 @@
+print(999n + 1n);
+print(1n + 100);
+
+%output
+
+1000
+101

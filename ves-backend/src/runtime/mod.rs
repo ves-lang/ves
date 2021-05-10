@@ -143,13 +143,14 @@ pub mod suite {
             }
 
             let gc = GcHandle::new(DefaultGc::default());
+            let mut strings = HashMap::new();
             let mut vtables = VTables::init(gc.clone());
             let mut result = mid.map_modules(|ast| {
                 Emitter::new(
                     ast,
                     CompilationContext {
                         gc: gc.clone(),
-                        strings: &mut HashMap::new(),
+                        strings: &mut strings,
                         vtables: &mut vtables,
                     },
                 )

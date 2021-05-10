@@ -237,6 +237,12 @@ impl FromVes for VesRef {
         }
     }
 }
+impl FromVes for Value {
+    fn from_ves(value: Value) -> Result<Self> {
+        Ok(value)
+    }
+}
+
 impl<T: FromVes> FromVes for Option<T> {
     fn from_ves(v: Value) -> Result<Self> {
         match v {

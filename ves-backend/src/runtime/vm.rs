@@ -2,6 +2,7 @@ use ves_error::VesError;
 
 use crate::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
+    objects::{ves_fn::Args, ves_str::view::VesStrView},
     NanBox, Value, VesObject,
 };
 
@@ -234,7 +235,52 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
-    pub fn add(&mut self) -> Result<(), VesError> {
+    fn get_magic_method(&mut self, obj: NanBox, name: &VesStrView) -> Result<GcObj, VesError> {
+        match obj.unbox() {
+            Value::Ref(obj) => {
+                // TODO: this should probably be behind a trait
+                match &*obj {
+                    VesObject::Str(_) => todo!(),
+                    // NOTE: this assumes that BigInt has only methods and no fields
+                    VesObject::Int(i) => i
+                        .props()
+                        .get_slot_value(&name)
+                        .and_then(|obj| obj.as_ref())
+                        .and_then(|obj| {
+                            if obj
+                                .as_fn_native()
+                                .map(|func| func.is_magic())
+                                .unwrap_or(false)
+                            {
+                                Some(*obj)
+                            } else {
+                                None
+                            }
+                        })
+                        .ok_or_else(|| {
+                            self.error(format!(
+                                "BigInt doesn't have a magic method called `@{}`",
+                                name.str()
+                            ))
+                        }),
+                    VesObject::Instance(_) => {
+                        unimplemented!()
+                    }
+                    rest => Err(self.error(format!(
+                        "Cannot access a magic method `@{}` on an object of type {}",
+                        name.str(),
+                        rest,
+                    ))),
+                }
+            }
+            rest => Err(self.error(format!(
+                "Cannot access properties on an object of type {}",
+                rest
+            ))),
+        }
+    }
+
+    fn add(&mut self) -> Result<(), VesError> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
@@ -246,9 +292,25 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             std::ops::Add::<f64>::add
         );
 
+        // NOTE: this is a POC
         // TODO: use a function-level inline cache here.
-        // if self.get_magic_method(left, name)? {}
-        todo!()
+        // TODO: use an intern table / symbol table instead of allocating a new string every time
+        let add = self.alloc("add".into());
+        let mut method = self.get_magic_method(left, &VesStrView::new(add))?;
+
+        let result = match &mut *method {
+            VesObject::FnNative(func) => {
+                func.call(self, Args(&mut vec![left.unbox(), right.unbox()]))?
+            }
+            VesObject::Fn(_) | VesObject::Closure(_) => {
+                unimplemented!("Functions calls aren't implemented yet")
+            }
+            _ => unreachable!("get_magic_method shouldn't return non-callable objects"),
+        };
+
+        self.pop_n(2);
+        self.push(NanBox::new(result));
+        Ok(())
     }
 
     fn sub(&mut self) -> Result<(), VesError> {

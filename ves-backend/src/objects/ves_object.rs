@@ -17,18 +17,15 @@ use crate::{
 };
 
 use super::{
-    ves_fn::{ClosureDescriptor, VesClosure, VesFn},
+    ves_fn::{Args, ClosureDescriptor, VesClosure, VesFn},
     ves_int::VesInt,
 };
 
-pub type FnNative = dyn Fn(
-    // Vm instance
-    &mut dyn VmInterface,
-    // Object being called
-    GcObj,
-    // Args
-    Vec<crate::NanBox>,
-) -> Result<Value, VesError>;
+pub trait FnNative: Trace {
+    fn call<'a>(&mut self, vm: &'a mut dyn VmInterface, args: Args<'a>) -> Result<Value, VesError>;
+    fn name(&self) -> &Cow<'static, str>;
+    fn is_magic(&self) -> bool;
+}
 
 pub enum VesObject {
     /// An immutable string.
@@ -42,7 +39,7 @@ pub enum VesObject {
     /// A plain function with no upvalues.
     Fn(VesFn),
     /// A native function.
-    FnNative(Box<FnNative>),
+    FnNative(Box<dyn FnNative>),
     /// A function with upvalues
     Closure(VesClosure),
     /// An object which describes how a closure should be created
@@ -97,9 +94,9 @@ impl VesObject {
         }
     }
 
-    pub fn as_fn_native(&self) -> Option<&FnNative> {
+    pub fn as_fn_native(&self) -> Option<&dyn FnNative> {
         if let Self::FnNative(v) = self {
-            Some(v)
+            Some(&**v)
         } else {
             None
         }
@@ -161,9 +158,9 @@ impl VesObject {
         }
     }
 
-    pub fn as_fn_native_unchecked(&self) -> &FnNative {
+    pub fn as_fn_native_unchecked(&self) -> &dyn FnNative {
         if let Self::FnNative(v) = self {
-            v
+            &**v
         } else {
             panic!("Attempted to unwrap {:?} as FnNative", self);
         }
@@ -261,6 +258,18 @@ impl From<VesFn> for VesObject {
 impl From<VesInt> for VesObject {
     fn from(v: VesInt) -> Self {
         Self::Int(v)
+    }
+}
+
+impl<F: FnNative + 'static> From<F> for VesObject {
+    fn from(v: F) -> Self {
+        Self::FnNative(Box::new(v))
+    }
+}
+
+impl From<Box<dyn FnNative>> for VesObject {
+    fn from(v: Box<dyn FnNative>) -> Self {
+        Self::FnNative(v)
     }
 }
 
