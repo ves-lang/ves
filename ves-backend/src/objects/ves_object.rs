@@ -73,6 +73,13 @@ impl VesObject {
             None
         }
     }
+    pub fn as_int_mut(&mut self) -> Option<&mut VesInt> {
+        if let Self::Int(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 
     pub fn as_instance(&self) -> Option<&VesInstance> {
         if let Self::Instance(v) = self {

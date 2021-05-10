@@ -85,7 +85,7 @@ impl PropertyLookup for IntVTableLookup {
 
 #[derive(Debug)]
 pub struct VesInt {
-    int: IBig,
+    pub value: IBig,
     slots: CacheLayer<IntVTableLookup, Value, ProxyAllocator>,
 }
 
@@ -93,7 +93,7 @@ impl VesInt {
     pub fn new(int: IBig, lookup: IntVTableLookup, proxy: ProxyAllocator) -> Self {
         let methods = lookup.get_methods(proxy);
         let slots = CacheLayer::new(lookup, methods);
-        Self { int, slots }
+        Self { value: int, slots }
     }
 }
 
@@ -105,6 +105,6 @@ unsafe impl Trace for VesInt {
 
 impl std::fmt::Display for VesInt {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.int)
+        write!(f, "{}", self.value)
     }
 }

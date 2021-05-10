@@ -3,7 +3,12 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 use ves_error::{FileId, VesError};
 
-use crate::gc::{Trace, VesRef};
+use crate::{
+    gc::{Trace, VesRef},
+    VesObject,
+};
+
+use super::ves_int::VesInt;
 
 // TODO: user-facing error type
 #[derive(Clone, PartialEq)]
@@ -84,6 +89,62 @@ impl Value {
             Value::Bool(v) => *v,
             Value::Ref(_) => true,
         }
+    }
+
+    pub fn as_int(&self) -> Option<&i32> {
+        if let Self::Int(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_float(&self) -> Option<&f64> {
+        if let Self::Float(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<&bool> {
+        if let Self::Bool(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_ref(&self) -> Option<&VesRef> {
+        if let Self::Ref(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+    pub fn as_ref_mut(&mut self) -> Option<&mut VesRef> {
+        if let Self::Ref(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_bigint(&self) -> Option<&VesInt> {
+        if let Self::Ref(v) = self {
+            if let VesObject::Int(v) = &**v {
+                return Some(v);
+            }
+        }
+        None
+    }
+    pub fn as_bigint_mut(&mut self) -> Option<&mut VesInt> {
+        if let Self::Ref(v) = self {
+            if let VesObject::Int(v) = &mut **v {
+                return Some(v);
+            }
+        }
+        None
     }
 }
 

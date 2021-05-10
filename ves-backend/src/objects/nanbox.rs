@@ -105,7 +105,7 @@ use crate::{
     value::IntoVes,
 };
 
-use super::value::Value;
+use super::{value::Value, ves_int::VesInt};
 
 #[rustfmt::skip]
 pub const QNAN_BITS: u64 =      0b01111111_11111100_00000000_00000000_00000000_00000000_00000000_00000000;
@@ -224,8 +224,8 @@ impl NanBox {
     }
 
     #[inline]
-    pub fn to_float_unchecked(self) -> f64 {
-        if self.is_float() {
+    pub fn coerce_float(self) -> f64 {
+        if std::intrinsics::likely(self.is_float()) {
             self.as_float_unchecked()
         } else {
             self.as_int_unchecked() as f64

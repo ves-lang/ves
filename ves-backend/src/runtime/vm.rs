@@ -11,6 +11,54 @@ pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
 const DEBUG_STACK_PRINT_SIZE: usize = 5;
 
+macro_rules! num_bin_op {
+    ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr) => {
+        // favor ints
+        if $left.is_int() {
+            if $right.is_int() {
+                $self.pop_n(2);
+                $self.push(NanBox::from($int(
+                    $left.as_int_unchecked(),
+                    $right.as_int_unchecked(),
+                )));
+                return Ok(());
+            } else if $right.is_float() {
+                $self.pop_n(2);
+                $self.push(NanBox::from($float(
+                    $left.as_int_unchecked() as f64,
+                    $right.as_float_unchecked(),
+                )));
+                return Ok(());
+            }
+        } else if $left.is_float() {
+            if $right.is_int() {
+                $self.pop_n(2);
+                $self.push(NanBox::from($float(
+                    $left.as_float_unchecked(),
+                    $right.as_int_unchecked() as f64,
+                )));
+                return Ok(());
+            } else if $right.is_float() {
+                $self.pop_n(2);
+                $self.push(NanBox::from($float(
+                    $left.as_float_unchecked(),
+                    $right.as_float_unchecked(),
+                )));
+                return Ok(());
+            }
+        }
+        // TODO: bigint
+        // outside of + - *, we also have to check if the values match certain criteria:
+        // 1. in case of bigint.pow, the right side must be within usize::MIN..usize::MAX
+        // 2. in case of bigint.div, the right side must not be zero
+        // bigint + bigint -> bigint
+        // bigint + int -> bigint
+        // int + bigint -> bigint
+        // bigint + float -> error
+        // float + bigint -> error
+    };
+}
+
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
     fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError>;
@@ -190,27 +238,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_num() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.as_float_unchecked() + right.to_float_unchecked(),
-            ));
-            return Ok(());
-        } else if left.is_num() && right.is_float() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.to_float_unchecked() + right.as_float_unchecked(),
-            ));
-            return Ok(());
-        } else if left.is_int() && right.is_int() {
-            self.pop_n(2);
-            let result = left.as_int_unchecked() as i64 + right.as_int_unchecked() as i64;
-            if result as i32 as i64 != result {
-                unimplemented!("Allocate a big int here");
-            }
-            self.push(NanBox::from(result as i32));
-            return Ok(());
-        }
+        num_bin_op!(
+            self,
+            left,
+            right,
+            i32::wrapping_add,
+            std::ops::Add::<f64>::add
+        );
 
         // TODO: use a function-level inline cache here.
         // if self.get_magic_method(left, name)? {}
@@ -221,13 +255,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_float() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.as_float_unchecked() - right.as_float_unchecked(),
-            ));
-            return Ok(());
-        }
+        num_bin_op!(
+            self,
+            left,
+            right,
+            i32::wrapping_sub,
+            std::ops::Sub::<f64>::sub
+        );
 
         // TODO: use a function-level inline cache here.
         // if self.get_magic_method(left, name)? {}
@@ -238,13 +272,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_float() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.as_float_unchecked() * right.as_float_unchecked(),
-            ));
-            return Ok(());
-        }
+        num_bin_op!(
+            self,
+            left,
+            right,
+            i32::wrapping_mul,
+            std::ops::Mul::<f64>::mul
+        );
 
         todo!()
     }
@@ -253,13 +287,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_float() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.as_float_unchecked() / right.as_float_unchecked(),
-            ));
-            return Ok(());
-        }
+        // TODO: integer division? currently it just coerces to floats.
+        let idiv = |l, r| (l as f64) / (r as f64);
+        num_bin_op!(self, left, right, idiv, std::ops::Div::<f64>::div);
 
         todo!()
     }
@@ -268,13 +298,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        if left.is_float() && right.is_float() {
-            self.pop_n(2);
-            self.push(NanBox::from(
-                left.as_float_unchecked().powf(right.as_float_unchecked()),
-            ));
-            return Ok(());
-        }
+        // TODO: integer exponentiation? currently it just coerces to floats.
+        let ipow = |l, r| (l as f64).powf(r as f64);
+        num_bin_op!(self, left, right, ipow, f64::powf);
 
         todo!()
     }
@@ -282,10 +308,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn neg(&mut self) -> Result<(), VesError> {
         let operand = *self.peek();
 
-        if operand.is_float() {
+        if operand.is_int() {
+            self.pop();
+            self.push(NanBox::from(-operand.as_int_unchecked()));
+            return Ok(());
+        } else if operand.is_float() {
             self.pop();
             self.push(NanBox::from(-operand.as_float_unchecked()));
             return Ok(());
+        } else if operand.is_normal_ptr() {
+            if let Some(operand) = operand.unbox().as_bigint_mut() {
+                operand.value = -&operand.value;
+            }
         }
 
         todo!()
