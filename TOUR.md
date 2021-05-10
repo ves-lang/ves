@@ -23,9 +23,9 @@ false
 f"1 + 1 is {1 + 1}"
 
 // map
-{ "key0": value0, "key1": value1 }
-// 
-{ expression(): value }
+{ key0: value0, key1: value1 }
+{ [expression()]: value }
+// TODO: this is not enforced
 // duplicate (constant) keys are a compile-time error
 // { "key": value, "key": value }
 

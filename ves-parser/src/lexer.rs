@@ -157,8 +157,6 @@ pub enum TokenKind<'a> {
     #[regex("'([^'\\\\]|\\\\.)*'")]
     String,
     /// Floating point (IEEE754) numeric literal
-    /// TODO: underscores
-    /// TODO: allow '0.' and '.0' in a way that is not ambiguous with ranges
     #[regex(
         "([0-9]+[Ee][+-]?[0-9]+|([0-9]+\\.[0-9]+([Ee][+-]?[0-9]+)?))f?|NaN|inf",
         priority = 2

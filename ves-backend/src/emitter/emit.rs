@@ -55,10 +55,6 @@ enum LoopControl {
     Continue,
 }
 
-/// QQQ(moscow): the word `label` is overloaded a lot here.
-/// can we call it `virtual address` instead of a `label` for the "label ids" that are used for virtual jumps
-/// and `labels` for the "physical" LoopLabel, which holds the start/end of a loop?
-
 struct State<'a> {
     enclosing: Option<Box<State<'a>>>,
     fn_kind: Option<FnKind>,
@@ -126,7 +122,7 @@ impl<'a> State<'a> {
     /// Partially closing a scope means discarding all its locals,
     /// but *without* popping the last `preserve` locals.
     ///
-    /// NOTE: it is up to the user to ensure that at least `preserve` locals exist
+    /// Safety: It is up to the user to ensure that at least `preserve` locals exist.
     fn end_scope_partial(&mut self, scope_span: Span, preserve: usize) {
         // drain all locals from the scope
         self.scope_depth -= 1;
@@ -264,8 +260,6 @@ impl<'a> State<'a> {
             } else {
                 enclosing
                     .resolve_upvalue(name)
-                    // this upvalue will be created from an upvalue in the enclosing closure
-                    // FIXME: panics if there are more than u16::MAX upvalues
                     .map(|index| self.add_upvalue(UpvalueInfo::Upvalue(index)))
             }
         } else {
@@ -575,13 +569,11 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     /// end:
     ///
     /// ```
-    /// TODO: describe the layout for the loops with a binding
     fn emit_while_loop(&mut self, info: &'b While<'a>, span: Span) -> Result<()> {
         self.state.begin_loop();
         let [start, exit, end] = self.state.reserve_labels();
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
-        // TODO: while loops are also wrong (in the same way as if expr)
         self.state.begin_scope();
         let mut used_pattern = false;
         match &info.condition.pattern {
@@ -841,7 +833,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     ///     pop condition result
     /// end:
     /// ```
-    /// TODO: describe the layout for the loops with a binding
     fn emit_for_loop(&mut self, info: &'b For<'a>, span: Span) -> Result<()> {
         self.state.begin_scope();
         for init in info.initializers.iter() {
@@ -1046,7 +1037,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         Ok(())
     }
 
-    // TODO
     fn emit_struct_expr(
         &mut self,
         info: &'b StructInfo<'a>,
@@ -1065,8 +1055,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.emit_fn_expr(method, span.clone(), true)?;
             match method.name.lexeme.strip_prefix('@') {
                 Some(name) => {
-                    // TODO: how to *not* to_string here?
                     let name_index = self.state.builder.constant(
+                        // TODO: can the to_string call be avoided?
                         self.ctx.alloc_or_intern(name.to_string()).into_ves(),
                         span.clone(),
                     )?;
@@ -1075,8 +1065,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                         .op(Opcode::AddMagicMethod(name_index), span.clone());
                 }
                 None => {
-                    // TODO: how to *not* to_string here?
                     let name_index = self.state.builder.constant(
+                        // TODO: can the to_string call be avoided?
                         self.ctx
                             .alloc_or_intern(method.name.lexeme.to_string())
                             .into_ves(),
@@ -1642,7 +1632,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             ExprKind::GetProp(ref get) => {
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
-                // FIXME: stub before heap values are available
                 self.state.builder.op(add_or_sub_one, span.clone());
                 let offset = self.state.builder.constant(
                     self.ctx
