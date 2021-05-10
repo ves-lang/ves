@@ -71,10 +71,6 @@ pub enum Opcode {
     Power,
     /// Negate an operand
     Negate,
-    /// Logical '&&'
-    And,
-    /// Logical '||'
-    Or,
     /// Logical '!'
     Not,
     /// Check if operands are equal

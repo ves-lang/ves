@@ -89,8 +89,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::Negate => self.neg()?,
                 Opcode::AddOne => unimplemented!(),
                 Opcode::SubtractOne => unimplemented!(),
-                Opcode::And => unimplemented!(),
-                Opcode::Or => unimplemented!(),
                 Opcode::Not => unimplemented!(),
                 Opcode::Equal => unimplemented!(),
                 Opcode::NotEqual => unimplemented!(),

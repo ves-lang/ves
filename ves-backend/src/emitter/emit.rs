@@ -3,7 +3,7 @@ use std::{borrow::Cow, collections::HashMap, rc::Rc};
 use crate::{
     gc::{GcObj, VesGc},
     objects::{
-        ves_fn::{ClosureDescriptor, VesFn},
+        ves_fn::{Arity, ClosureDescriptor, VesFn},
         ves_int::VesInt,
         ves_str::view::VesStrView,
     },
@@ -398,9 +398,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
         let f = VesFn {
             name: VesStrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
-            positionals: 0,
-            defaults: 0,
-            rest: false,
+            arity: Arity::none(),
             chunk: self.state.finish(),
             file_id: self.ast.file_id,
             is_magic_method: false,
@@ -991,15 +989,13 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     BinOpKind::Divide => Opcode::Divide,
                     BinOpKind::Remainder => Opcode::Remainder,
                     BinOpKind::Power => Opcode::Power,
-                    BinOpKind::And => Opcode::And,
-                    BinOpKind::Or => Opcode::Or,
                     BinOpKind::Equal => Opcode::Equal,
                     BinOpKind::NotEqual => Opcode::NotEqual,
                     BinOpKind::LessThan => Opcode::LessThan,
                     BinOpKind::LessEqual => Opcode::LessEqual,
                     BinOpKind::GreaterThan => Opcode::GreaterThan,
                     BinOpKind::GreaterEqual => Opcode::GreaterEqual,
-                    BinOpKind::Is => unreachable!(),
+                    BinOpKind::And | BinOpKind::Or | BinOpKind::Is => unreachable!(),
                 },
                 span,
             );
@@ -1209,9 +1205,11 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         let fn_constant_index = self.state.builder.constant(
             self.ctx.alloc_value(VesFn {
                 name: VesStrView::new(name),
-                positionals: info.params.positional.len() as u32,
-                defaults: info.params.default.len() as u32,
-                rest: info.params.rest.is_some(),
+                arity: Arity {
+                    positional: info.params.positional.len() as u32,
+                    default: info.params.default.len() as u32,
+                    rest: info.params.rest.is_some(),
+                },
                 chunk,
                 file_id: self.ast.file_id,
                 is_magic_method: info.kind == FnKind::MagicMethod,

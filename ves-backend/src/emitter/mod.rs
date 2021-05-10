@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub mod builder;
+pub mod dis;
 pub mod emit;
 pub mod opcode;
 
