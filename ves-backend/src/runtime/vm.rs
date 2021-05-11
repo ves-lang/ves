@@ -18,33 +18,25 @@ macro_rules! num_bin_op {
         if $left.is_int() {
             if $right.is_int() {
                 $self.pop_n(2);
-                $self.push(NanBox::from($int(
-                    $left.as_int_unchecked(),
-                    $right.as_int_unchecked(),
-                )));
+                let v = $int($left.as_int_unchecked(), $right.as_int_unchecked())?;
+                $self.push(NanBox::from(v));
                 return Ok(());
             } else if $right.is_float() {
                 $self.pop_n(2);
-                $self.push(NanBox::from($float(
-                    $left.as_int_unchecked() as f64,
-                    $right.as_float_unchecked(),
-                )));
+                let v = $float($left.as_int_unchecked() as f64, $right.as_float_unchecked());
+                $self.push(NanBox::from(v));
                 return Ok(());
             }
         } else if $left.is_float() {
             if $right.is_int() {
                 $self.pop_n(2);
-                $self.push(NanBox::from($float(
-                    $left.as_float_unchecked(),
-                    $right.as_int_unchecked() as f64,
-                )));
+                let v = $float($left.as_float_unchecked(), $right.as_int_unchecked() as f64);
+                $self.push(NanBox::from(v));
                 return Ok(());
             } else if $right.is_float() {
                 $self.pop_n(2);
-                $self.push(NanBox::from($float(
-                    $left.as_float_unchecked(),
-                    $right.as_float_unchecked(),
-                )));
+                let v = $float($left.as_float_unchecked(), $right.as_float_unchecked());
+                $self.push(NanBox::from(v));
                 return Ok(());
             }
         }
@@ -168,15 +160,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::Remainder => unimplemented!(),
                 Opcode::Power => self.pow()?,
                 Opcode::Negate => self.neg()?,
-                Opcode::AddOne => unimplemented!(),
-                Opcode::SubtractOne => unimplemented!(),
-                Opcode::Not => unimplemented!(),
-                Opcode::Equal => unimplemented!(),
-                Opcode::NotEqual => unimplemented!(),
-                Opcode::LessThan => unimplemented!(),
-                Opcode::LessEqual => unimplemented!(),
-                Opcode::GreaterThan => unimplemented!(),
-                Opcode::GreaterEqual => unimplemented!(),
+                Opcode::AddOne => self.add1()?,
+                Opcode::SubtractOne => self.sub1()?,
+                Opcode::Not => self.not()?,
+                Opcode::Equal => self.equal()?,
+                Opcode::NotEqual => self.not_equal()?,
+                Opcode::LessThan => self.less_than()?,
+                Opcode::LessEqual => self.less_equal()?,
+                Opcode::GreaterThan => self.greater_than()?,
+                Opcode::GreaterEqual => self.greater_equal()?,
                 Opcode::IsNum => unimplemented!(),
                 Opcode::IsStr => unimplemented!(),
                 Opcode::IsBool => unimplemented!(),
@@ -207,8 +199,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::AddStaticField(_) => unimplemented!(),
                 Opcode::Print => self.print()?,
                 Opcode::PrintN(n) => self.print_n(n)?,
-                Opcode::Pop => unimplemented!(),
-                Opcode::PopN(_) => unimplemented!(),
+                Opcode::Pop => {
+                    self.pop();
+                }
+                Opcode::PopN(n) => {
+                    self.pop_n(n as usize);
+                }
                 Opcode::Jump(_) => unimplemented!(),
                 Opcode::JumpIfFalse(_) => unimplemented!(),
                 Opcode::Return => {
@@ -288,7 +284,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             self,
             left,
             right,
-            i32::wrapping_add,
+            |l, r| Ok(i32::wrapping_add(l, r)),
             std::ops::Add::<f64>::add
         );
 
@@ -321,7 +317,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             self,
             left,
             right,
-            i32::wrapping_sub,
+            |l, r| Ok(i32::wrapping_sub(l, r)),
             std::ops::Sub::<f64>::sub
         );
 
@@ -338,7 +334,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             self,
             left,
             right,
-            i32::wrapping_mul,
+            |l, r| Ok(i32::wrapping_mul(l, r)),
             std::ops::Mul::<f64>::mul
         );
 
@@ -349,9 +345,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        // TODO: integer division? currently it just coerces to floats.
-        let idiv = |l, r| (l as f64) / (r as f64);
-        num_bin_op!(self, left, right, idiv, std::ops::Div::<f64>::div);
+        num_bin_op!(
+            self,
+            left,
+            right,
+            |l, r| i32::checked_div(l, r).ok_or_else(|| self.error("Division by zero")),
+            std::ops::Div::<f64>::div
+        );
 
         todo!()
     }
@@ -360,9 +360,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek();
         let left = *self.peek_at(1);
 
-        // TODO: integer exponentiation? currently it just coerces to floats.
-        let ipow = |l, r| (l as f64).powf(r as f64);
-        num_bin_op!(self, left, right, ipow, f64::powf);
+        num_bin_op!(
+            self,
+            left,
+            right,
+            |l, r| std::convert::TryInto::<u32>::try_into(r)
+                .map(|r| i32::pow(l, r))
+                .map_err(|_| self.error("Negative exponent")),
+            f64::powf
+        );
 
         todo!()
     }
@@ -385,6 +391,87 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
 
         todo!()
+    }
+
+    fn add1(&mut self) -> Result<(), VesError> {
+        self.push(NanBox::int(1));
+        self.add()?;
+        Ok(())
+    }
+
+    fn sub1(&mut self) -> Result<(), VesError> {
+        self.push(NanBox::int(1));
+        self.sub()?;
+        Ok(())
+    }
+
+    fn not(&mut self) -> Result<(), VesError> {
+        let operand = *self.peek();
+
+        if operand.is_bool() {
+            self.pop();
+            self.push(NanBox::from(operand.as_bool_unchecked()));
+            return Ok(());
+        }
+
+        todo!()
+    }
+
+    fn equal(&mut self) -> Result<(), VesError> {
+        let right = *self.peek_at(1);
+        let left = *self.peek();
+
+        // two values are equal if their bit representations are equal, which implies:
+        // - their types are the same
+        // - their values are the same
+        // for objects, we compare identity
+        self.pop_n(2);
+        self.push(NanBox::bool(left == right));
+        Ok(())
+    }
+
+    fn not_equal(&mut self) -> Result<(), VesError> {
+        let right = *self.peek_at(1);
+        let left = *self.peek();
+        self.pop_n(2);
+        self.push(NanBox::bool(left != right));
+        Ok(())
+    }
+
+    fn less_than(&mut self) -> Result<(), VesError> {
+        let right = *self.peek_at(1);
+        let left = *self.peek();
+
+        num_bin_op!(self, left, right, |l, r| Ok(l < r), |l, r| l < r);
+
+        Ok(())
+    }
+
+    fn less_equal(&mut self) -> Result<(), VesError> {
+        let right = *self.peek_at(1);
+        let left = *self.peek();
+
+        num_bin_op!(self, left, right, |l, r| Ok(l <= r), |l, r| l <= r);
+
+        Ok(())
+    }
+
+    fn greater_than(&mut self) -> Result<(), VesError> {
+        let left = *self.peek();
+        let right = *self.peek_at(1);
+
+        num_bin_op!(self, left, right, |l, r| Ok(l > r), |l, r| l > r);
+
+        Ok(())
+    }
+
+    fn greater_equal(&mut self) -> Result<(), VesError> {
+        let right = *self.peek_at(1);
+        let left = *self.peek();
+
+        num_bin_op!(self, left, right, |l, r| Ok(l >= r), |l, r| l >= r);
+
+        Ok(())
     }
 
     fn get_const(&mut self, idx: u32) {

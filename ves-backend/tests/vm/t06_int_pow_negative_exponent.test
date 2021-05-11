@@ -1,0 +1,9 @@
+2 ** -1
+
+%output err
+
+error[ in <main>() ]: Negative exponent
+  ┌─ <source: #2dad385692ecf6fa>:1:7
+  │
+1 │ 2 ** -1
+  │       ^

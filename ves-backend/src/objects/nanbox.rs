@@ -105,7 +105,7 @@ use crate::{
     value::IntoVes,
 };
 
-use super::{value::Value, ves_int::VesInt};
+use super::value::Value;
 
 #[rustfmt::skip]
 pub const QNAN_BITS: u64 =      0b01111111_11111100_00000000_00000000_00000000_00000000_00000000_00000000;
@@ -276,6 +276,11 @@ impl NanBox {
     #[inline(always)]
     pub fn into_int_unchecked(self) -> i32 {
         self.0 as i32
+    }
+
+    #[inline(always)]
+    pub fn as_bool_unchecked(&self) -> bool {
+        self.0 & 1 == 1
     }
 
     /// Unboxes the boxed value into a raw f64.

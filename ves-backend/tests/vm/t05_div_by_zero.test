@@ -1,0 +1,9 @@
+1 / 0
+
+%output err
+
+error[ in <main>() ]: Division by zero
+  ┌─ <source: #fc233db8e5ce009a>:1:5
+  │
+1 │ 1 / 0
+  │     ^
