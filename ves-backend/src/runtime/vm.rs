@@ -13,6 +13,31 @@ pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
 const DEBUG_STACK_PRINT_SIZE: usize = 5;
 
 macro_rules! num_bin_op {
+    ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr, lhs => $lhs_method:ident, rhs => $rhs_method:ident) => {
+        num_bin_op!($self, $left, $right, $int, $float);
+
+        // TODO: bigint
+        // outside of + - *, we also have to check if the values match certain criteria:
+        // [ ] 1. in case of bigint.pow, the right side must be within usize::MIN..usize::MAX
+        // [x] 2. in case of bigint.div, the right side must not be zero
+        // [x] bigint + bigint -> bigint
+        // [x] bigint + int -> bigint
+        // [x] int + bigint -> bigint
+        // [ ] bigint + float -> error
+        // [ ] float + bigint -> error
+
+        // Should this be in a method?
+        let lhs_method = $self.symbols.$lhs_method;
+        let rhs_method = $self.symbols.$rhs_method;
+        if let Some(result) =
+            $self.call_magic_arithmetics_method(&lhs_method, &rhs_method, $left, $right)?
+        {
+            $self.pop_n(2);
+            $self.push(NanBox::new(result));
+        } else {
+            unimplemented!("The result may be none only when making ves calls");
+        }
+    };
     ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr) => {
         // favor ints
         if $left.is_int() {
@@ -40,15 +65,6 @@ macro_rules! num_bin_op {
                 return Ok(());
             }
         }
-        // TODO: bigint
-        // outside of + - *, we also have to check if the values match certain criteria:
-        // 1. in case of bigint.pow, the right side must be within usize::MIN..usize::MAX
-        // 2. in case of bigint.div, the right side must not be zero
-        // bigint + bigint -> bigint
-        // bigint + int -> bigint
-        // int + bigint -> bigint
-        // bigint + float -> error
-        // float + bigint -> error
     };
 }
 
@@ -161,7 +177,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::Subtract => self.sub()?,
                 Opcode::Multiply => self.mul()?,
                 Opcode::Divide => self.div()?,
-                Opcode::Remainder => unimplemented!(),
+                Opcode::Remainder => self.rem()?,
                 Opcode::Power => self.pow()?,
                 Opcode::Negate => self.neg()?,
                 Opcode::AddOne => self.add1()?,
@@ -304,23 +320,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
-    fn add(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-
-        num_bin_op!(
-            self,
-            left,
-            right,
-            |l, r| Ok(i32::wrapping_add(l, r)),
-            std::ops::Add::<f64>::add
-        );
-
-        // NOTE: this is a POC
-        // TODO: use a function-level inline cache here.
-        // TODO: use an intern table / symbol table instead of allocating a new string every time
-        let add = self.symbols.add;
-        let mut method = self.get_magic_method(left, &add, self.ip)?;
+    fn call_magic_arithmetics_method(
+        &mut self,
+        lhs_method: &VesStrView,
+        rhs_method: &VesStrView,
+        left: NanBox,
+        right: NanBox,
+        // NOTE: has to return an option since ves calls wouldn't be able to return a value immediately
+    ) -> Result<Option<Value>, VesError> {
+        let inst = self.ip;
+        let mut method = self
+            .get_magic_method(left, &lhs_method, inst)
+            .or_else(|_| self.get_magic_method(right, &rhs_method, inst))?;
 
         let result = match &mut *method {
             VesObject::FnNative(func) => {
@@ -332,8 +343,23 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             _ => unreachable!("get_magic_method shouldn't return non-callable objects"),
         };
 
-        self.pop_n(2);
-        self.push(NanBox::new(result));
+        Ok(Some(result))
+    }
+
+    fn add(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        num_bin_op!(
+            self,
+            left,
+            right,
+            |l, r| Ok(i32::wrapping_add(l, r)),
+            std::ops::Add::<f64>::add,
+            lhs => add,
+            rhs => radd
+        );
+
         Ok(())
     }
 
@@ -346,12 +372,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             left,
             right,
             |l, r| Ok(i32::wrapping_sub(l, r)),
-            std::ops::Sub::<f64>::sub
+            std::ops::Sub::<f64>::sub,
+            lhs => sub,
+            rhs => rsub
         );
 
-        // TODO: use a function-level inline cache here.
-        // if self.get_magic_method(left, name)? {}
-        todo!()
+        Ok(())
     }
 
     fn mul(&mut self) -> Result<(), VesError> {
@@ -363,10 +389,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             left,
             right,
             |l, r| Ok(i32::wrapping_mul(l, r)),
-            std::ops::Mul::<f64>::mul
+            std::ops::Mul::<f64>::mul,
+            lhs => mul,
+            rhs => rmul
         );
 
-        todo!()
+        Ok(())
     }
 
     fn div(&mut self) -> Result<(), VesError> {
@@ -378,10 +406,29 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             left,
             right,
             |l, r| i32::checked_div(l, r).ok_or_else(|| self.error("Division by zero")),
-            std::ops::Div::<f64>::div
+            std::ops::Div::<f64>::div,
+            lhs => div,
+            rhs => rdiv
         );
 
-        todo!()
+        Ok(())
+    }
+
+    fn rem(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        num_bin_op!(
+            self,
+            left,
+            right,
+            |l, r| i32::checked_rem(l, r).ok_or_else(|| self.error("Division by zero")),
+            std::ops::Rem::<f64>::rem,
+            lhs => rem,
+            rhs => rrem
+        );
+
+        Ok(())
     }
 
     fn pow(&mut self) -> Result<(), VesError> {
@@ -395,7 +442,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             |l, r| std::convert::TryInto::<u32>::try_into(r)
                 .map(|r| i32::pow(l, r))
                 .map_err(|_| self.error("Negative exponent")),
-            f64::powf
+            f64::powf,
+            lhs => pow,
+            rhs => rpow
         );
 
         todo!()
@@ -517,7 +566,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn get_global(&mut self, offset: u32) -> Result<(), VesError> {
-        match self.globals.get(offset as _).copied() {
+        match self.globals.get(offset as _) {
             Some(val) => {
                 self.push(NanBox::new(val));
                 Ok(())

@@ -20,6 +20,8 @@ use super::{
     Value,
 };
 
+use super::macros;
+
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
@@ -31,36 +33,18 @@ pub struct VesIntVTable {
 impl VesIntVTable {
     fn init<T: VesGc>(mut handle: GcHandle<T>, lookup: IntVTableLookup) -> Self {
         let proxy = handle.proxy();
-        let mut methods = VesHashMap::new_in(handle.proxy());
 
-        // TODO: arithmetic methods here
-        methods.insert(
-            ViewKey::from(handle.alloc_permanent("add")),
-            (
-                0,
-                handle.alloc_permanent(wrap_native(
-                    move |vm: &mut dyn VmInterface, (left, right): (GcObj, Value)| {
-                        let left = left.as_int_unchecked();
-
-                        let result = match right {
-                            Value::Int(i) => left.value.clone() + IBig::from(i),
-                            Value::Ref(obj) if obj.as_int().is_some() => {
-                                left.value.clone() + &obj.as_int_unchecked().value
-                            }
-                            rest => {
-                                return Err(RuntimeError::new(format!(
-                                    "Cannot add a big integer and `{}`",
-                                    rest
-                                )))
-                            }
-                        };
-
-                        Ok(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into()))
-                    },
-                    "add",
-                    true,
-                )),
-            ),
+        let methods = macros::define_int_methods!(handle, lookup, proxy,
+            "add" => LHS +,
+            "radd" => RHS +,
+            "sub" => LHS -,
+            "rsub" => RHS -,
+            "mul" => LHS *,
+            "rmul" => RHS *,
+            "div" => LHS /,
+            "rdiv" => RHS /,
+            "rem" => LHS %,
+            "rrem" => RHS %
         );
 
         Self { methods }

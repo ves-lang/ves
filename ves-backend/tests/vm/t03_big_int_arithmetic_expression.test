@@ -1,7 +1,40 @@
-print(999n + 1n);
-print(1n + 100);
+print(200n + 2n);
+print(2n + 200);
+print(2 + 200n);
+
+print(200n - 2n);
+print(2n - 200);
+print(2 - 200n);
+
+print(200n * 2n);
+print(2n * 200);
+print(2 * 200n);
+
+print(200n / 2n);
+print(2n / 200);
+print(2 / 200n);
+
+print(200n % 2n);
+print(2n % 200);
+print(2 % 200n);
+
+// TODO: powers
+// print(2n + ((2n * (20n ** -2n)) / 2n));
 
 %output
 
-1000
-101
+202
+202
+202
+198
+-198
+-198
+400
+400
+400
+100
+0
+0
+0
+2
+2

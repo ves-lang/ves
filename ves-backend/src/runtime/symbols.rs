@@ -14,6 +14,8 @@ pub struct SymbolTable<T: VesGc> {
     pub rdiv: VesStrView,
     pub rem: VesStrView,
     pub rrem: VesStrView,
+    pub pow: VesStrView,
+    pub rpow: VesStrView,
     _gc: GcHandle<T>,
 }
 
@@ -30,6 +32,8 @@ impl<T: VesGc> SymbolTable<T> {
             rdiv: VesStrView::new(gc.alloc_permanent("rdiv")),
             rem: VesStrView::new(gc.alloc_permanent("rem")),
             rrem: VesStrView::new(gc.alloc_permanent("rrem")),
+            pow: VesStrView::new(gc.alloc_permanent("pow")),
+            rpow: VesStrView::new(gc.alloc_permanent("rpow")),
             _gc: gc,
         }
     }
@@ -39,16 +43,18 @@ impl<T: VesGc> Clone for SymbolTable<T> {
     #[inline]
     fn clone(&self) -> SymbolTable<T> {
         SymbolTable {
-            add: self.add.clone(),
-            radd: self.radd.clone(),
-            sub: self.sub.clone(),
-            rsub: self.rsub.clone(),
-            mul: self.mul.clone(),
-            rmul: self.rmul.clone(),
-            div: self.div.clone(),
-            rdiv: self.rdiv.clone(),
-            rem: self.rem.clone(),
-            rrem: self.rrem.clone(),
+            add: self.add,
+            radd: self.radd,
+            sub: self.sub,
+            rsub: self.rsub,
+            mul: self.mul,
+            rmul: self.rmul,
+            div: self.div,
+            rdiv: self.rdiv,
+            rem: self.rem,
+            rrem: self.rrem,
+            pow: self.pow,
+            rpow: self.rpow,
             _gc: self._gc.clone(),
         }
     }

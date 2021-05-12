@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use std::cell::UnsafeCell;
 
 use ves_middle::registry::ModuleRegistry;
 
@@ -14,30 +14,30 @@ pub mod inline_cache;
 pub mod symbols;
 pub mod vm;
 
+type Globals = (UnsafeCell<Vec<Option<Value>>>, Vec<String>);
+
 #[derive(Clone)]
 pub struct VmGlobals {
-    actual_globals: SharedPtr<(Vec<Option<Value>>, Vec<String>)>,
-    ptr: NonNull<Vec<Option<Value>>>,
+    actual_globals: SharedPtr<Globals>,
 }
 
 impl VmGlobals {
     pub fn new(names: Vec<String>) -> Self {
-        let actual_globals = SharedPtr::new((vec![None; names.len()], names));
-        let ptr = NonNull::new(SharedPtr::into_raw(actual_globals.clone()) as *mut _).unwrap();
+        let actual_globals = SharedPtr::new((UnsafeCell::new(vec![None; names.len()]), names));
         Self {
             actual_globals,
-            ptr,
+            // ptr,
         }
     }
 
     #[inline]
     fn vec(&self) -> &Vec<Option<Value>> {
-        unsafe { self.ptr.as_ref() }
+        unsafe { &*self.actual_globals.0.get() }
     }
 
     #[inline]
     fn vec_mut(&mut self) -> &mut Vec<Option<Value>> {
-        unsafe { self.ptr.as_mut() }
+        unsafe { &mut *self.actual_globals.0.get() }
     }
 
     pub fn len(&self) -> usize {
@@ -49,13 +49,8 @@ impl VmGlobals {
     }
 
     #[inline]
-    pub fn get(&self, n: usize) -> Option<&Value> {
-        self.vec().get(n).and_then(|x| x.as_ref())
-    }
-
-    #[inline]
-    pub fn get_mut(&mut self, n: usize) -> Option<&mut Value> {
-        self.vec_mut().get_mut(n).and_then(|x| x.as_mut())
+    pub fn get(&self, n: usize) -> Option<Value> {
+        self.vec().get(n).and_then(|x| *x)
     }
 
     #[inline]
@@ -67,15 +62,8 @@ impl VmGlobals {
     /// # Safety
     /// The index must be within the length of the global array.
     #[inline]
-    pub unsafe fn get_unchecked(&self, n: usize) -> Option<&Value> {
-        self.vec().get_unchecked(n).as_ref()
-    }
-
-    /// # Safety
-    /// The index must be within the length of the global array.
-    #[inline]
-    pub unsafe fn get_unchecked_mut(&mut self, n: usize) -> Option<&mut Value> {
-        self.vec_mut().get_unchecked_mut(n).as_mut()
+    pub unsafe fn get_unchecked(&self, n: usize) -> Option<Value> {
+        *self.vec().get_unchecked(n)
     }
 }
 
@@ -89,7 +77,7 @@ unsafe impl Trace for VmGlobals {
 
 impl Drop for VmGlobals {
     fn drop(&mut self) {
-        std::mem::drop(unsafe { SharedPtr::from_raw(self.ptr.as_ptr()) });
+        // std::mem::drop(unsafe { SharedPtr::from_raw(self.ptr.as_ptr()) });
     }
 }
 
