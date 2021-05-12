@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::opcode::Opcode;
 use super::Result;
-use crate::{Span, Value};
+use crate::{runtime::inline_cache::InlineCache, Span, Value};
 use ves_error::{FileId, VesError};
 /* use ves_backend::{NanBox, Value}; */
 
@@ -12,6 +12,7 @@ pub struct Chunk {
     pub code: Vec<Opcode>,
     pub spans: Vec<Span>,
     pub constants: Vec<Value>,
+    pub cache: InlineCache,
     pub file_id: FileId,
 }
 
@@ -177,6 +178,8 @@ impl BytecodeBuilder {
         use std::mem::take;
 
         self.patch_jumps(labels);
+
+        let cache_size = self.code.len();
         Chunk {
             code: take(&mut self.code),
             spans: take(&mut self.spans),
@@ -185,6 +188,7 @@ impl BytecodeBuilder {
                 constants.sort_by_key(|(_, idx)| *idx);
                 constants.into_iter().map(|(v, _)| v).collect()
             },
+            cache: InlineCache::new(cache_size),
             file_id: self.file_id,
         }
     }

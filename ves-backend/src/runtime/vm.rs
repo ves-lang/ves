@@ -1,12 +1,12 @@
 use ves_error::VesError;
 
 use crate::{
-    gc::{GcHandle, GcObj, Roots, Trace, VesGc},
+    gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{ves_fn::Args, ves_str::view::VesStrView},
     NanBox, Value, VesObject,
 };
 
-use super::{call_frame::CallFrame, VmGlobals};
+use super::{call_frame::CallFrame, symbols::SymbolTable, Context, VmGlobals};
 
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
@@ -59,7 +59,9 @@ pub trait VmInterface {
 }
 
 pub struct Vm<T: VesGc, W = std::io::Stdout> {
+    ctx: SharedPtr<Context<T>>,
     gc: GcHandle<T>,
+    symbols: SymbolTable<T>,
     globals: VmGlobals,
     stack: Vec<NanBox>,
     call_stack: Vec<CallFrame>,
@@ -97,14 +99,16 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
 }
 
 impl<T: VesGc, W: std::io::Write> Vm<T, W> {
-    pub fn new(gc: GcHandle<T>, globals: VmGlobals) -> Vm<T, std::io::Stdout> {
-        Vm::with_writer(gc, globals, std::io::stdout())
+    pub fn new(ctx: SharedPtr<Context<T>>) -> Vm<T, std::io::Stdout> {
+        Vm::with_writer(ctx, std::io::stdout())
     }
 
-    pub fn with_writer(gc: GcHandle<T>, globals: VmGlobals, writer: W) -> Vm<T, W> {
+    pub fn with_writer(ctx: SharedPtr<Context<T>>, writer: W) -> Vm<T, W> {
         Self {
-            gc,
-            globals,
+            gc: ctx.gc.clone(),
+            globals: ctx.globals.clone(),
+            symbols: ctx.symbols.clone(),
+            ctx,
             stack: Vec::with_capacity(DEFAULT_STACK_SIZE),
             call_stack: Vec::with_capacity(0),
             ip: 0,
@@ -231,34 +235,58 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
-    fn get_magic_method(&mut self, obj: NanBox, name: &VesStrView) -> Result<GcObj, VesError> {
+    fn get_magic_method(
+        &mut self,
+        obj: NanBox,
+        name: &VesStrView,
+        inst: usize,
+    ) -> Result<GcObj, VesError> {
         match obj.unbox() {
-            Value::Ref(obj) => {
+            Value::Ref(mut obj) => {
+                let slot = self
+                    .frame_unchecked_mut()
+                    .cache_mut()
+                    .get_property_cache(inst, &obj);
+
                 // TODO: this should probably be behind a trait
-                match &*obj {
+                match &mut *obj {
                     VesObject::Str(_) => todo!(),
                     // NOTE: this assumes that BigInt has only methods and no fields
-                    VesObject::Int(i) => i
-                        .props()
-                        .get_slot_value(&name)
-                        .and_then(|obj| obj.as_ref())
-                        .and_then(|obj| {
-                            if obj
-                                .as_fn_native()
-                                .map(|func| func.is_magic())
-                                .unwrap_or(false)
+                    VesObject::Int(i) => {
+                        if let Some(slot) = slot {
+                            let method = i.props().get_by_slot_index(slot).expect("Unexpected cache misconfiguration (expected to find a method according to the IC)");
+                            Ok(method.as_ptr().unwrap())
+                        } else {
+                            let index = i.props().get_slot_index(&name);
+                            if let Some(method) = index
+                                .and_then(|index| i.props().get_by_slot_index(index))
+                                .and_then(|obj| obj.as_ref())
+                                .and_then(|obj| {
+                                    if obj
+                                        .as_fn_native()
+                                        .map(|func| func.is_magic())
+                                        .unwrap_or(false)
+                                    {
+                                        Some(*obj)
+                                    } else {
+                                        None
+                                    }
+                                })
                             {
-                                Some(*obj)
+                                self.frame_unchecked_mut()
+                                    .cache_mut()
+                                    .update_property_cache(inst, index.unwrap(), obj);
+                                Ok(method)
                             } else {
-                                None
+                                Err({
+                                    self.error(format!(
+                                        "BigInt doesn't have a magic method called `@{}`",
+                                        name.str()
+                                    ))
+                                })
                             }
-                        })
-                        .ok_or_else(|| {
-                            self.error(format!(
-                                "BigInt doesn't have a magic method called `@{}`",
-                                name.str()
-                            ))
-                        }),
+                        }
+                    }
                     VesObject::Instance(_) => {
                         unimplemented!()
                     }
@@ -291,8 +319,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // NOTE: this is a POC
         // TODO: use a function-level inline cache here.
         // TODO: use an intern table / symbol table instead of allocating a new string every time
-        let add = self.alloc("add".into());
-        let mut method = self.get_magic_method(left, &VesStrView::new(add))?;
+        let add = self.symbols.add;
+        let mut method = self.get_magic_method(left, &add, self.ip)?;
 
         let result = match &mut *method {
             VesObject::FnNative(func) => {
@@ -644,6 +672,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[inline(always)]
     fn frame_unchecked(&self) -> &CallFrame {
         unsafe { &*self.frame }
+    }
+
+    #[inline(always)]
+    fn frame_unchecked_mut(&mut self) -> &mut CallFrame {
+        unsafe { &mut *self.frame }
     }
 
     #[inline]

@@ -1,6 +1,5 @@
 use std::ptr::NonNull;
 
-use ves_error::VesFileDatabase;
 use ves_middle::registry::ModuleRegistry;
 
 use crate::{
@@ -8,8 +7,11 @@ use crate::{
     Value,
 };
 
+use self::symbols::SymbolTable;
+
 pub mod call_frame;
 pub mod inline_cache;
+pub mod symbols;
 pub mod vm;
 
 #[derive(Clone)]
@@ -94,9 +96,25 @@ impl Drop for VmGlobals {
 // TODO: think through what exactly this needs to hold.
 pub struct Context<T: VesGc> {
     gc: GcHandle<T>,
-    db: VesFileDatabase<String, String>,
-    registry: ModuleRegistry<()>,
+    pub(crate) registry: ModuleRegistry<()>,
     globals: VmGlobals,
+    symbols: SymbolTable<T>,
+}
+
+impl<T: VesGc> Context<T> {
+    pub fn new(
+        gc: GcHandle<T>,
+        registry: ModuleRegistry<()>,
+        globals: VmGlobals,
+        symbols: SymbolTable<T>,
+    ) -> Self {
+        Self {
+            gc,
+            registry,
+            globals,
+            symbols,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -118,8 +136,8 @@ pub mod suite {
 
         use crate::{
             emitter::{emit::Emitter, CompilationContext, VTables},
-            gc::{DefaultGc, GcHandle},
-            runtime::{vm::Vm, VmGlobals},
+            gc::{DefaultGc, GcHandle, SharedPtr},
+            runtime::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
         };
 
         pub fn compile_and_run(src: String) -> String {
@@ -177,9 +195,15 @@ pub mod suite {
             assert_eq!(modules.len(), 1); // TODO: multiple modules
 
             let entry = modules.pop().unwrap();
+            let context = SharedPtr::new(Context {
+                gc: gc.clone(),
+                registry: result.registry,
+                globals,
+                symbols: SymbolTable::new(gc),
+            });
 
             let mut output = Vec::new();
-            let mut vm = Vm::with_writer(gc, globals, &mut output);
+            let mut vm = Vm::with_writer(context, &mut output);
 
             match vm.run(entry) {
                 Ok(_) => String::from_utf8(output).unwrap(),

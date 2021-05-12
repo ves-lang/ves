@@ -360,9 +360,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use ves_middle::registry::ModuleRegistry;
+
     use crate::{
-        gc::{DefaultGc, GcHandle},
-        runtime::{vm::Vm, VmGlobals},
+        gc::{DefaultGc, GcHandle, SharedPtr},
+        runtime::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
         value::Result,
     };
 
@@ -382,7 +384,12 @@ mod tests {
         }
 
         let handle = GcHandle::new(DefaultGc::default());
-        let mut vm = Vm::<_, std::io::Stdout>::new(handle, VmGlobals::new(vec![]));
+        let mut vm = Vm::<_, std::io::Stdout>::new(SharedPtr::new(Context::new(
+            handle.clone(),
+            ModuleRegistry::new(),
+            VmGlobals::new(vec![]),
+            SymbolTable::new(handle),
+        )));
         let mut args = vec![Value::Int(2), Value::Int(5), Value::Int(3)];
         assert_eq!(
             something.ves_call(&mut vm, Args(&mut args)).unwrap(),

@@ -9,11 +9,14 @@ use crate::{
     Value,
 };
 
+use super::inline_cache::InlineCache;
+
 pub struct CallFrame {
     r#fn: GcObj,
     chunk: NonNull<Chunk>,
     code: NonNull<Opcode>,
     code_len: usize,
+    cache: NonNull<InlineCache>,
     defer_stack: Vec<GcObj>,
 
     pub(crate) stack_index: usize,
@@ -26,12 +29,14 @@ impl CallFrame {
         let chunk = unsafe { NonNull::new_unchecked(&mut obj.chunk) };
         let code = unsafe { NonNull::new_unchecked(obj.chunk.code.as_mut_ptr()) };
         let code_len = obj.chunk.code.len();
+        let cache = unsafe { NonNull::new_unchecked(&mut obj.chunk.cache) };
 
         Self {
             r#fn,
             defer_stack: Vec::new(),
             chunk,
             code,
+            cache,
             code_len,
             stack_index,
             return_address,
@@ -73,6 +78,16 @@ impl CallFrame {
     #[inline]
     pub fn constants(&self) -> &[Value] {
         unsafe { &self.chunk.as_ref().constants }
+    }
+
+    #[inline]
+    pub fn cache_mut(&mut self) -> &mut InlineCache {
+        unsafe { self.cache.as_mut() }
+    }
+
+    #[inline]
+    pub fn cache(&self) -> &InlineCache {
+        unsafe { self.cache.as_ref() }
     }
 
     #[inline]
