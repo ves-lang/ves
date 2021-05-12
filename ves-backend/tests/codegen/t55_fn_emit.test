@@ -70,39 +70,41 @@ test3(1, 2, 3);
 >>>>>> test2
 |0000| PushNone
 |0001| GetLocal(2)
-|0002| IsNone
-|0003| JumpIfFalse(9)   // if b is none jump @other
-|0004| Pop
-|0005| PushInt32(0)
-|0006| SetLocal(2)      // b = 0
-|0007| Pop
-|0008| Jump(10)         // jump @end
+|0002| PushNone
+|0003| Equal
+|0004| JumpIfFalse(10)   // if b == none jump @other
+|0005| Pop
+|0006| PushInt32(0)
+|0007| SetLocal(2)      // b = 0
+|0008| Pop
+|0009| Jump(11)         // jump @end
 // @other:
-|0009| Pop
+|0010| Pop
 // @end:
-|0010| GetLocal(1)
-|0011| GetLocal(2)
-|0012| PrintN(2)        // print(a, b)
-|0013| PopN(3)          // pop b, a, receiver
-|0014| PushNone
-|0015| Return
+|0011| GetLocal(1)
+|0012| GetLocal(2)
+|0013| PrintN(2)        // print(a, b)
+|0014| PopN(3)          // pop b, a, receiver
+|0015| PushNone
+|0016| Return
 >>>>>> test3
 |0000| PushNone
 |0001| GetLocal(2)
-|0002| IsNone
-|0003| JumpIfFalse(9)   // if b is none jump @other
-|0004| Pop
-|0005| PushInt32(0)
-|0006| SetLocal(2)      // b = 0
-|0007| Pop
-|0008| Jump(10)         // jump @end
+|0002| PushNone
+|0003| Equal
+|0004| JumpIfFalse(10)   // if b == none jump @other
+|0005| Pop
+|0006| PushInt32(0)
+|0007| SetLocal(2)      // b = 0
+|0008| Pop
+|0009| Jump(11)         // jump @end
 // @other:
-|0009| Pop
+|0010| Pop
 // @end:
-|0010| GetLocal(1)
-|0011| GetLocal(2)
-|0012| GetLocal(3)
-|0013| PrintN(3)        // print(a, b, c)
-|0014| PopN(4)          // pop c, b, a, receiver
-|0015| PushNone
-|0016| Return
+|0011| GetLocal(1)
+|0012| GetLocal(2)
+|0013| GetLocal(3)
+|0014| PrintN(3)        // print(a, b, c)
+|0015| PopN(4)          // pop c, b, a, receiver
+|0016| PushNone
+|0017| Return

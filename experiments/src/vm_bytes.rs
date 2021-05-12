@@ -5,6 +5,7 @@ use ves_backend::{
         ves_str::view::VesStrView,
         ves_struct::{VesHashMap, VesInstance, VesStruct, ViewKey},
     },
+    value::TypeId,
     ves_object::VesObject,
     Value,
 };
@@ -48,7 +49,7 @@ impl<T: VesGc> VmBytes<T> {
         fields.insert(ViewKey::from(gc.alloc_permanent("n")), 0);
         fields.insert(ViewKey::from(gc.alloc_permanent("a")), 1);
         fields.insert(ViewKey::from(gc.alloc_permanent("b")), 2);
-        let ty = VesStruct::new(fields, VesHashMap::new_in(gc.proxy()));
+        let ty = VesStruct::new(fields, VesHashMap::new_in(gc.proxy()), TypeId(0));
         let ty = gc.alloc_permanent(ty);
 
         Self {

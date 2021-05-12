@@ -1,14 +1,20 @@
 
 ### Literals
-```rust
+```js
 // special value equivalent to 'nil' or 'null' in other languages
 none
 
-// number
+// numbers
+// integer literals
 1
-1.2
+1i
+10000
+// float literals
+1f
+1.0
 1.2e2
--1.2e-1
+// bigint literals
+10000000000000000000000000000000000000000000n
 
 // boolean
 true
@@ -75,14 +81,14 @@ let x = 10;
 1 < 1
 1 > 1
 "test" in thing // property existence check
-"test" is Type // with built-ins 'map', 'array', 'num', 'str', 'bool', 'none', 'some'
+"test" is Type // with built-ins 'Map', 'Array', 'Int', 'Float', 'String', 'Bool', 'None'
 ("grouping")
 index[10]
 index["test"]
 index[dynamic]
 call()
 dot.access
-optional?.access // returns `none` if anything in the chain is `none`
+optional?.access // returns `none` if anything in the chain is equal to `none`
 ...spread
 ```
 

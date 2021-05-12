@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcObj, Trace},
+    value::{GetTypeId, TypeId},
     VesObject,
 };
 use ahash::RandomState;
@@ -75,11 +76,26 @@ pub struct VesStruct {
     // TODO: static fields
     methods: VesHashMap<ViewKey, GcObj>,
     fields: VesHashMap<ViewKey, u8>,
+    typeid: TypeId,
 }
 
 impl VesStruct {
-    pub fn new(fields: VesHashMap<ViewKey, u8>, methods: VesHashMap<ViewKey, GcObj>) -> Self {
-        Self { methods, fields }
+    pub fn new(
+        fields: VesHashMap<ViewKey, u8>,
+        methods: VesHashMap<ViewKey, GcObj>,
+        typeid: TypeId,
+    ) -> Self {
+        Self {
+            methods,
+            fields,
+            typeid,
+        }
+    }
+}
+
+impl GetTypeId for VesStruct {
+    fn typeid(&self) -> TypeId {
+        self.typeid
     }
 }
 

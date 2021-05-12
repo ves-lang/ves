@@ -3,6 +3,7 @@ use ves_error::VesError;
 use crate::{
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{ves_fn::Args, ves_str::view::VesStrView},
+    value::GetTypeId,
     NanBox, Value, VesObject,
 };
 
@@ -189,14 +190,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::LessEqual => self.less_equal()?,
                 Opcode::GreaterThan => self.greater_than()?,
                 Opcode::GreaterEqual => self.greater_equal()?,
-                Opcode::IsNum => unimplemented!(),
-                Opcode::IsStr => unimplemented!(),
-                Opcode::IsBool => unimplemented!(),
-                Opcode::IsMap => unimplemented!(),
-                Opcode::IsArray => unimplemented!(),
-                Opcode::IsNone => unimplemented!(),
-                Opcode::IsSome => unimplemented!(),
-                Opcode::CompareType => unimplemented!(),
+                Opcode::CompareType => self.compare_type()?,
                 Opcode::HasProperty => unimplemented!(),
                 Opcode::Try => unimplemented!(),
                 Opcode::WrapOk => unimplemented!(),
@@ -508,16 +502,16 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn not_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek_at(1);
-        let left = *self.peek();
+        let right = *self.peek();
+        let left = *self.peek_at(1);
         self.pop_n(2);
         self.push(NanBox::bool(left != right));
         Ok(())
     }
 
     fn less_than(&mut self) -> Result<(), VesError> {
-        let right = *self.peek_at(1);
-        let left = *self.peek();
+        let right = *self.peek();
+        let left = *self.peek_at(1);
 
         num_bin_op!(self, left, right, |l, r| Ok(l < r), |l, r| l < r);
 
@@ -525,8 +519,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn less_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek_at(1);
-        let left = *self.peek();
+        let right = *self.peek();
+        let left = *self.peek_at(1);
 
         num_bin_op!(self, left, right, |l, r| Ok(l <= r), |l, r| l <= r);
 
@@ -534,8 +528,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn greater_than(&mut self) -> Result<(), VesError> {
-        let left = *self.peek();
-        let right = *self.peek_at(1);
+        let right = *self.peek();
+        let left = *self.peek_at(1);
 
         num_bin_op!(self, left, right, |l, r| Ok(l > r), |l, r| l > r);
 
@@ -543,10 +537,21 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn greater_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek_at(1);
-        let left = *self.peek();
+        let right = *self.peek();
+        let left = *self.peek_at(1);
 
         num_bin_op!(self, left, right, |l, r| Ok(l >= r), |l, r| l >= r);
+
+        Ok(())
+    }
+
+    fn compare_type(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
+
+        self.push(NanBox::bool(
+            left.unbox().typeid() == right.unbox().typeid(),
+        ));
 
         Ok(())
     }

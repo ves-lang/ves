@@ -76,7 +76,7 @@ StmtKind::ExprStmt
             expr: If
               condition: Condition
                 value: ExprKind::Binary
-                  op: Is
+                  op: Equal
                   left: GetProp
                     node: ExprKind::Variable
                       name: "self"
@@ -170,7 +170,7 @@ StmtKind::ExprStmt
             expr: If
               condition: Condition
                 value: ExprKind::Binary
-                  op: Is
+                  op: Equal
                   left: GetProp
                     node: ExprKind::Variable
                       name: "self"

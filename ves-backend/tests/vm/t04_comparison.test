@@ -8,10 +8,10 @@ print(0 != 1);
 
 %output
 
-false
-false
 true
 true
+false
+false
 true
 false
 true

@@ -1968,7 +1968,7 @@ fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::S
                     value: ast::Expr {
                         span: span.clone(),
                         kind: ast::ExprKind::Binary(
-                            ast::BinOpKind::Is,
+                            ast::BinOpKind::Equal,
                             box ast::Expr {
                                 span: span.clone(),
                                 kind: ast::ExprKind::GetProp(box ast::GetProp {

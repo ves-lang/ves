@@ -242,6 +242,7 @@ pub(crate) mod tests {
     use crate::{
         gc::{Roots, Trace},
         objects::ves_struct::{VesInstance, VesStruct, ViewKey},
+        value::TypeId,
         NanBox, Value, VesObject,
     };
 
@@ -396,6 +397,12 @@ pub(crate) mod tests {
             stack.pop();
         }
 
-        VesStruct::new(fields, HashMap::new_in(handle.proxy()))
+        use std::sync::atomic::{AtomicI32, Ordering};
+        static ID: AtomicI32 = AtomicI32::new(0);
+        VesStruct::new(
+            fields,
+            HashMap::new_in(handle.proxy()),
+            TypeId(ID.fetch_add(1, Ordering::SeqCst)),
+        )
     }
 }

@@ -85,20 +85,6 @@ pub enum Opcode {
     GreaterThan,
     /// Check if left operand has a value greater than or equal to right operand
     GreaterEqual,
-    /// Check if type of operand is `num`
-    IsNum,
-    /// Check if type of operand is `str`
-    IsStr,
-    /// Check if type of operand is `bool`
-    IsBool,
-    /// Check if type of operand is `map`
-    IsMap,
-    /// Check if type of operand is `array`
-    IsArray,
-    /// Check if type of operand is `none`
-    IsNone,
-    /// Check if type of operand is not `none`
-    IsSome,
     /// Compare types of operands
     CompareType,
     /// Check if right operand has field or method with name evaluated from left operand

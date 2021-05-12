@@ -948,27 +948,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         span: Span,
     ) -> Result<()> {
         self.emit_expr(left, true)?;
-        if op == BinOpKind::Is {
-            let inst = match right.kind {
-                ExprKind::Lit(ref lit) if lit.token.lexeme == "none" => Some(Opcode::IsNone),
-                ExprKind::Variable(ref var) => match var.lexeme.as_ref() {
-                    "num" => Some(Opcode::IsNum),
-                    "str" => Some(Opcode::IsStr),
-                    "bool" => Some(Opcode::IsBool),
-                    "map" => Some(Opcode::IsMap),
-                    "array" => Some(Opcode::IsArray),
-                    "some" => Some(Opcode::IsSome),
-                    _ => None,
-                },
-                _ => None,
-            };
-            if let Some(inst) = inst {
-                self.state.builder.op(inst, span);
-            } else {
-                self.emit_expr(right, true)?;
-                self.state.builder.op(Opcode::CompareType, span);
-            }
-        } else if matches!(op, BinOpKind::And | BinOpKind::Or) {
+        if matches!(op, BinOpKind::And | BinOpKind::Or) {
             self.emit_logical_expr(op, right, span)?;
         } else {
             self.emit_expr(right, true)?;
@@ -987,7 +967,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     BinOpKind::LessEqual => Opcode::LessEqual,
                     BinOpKind::GreaterThan => Opcode::GreaterThan,
                     BinOpKind::GreaterEqual => Opcode::GreaterEqual,
-                    BinOpKind::And | BinOpKind::Or | BinOpKind::Is => unreachable!(),
+                    BinOpKind::Is => Opcode::CompareType,
+                    BinOpKind::And | BinOpKind::Or => unreachable!(),
                 },
                 span,
             );
@@ -1237,13 +1218,13 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     /// Emits the conditional assignment to a default parameter
     fn emit_default_param(&mut self, name: &Token<'a>, value: &Expr<'a>, span: Span) -> Result<()> {
         // format:
-        // if <param> is none { <param> = <value>; }
+        // if <param> == none { <param> = <value>; }
         let r#if = If {
             condition: Condition {
                 value: Expr {
-                    // <param> is none
+                    // <param> == none
                     kind: ExprKind::Binary(
-                        BinOpKind::Is,
+                        BinOpKind::Equal,
                         box Expr {
                             kind: ExprKind::Variable(name.clone()),
                             span: span.clone(),

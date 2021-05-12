@@ -34,22 +34,23 @@ struct T3(a = 0) {
 |0003| Data(0)          //
 |0004| Data(0)          //
 |0005| Data(0)          //
-|0006| IsNone           // self.a is none ; <condition>
-|0007| JumpIfFalse(17)  // if false jump @other
-|0008| Pop              // pop <condition> result
-|0009| GetLocal(0)      // get self
-|0010| PushInt32(0)   // push 0
-|0011| SetProp(0)       // self.a = 0
-|0012| Data(0)          //
+|0006| PushNone
+|0007| Equal            // self.a == none ; <condition>
+|0008| JumpIfFalse(18)  // if false jump @other
+|0009| Pop              // pop <condition> result
+|0010| GetLocal(0)      // get self
+|0011| PushInt32(0)   // push 0
+|0012| SetProp(0)       // self.a = 0
 |0013| Data(0)          //
 |0014| Data(0)          //
-|0015| Pop              // pop 0
-|0016| Jump(18)         // jump @end
+|0015| Data(0)          //
+|0016| Pop              // pop 0
+|0017| Jump(19)         // jump @end
 // @other:              //
-|0017| Pop              // pop <condition> result
+|0018| Pop              // pop <condition> result
 // @end:                //
-|0018| Pop              // pop [[VALUE]]
-|0019| Return
+|0019| Pop              // pop [[VALUE]]
+|0020| Return
 >>>>>> T3.init          
 |0000| PushNone         // [[VALUE]] = none
 |0001| GetLocal(0)      // get self
@@ -57,25 +58,26 @@ struct T3(a = 0) {
 |0003| Data(0)          //
 |0004| Data(0)          //
 |0005| Data(0)          //
-|0006| IsNone           // self.a is none ; <condition>
-|0007| JumpIfFalse(17)  // if false jump @other
-|0008| Pop              // pop <condition> result
-|0009| GetLocal(0)      // get self
-|0010| PushInt32(0)   // push 0
-|0011| SetProp(0)       // self.a = 0
-|0012| Data(0)          //
+|0006| PushNone         //
+|0007| Equal            // self.a == none ; <condition>
+|0008| JumpIfFalse(18)  // if false jump @other
+|0009| Pop              // pop <condition> result
+|0010| GetLocal(0)      // get self
+|0011| PushInt32(0)   // push 0
+|0012| SetProp(0)       // self.a = 0
 |0013| Data(0)          //
 |0014| Data(0)          //
-|0015| Pop              // pop 0
-|0016| Jump(18)         // jump @end
+|0015| Data(0)          //
+|0016| Pop              // pop 0
+|0017| Jump(19)         // jump @end
 // @other:              //
-|0017| Pop              // pop <condition> result
+|0018| Pop              // pop <condition> result
 // @end:                //
-|0018| Pop              // pop [[VALUE]]
-|0019| GetLocal(0)      // get self
-|0020| GetProp(0)       // get self.a
-|0021| Data(0)          //
+|0019| Pop              // pop [[VALUE]]
+|0020| GetLocal(0)      // get self
+|0021| GetProp(0)       // get self.a
 |0022| Data(0)          //
 |0023| Data(0)          //
-|0024| Print            // print(self.a)
-|0025| Return
+|0024| Data(0)          //
+|0025| Print            // print(self.a)
+|0026| Return

@@ -1,5 +1,5 @@
 mut v = none
-v = if v is none {
+v = if v == none {
     0
 }
 
@@ -11,16 +11,17 @@ v = if v is none {
 // @if.start:
 |0003| PushNone         // [[VALUE]] = none
 |0004| GetGlobal(0)     // get v
-|0005| IsNone           // v is none
-|0006| JumpIfFalse(12)  // jump_if_false @if.other
-|0007| Pop              // pop v is none
-|0008| PushInt32(0)   // push 0
-|0009| SetLocal(0)      // [[VALUE]] = 0
-|0010| Pop              // pop 0
-|0011| Jump(13)         // jump @end
+|0005| PushNone
+|0006| Equal            // v == none
+|0007| JumpIfFalse(13)  // jump_if_false @if.other
+|0008| Pop              // pop v == none
+|0009| PushInt32(0)     // push 0
+|0010| SetLocal(0)      // [[VALUE]] = 0
+|0011| Pop              // pop 0
+|0012| Jump(14)         // jump @end
 // @if.other:
-|0012| Pop              // pop v is none
+|0013| Pop              // pop v == none
 // @if.end:
-|0013| SetGlobal(0)     // v = [[VALUE]]
-|0014| Pop              // pop [[VALUE]]
-|0015| Return
+|0014| SetGlobal(0)     // v = [[VALUE]]
+|0015| Pop              // pop [[VALUE]]
+|0016| Return

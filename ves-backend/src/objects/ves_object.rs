@@ -13,6 +13,7 @@ use crate::{
         ves_struct::{VesInstance, VesStruct},
     },
     runtime::vm::VmInterface,
+    value::{GetTypeId, StaticTypeId, TypeId},
     Value,
 };
 
@@ -203,6 +204,21 @@ impl VesObject {
             v
         } else {
             panic!("Couldn't unwrap {:?} as VesObject::Str", self)
+        }
+    }
+}
+
+impl GetTypeId for VesObject {
+    fn typeid(&self) -> TypeId {
+        match self {
+            VesObject::Str(_) => StaticTypeId::STR,
+            VesObject::Int(_) => StaticTypeId::BIGINT,
+            VesObject::Fn(_) => StaticTypeId::FN,
+            VesObject::FnNative(_) => StaticTypeId::FN,
+            VesObject::Closure(_) => StaticTypeId::FN,
+            VesObject::Instance(v) => v.ty_ptr().typeid(),
+            VesObject::Struct(v) => v.typeid(),
+            VesObject::ClosureDescriptor(_) => unreachable!(),
         }
     }
 }

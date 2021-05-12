@@ -1,0 +1,5 @@
+print(0 is 0)
+
+%output
+
+true
