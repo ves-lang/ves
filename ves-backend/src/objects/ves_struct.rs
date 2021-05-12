@@ -16,6 +16,7 @@ use hashbrown::HashMap;
 use super::{
     cache_layer::{CacheLayer, PropertyLookup},
     peel::Peeled,
+    ves_fn::Arity,
     ves_str::view::VesStrView,
     Value,
 };
@@ -39,19 +40,7 @@ impl From<GcObj> for ViewKey {
             crate::VesObject::Str(_) => ViewKey {
                 view: UnsafeCell::new(VesStrView::new(obj)),
             },
-
-            crate::VesObject::Instance(_) => panic!("Unexpected object type: instance"),
-            crate::VesObject::Struct(_) => panic!("Unexpected object type: struct"),
-            crate::VesObject::Fn(_) | crate::VesObject::FnNative(_) => {
-                panic!("Unexpected object type: fn")
-            }
-            crate::VesObject::Closure(_) => panic!("Unexpected object type: closure"),
-            crate::VesObject::ClosureDescriptor(_) => {
-                panic!("Unexpected object type: closure descriptor")
-            }
-            VesObject::Int(_) => {
-                panic!("Unexpected object type: big integer")
-            }
+            _ => panic!("Expected Str, got {:?}", obj),
         }
     }
 }
@@ -69,6 +58,13 @@ impl std::hash::Hash for ViewKey {
 }
 
 impl Eq for ViewKey {}
+
+#[derive(Debug)]
+pub struct StructDescriptor {
+    pub name: VesStrView,
+    /// Field arity (rest field is ignored)
+    pub arity: Arity,
+}
 
 #[derive(Debug)]
 pub struct VesStruct {
@@ -185,6 +181,19 @@ impl Display for VesStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
         f.debug_struct("Struct").finish()
+    }
+}
+
+impl Display for StructDescriptor {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // TODO: better formatting
+        write!(
+            f,
+            "<{}, {}+{}>",
+            self.name.str(),
+            self.arity.positional,
+            self.arity.default
+        )
     }
 }
 

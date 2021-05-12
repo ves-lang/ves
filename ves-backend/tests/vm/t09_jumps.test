@@ -1,0 +1,22 @@
+mut cond = false
+for _ in 0..10 {
+    if cond {
+        print("condition was true")
+    } else {
+        print("condition was false")
+    }
+    cond = !cond;
+}
+
+%output
+
+condition was false
+condition was true
+condition was false
+condition was true
+condition was false
+condition was true
+condition was false
+condition was true
+condition was false
+condition was true

@@ -6,6 +6,7 @@ use crate::{
         ves_fn::{Arity, ClosureDescriptor, VesFn},
         ves_int::VesInt,
         ves_str::view::VesStrView,
+        ves_struct::StructDescriptor,
     },
     value::IntoVes,
     Span, Value, VesObject,
@@ -1030,7 +1031,21 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.state.begin_scope();
             self.state.define(info.name.lexeme.clone(), span.clone())?;
         }
-        self.state.builder.op(Opcode::CreateStruct, span.clone());
+        let struct_name = self.ctx.alloc_or_intern(info.name.lexeme.clone());
+        let struct_desc_index = self.state.builder.constant(
+            self.ctx.alloc_value(StructDescriptor {
+                name: VesStrView::new(struct_name),
+                arity: Arity {
+                    positional: info.fields.positional.len() as u32,
+                    default: info.fields.default.len() as u32,
+                    rest: false,
+                },
+            }),
+            span.clone(),
+        )?;
+        self.state
+            .builder
+            .op(Opcode::CreateStruct(struct_desc_index), span.clone());
         // (magic) methods
         for method in info.methods.iter() {
             self.emit_fn_expr(method, span.clone(), true)?;
@@ -1672,17 +1687,29 @@ mod suite {
         use ves_middle::Resolver;
         use ves_parser::{Lexer, Parser};
 
-        fn format_closure_descriptor(d: &ClosureDescriptor, c: &[Value]) -> String {
-            format!("{}, {}", c[d.fn_constant_index as usize], d.upvalues.len())
-        }
-
         fn format_op(op: &Opcode, c: &[Value]) -> String {
             match op {
                 Opcode::GetConst(i) => format!("GetConst({})", c[*i as usize]),
                 Opcode::CreateClosure(i) => format!("CreateClosure({})", {
                     match c[*i as usize] {
                         Value::Ref(v) => match &*v {
-                            VesObject::ClosureDescriptor(v) => format_closure_descriptor(v, c),
+                            VesObject::ClosureDescriptor(v) => {
+                                format!("{}, {}", c[v.fn_constant_index as usize], v.upvalues.len())
+                            }
+                            _ => unreachable!(),
+                        },
+                        _ => unreachable!(),
+                    }
+                }),
+                Opcode::CreateStruct(i) => format!("CreateStruct({})", {
+                    match c[*i as usize] {
+                        Value::Ref(v) => match &*v {
+                            VesObject::StructDescriptor(v) => format!(
+                                "{}, {}+{}",
+                                v.name.str(),
+                                v.arity.positional,
+                                v.arity.default
+                            ),
                             _ => unreachable!(),
                         },
                         _ => unreachable!(),

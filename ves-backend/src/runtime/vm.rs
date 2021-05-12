@@ -1,8 +1,14 @@
+use std::usize;
+
 use ves_error::VesError;
 
 use crate::{
+    emitter::emit::UpvalueInfo,
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
-    objects::{ves_fn::Args, ves_str::view::VesStrView},
+    objects::{
+        ves_fn::{Args, VesClosure},
+        ves_str::view::VesStrView,
+    },
     value::GetTypeId,
     NanBox, Value, VesObject,
 };
@@ -165,8 +171,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::PushFalse => self.push(NanBox::bool(false)),
                 Opcode::PushNone => self.push(NanBox::none()),
                 Opcode::GetGlobal(idx) => self.get_global(idx)?,
-                Opcode::GetUpvalue(_) => unimplemented!(),
-                Opcode::SetUpvalue(_) => unimplemented!(),
+                Opcode::GetUpvalue(idx) => self.get_upvalue(idx),
+                Opcode::SetUpvalue(idx) => self.set_upvalue(idx),
                 Opcode::SetGlobal(idx) => self.set_global(idx),
                 Opcode::GetMagicProp(_) => unimplemented!(),
                 Opcode::GetProp(_) => unimplemented!(),
@@ -205,8 +211,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::CreateEmptyMap => unimplemented!(),
                 Opcode::MapInsert => unimplemented!(),
                 Opcode::MapExtend => unimplemented!(),
-                Opcode::CreateClosure(_) => unimplemented!(),
-                Opcode::CreateStruct => unimplemented!(),
+                Opcode::CreateClosure(d) => self.create_closure(d)?,
+                Opcode::CreateStruct(_) => unimplemented!(),
                 Opcode::AddMethod(_) => unimplemented!(),
                 Opcode::AddMagicMethod(_) => unimplemented!(),
                 Opcode::AddStaticMethod(_) => unimplemented!(),
@@ -219,8 +225,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::PopN(n) => {
                     self.pop_n(n as usize);
                 }
-                Opcode::Jump(_) => unimplemented!(),
-                Opcode::JumpIfFalse(_) => unimplemented!(),
+                Opcode::Jump(to) => self.jump(to),
+                Opcode::JumpIfFalse(to) => self.jump_if_false(to),
                 Opcode::Return => {
                     let cs_size = self.call_stack.len();
 
@@ -455,10 +461,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             self.pop();
             self.push(NanBox::from(-operand.as_float_unchecked()));
             return Ok(());
-        } else if operand.is_normal_ptr() {
-            if let Some(operand) = operand.unbox().as_bigint_mut() {
-                operand.value = -&operand.value;
-            }
+        } else if let Some(operand) = operand.unbox().as_bigint_mut() {
+            operand.value = -&operand.value;
         }
 
         todo!()
@@ -481,7 +485,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
         if operand.is_bool() {
             self.pop();
-            self.push(NanBox::from(operand.as_bool_unchecked()));
+            self.push(NanBox::from(!operand.as_bool_unchecked()));
             return Ok(());
         }
 
@@ -556,6 +560,34 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
+    fn create_closure(&mut self, descriptor_index: u32) -> Result<(), VesError> {
+        let descriptor = self.const_at(descriptor_index as usize);
+        if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
+            let r#fn = self.const_at(descriptor.fn_constant_index as usize);
+            let mut closure = self.alloc(VesClosure::new(*r#fn.unbox().as_ref_unchecked()).into());
+            // because a closure may refer to itself as an upvalue,
+            // it must be on the stack *before* we start adding upvalues
+            self.push(closure);
+            let closure = closure.as_closure_unchecked_mut();
+
+            for upvalue in descriptor.upvalues.iter() {
+                match *upvalue {
+                    UpvalueInfo::Local(index) => {
+                        closure.upvalues.push(*self.local_at(index as usize))
+                    }
+                    UpvalueInfo::Upvalue(index) => {
+                        closure.upvalues.push(*self.upvalue_at(index as usize))
+                    }
+                }
+            }
+        }
+        println!("{:?}", self.peek().unbox());
+
+        // The constant index inside CreateClosure always refers to a closure descriptor.
+        // If this assert is triggered, it means there is a bug in the emit impl for functions.
+        unreachable!()
+    }
+
     fn get_const(&mut self, idx: u32) {
         self.push(self.const_at(idx as _));
     }
@@ -586,6 +618,16 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.push(value);
     }
 
+    fn get_upvalue(&mut self, index: u32) {
+        let value = *self.upvalue_at(index as usize);
+        self.push(value);
+    }
+
+    fn set_upvalue(&mut self, index: u32) {
+        let operand = *self.peek();
+        self.set_upvalue_at(index as usize, operand);
+    }
+
     #[cfg(not(feature = "fast"))]
     fn local_at(&self, offset: usize) -> &NanBox {
         let frame = self.frame_unchecked();
@@ -608,11 +650,60 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let frame_start = frame.stack_index;
         let slot = frame_start + offset;
         if slot >= self.stack.len() {
-            self.push(obj);
-        } else {
-            self.stack[slot] = obj;
+            panic!(
+                "INVALID LOCAL ADDRESS `{}` AT {} in `{}` (stack window = {}, stack = {:?})",
+                offset,
+                self.ip,
+                frame.func().name(),
+                frame_start,
+                self.stack
+            );
         }
+        self.stack[slot] = obj;
         self.local_at(offset)
+    }
+
+    fn upvalue_at(&self, offset: usize) -> &NanBox {
+        let frame = self.frame_unchecked();
+        let upvalues = frame.upvalues();
+        if offset >= upvalues.len() {
+            panic!(
+                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
+                offset,
+                self.ip,
+                frame.func().name()
+            );
+        }
+        &upvalues[offset]
+    }
+
+    fn upvalue_at_mut(&mut self, offset: usize) -> &mut NanBox {
+        let frame = self.frame_unchecked();
+        let upvalues = frame.upvalues();
+        if offset >= upvalues.len() {
+            panic!(
+                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
+                offset,
+                self.ip,
+                frame.func().name()
+            );
+        }
+        &mut self.frame_unchecked_mut().upvalues_mut()[offset]
+    }
+
+    fn set_upvalue_at(&mut self, offset: usize, value: NanBox) -> &NanBox {
+        let frame = self.frame_unchecked();
+        let upvalues = frame.upvalues();
+        if offset >= upvalues.len() {
+            panic!(
+                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
+                offset,
+                self.ip,
+                frame.func().name()
+            );
+        }
+        self.frame_unchecked_mut().upvalues_mut()[offset] = value;
+        self.upvalue_at(offset)
     }
 
     fn print(&mut self) -> Result<(), VesError> {
@@ -642,6 +733,20 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn local_at(&self, offset: usize) -> &NanBox {
         let frame_start = self.frame_unchecked().stack_index;
         unsafe { self.stack.get_unchecked(frame_start + offset) }
+    }
+
+    #[inline]
+    fn jump_if_false(&mut self, to: u32) {
+        let operand = *self.peek();
+
+        if !operand.unbox().is_truthy() {
+            self.ip = to as usize;
+        }
+    }
+
+    #[inline]
+    fn jump(&mut self, to: u32) {
+        self.ip = to as usize;
     }
 
     #[inline]

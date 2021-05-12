@@ -15,7 +15,7 @@ use crate::{
     runtime::vm::VmInterface,
     value::{FromVes, IntoVes, RuntimeError},
     ves_object::FnNative,
-    Value, VesObject,
+    NanBox, Value, VesObject,
 };
 
 use super::{peel::Peeled, ves_str::view::VesStrView};
@@ -23,7 +23,7 @@ use super::{peel::Peeled, ves_str::view::VesStrView};
 #[derive(Debug)]
 pub struct VesClosure {
     r#fn: Peeled<VesFn>,
-    pub upvalues: Vec<Value>,
+    pub upvalues: Vec<NanBox>,
 }
 impl VesClosure {
     pub fn new(r#fn: GcObj) -> Self {
@@ -46,7 +46,7 @@ unsafe impl Trace for VesClosure {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         Trace::trace(&mut self.r#fn, tracer);
         for value in self.upvalues.iter_mut() {
-            value.trace(tracer);
+            value.unbox().trace(tracer);
         }
     }
 }

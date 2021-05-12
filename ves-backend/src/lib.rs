@@ -9,11 +9,14 @@
 #![allow(
     clippy::new_without_default,
     clippy::comparison_chain,
-    clippy::needless_range_loop
+    clippy::needless_range_loop,
+    clippy::wrong_self_convention
 )]
 extern crate static_assertions as sa;
 
 pub type Span = core::ops::Range<usize>;
+
+mod macros;
 
 pub mod emitter;
 pub mod gc;

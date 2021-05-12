@@ -154,7 +154,7 @@ pub enum Opcode {
     /// is necessary because the closure may use *itself* as an upvalue.
     CreateClosure(/* descriptor constant index */ u32),
     /// Creates an empty struct
-    CreateStruct,
+    CreateStruct(/* descriptor constant index */ u32),
     /// Add a method to a struct
     AddMethod(/* name constant index */ u32),
     /// Add a magic method to a struct

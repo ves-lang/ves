@@ -1,0 +1,49 @@
+mut cond = false
+for _ in 0..10 {
+    if cond {
+        print("condition was true")
+    } else {
+        print("condition was false")
+    }
+    cond = !cond;
+}
+
+%output
+
+|0000| PushFalse
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| PushInt32(0)
+|0004| PushInt32(10)
+|0005| PushInt32(1)
+|0006| GetLocal(0)
+|0007| GetLocal(1)
+|0008| LessThan
+|0009| JumpIfFalse(34)
+|0010| Pop
+|0011| Jump(18)
+|0012| GetLocal(0)
+|0013| GetLocal(2)
+|0014| Add
+|0015| SetLocal(0)
+|0016| Pop
+|0017| Jump(6)
+|0018| PushNone
+|0019| GetGlobal(0)
+|0020| JumpIfFalse(25)
+|0021| Pop
+|0022| GetConst(condition was true)
+|0023| Print
+|0024| Jump(28)
+|0025| Pop
+|0026| GetConst(condition was false)
+|0027| Print
+|0028| Pop
+|0029| GetGlobal(0)
+|0030| Not
+|0031| SetGlobal(0)
+|0032| Pop
+|0033| Jump(12)
+|0034| Pop
+|0035| PopN(3)
+|0036| Return

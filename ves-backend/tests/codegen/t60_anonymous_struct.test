@@ -8,13 +8,13 @@
 
 %output
 
-|0000| CreateStruct
+|0000| CreateStruct(T, 1+0)
 |0001| CreateClosure(<fn T.sm>, 1)
-|0002| AddStaticMethod(2)
+|0002| AddStaticMethod(3)
 |0003| PushInt32(0)
-|0004| AddStaticField(3)
+|0004| AddStaticField(4)
 |0005| CreateClosure(<fn T.init>, 1)
-|0006| AddMethod(4)
+|0006| AddMethod(5)
 |0007| Pop
 |0008| Return
 >>>>>> T.sm

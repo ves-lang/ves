@@ -20,6 +20,7 @@ use crate::{
 use super::{
     ves_fn::{Args, ClosureDescriptor, VesClosure, VesFn},
     ves_int::VesInt,
+    ves_struct::StructDescriptor,
 };
 
 pub trait FnNative: Trace {
@@ -37,6 +38,8 @@ pub enum VesObject {
     Instance(VesInstance),
     /// A struct type instance.
     Struct(VesStruct),
+    /// An object which describes how a struct should be created
+    StructDescriptor(StructDescriptor),
     /// A plain function with no upvalues.
     Fn(VesFn),
     /// A native function.
@@ -119,68 +122,49 @@ impl VesObject {
         }
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_str_unchecked(&self) -> &VesStr {
-        if let Self::Str(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Str", self);
-        }
+        crate::unwrap_unchecked!(self, Str)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_fn_unchecked(&self) -> &VesFn {
-        if let Self::Fn(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Fn", self);
-        }
+        crate::unwrap_unchecked!(self, Fn)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_int_unchecked(&self) -> &VesInt {
-        if let Self::Int(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Int", self);
-        }
+        crate::unwrap_unchecked!(self, Int)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_instance_unchecked(&self) -> &VesInstance {
-        if let Self::Instance(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Instance", self);
-        }
+        crate::unwrap_unchecked!(self, Instance)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_struct_unchecked(&self) -> &VesStruct {
-        if let Self::Struct(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Struct", self);
-        }
+        crate::unwrap_unchecked!(self, Struct)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_fn_native_unchecked(&self) -> &dyn FnNative {
-        if let Self::FnNative(v) = self {
-            &**v
-        } else {
-            panic!("Attempted to unwrap {:?} as FnNative", self);
-        }
+        &**crate::unwrap_unchecked!(self, FnNative)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_closure_unchecked(&self) -> &VesClosure {
-        if let Self::Closure(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as Closure", self);
-        }
+        crate::unwrap_unchecked!(self, Closure)
     }
 
+    /// Safety: The caller *must* ensure that `self` is the right variant
+    pub fn as_closure_unchecked_mut(&mut self) -> &mut VesClosure {
+        crate::unwrap_unchecked!(self, Closure)
+    }
+
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_closure_descriptor_unchecked(&self) -> &ClosureDescriptor {
-        if let Self::ClosureDescriptor(v) = self {
-            v
-        } else {
-            panic!("Attempted to unwrap {:?} as ClosureDescriptor", self);
-        }
+        crate::unwrap_unchecked!(self, ClosureDescriptor)
     }
 
     pub fn as_struct_mut_unwrapped(&mut self) -> &mut VesStruct {
@@ -218,6 +202,7 @@ impl GetTypeId for VesObject {
             VesObject::Closure(_) => StaticTypeId::FN,
             VesObject::Instance(v) => v.ty_ptr().typeid(),
             VesObject::Struct(v) => v.typeid(),
+            VesObject::StructDescriptor(_) => unreachable!(),
             VesObject::ClosureDescriptor(_) => unreachable!(),
         }
     }
@@ -232,6 +217,12 @@ impl From<VesStr> for VesObject {
 impl From<VesStruct> for VesObject {
     fn from(v: VesStruct) -> Self {
         Self::Struct(v)
+    }
+}
+
+impl From<StructDescriptor> for VesObject {
+    fn from(v: StructDescriptor) -> Self {
+        Self::StructDescriptor(v)
     }
 }
 
@@ -299,6 +290,7 @@ unsafe impl Trace for VesObject {
             VesObject::Fn(f) => f.trace(tracer),
             VesObject::Closure(c) => c.trace(tracer),
             // not traceable, only used as a constant
+            VesObject::StructDescriptor(_) => (),
             VesObject::ClosureDescriptor(_) => (),
             VesObject::FnNative(_) => (),
         }
@@ -313,6 +305,7 @@ unsafe impl Trace for VesObject {
             VesObject::Fn(f) => f.after_forwarding(),
             VesObject::Closure(c) => c.after_forwarding(),
             // not traceable, only used as a constant
+            VesObject::StructDescriptor(_) => (),
             VesObject::ClosureDescriptor(_) => (),
             VesObject::FnNative(_) => (),
         }
@@ -329,6 +322,7 @@ impl Display for VesObject {
             VesObject::Fn(v) => v.fmt(f),
             VesObject::FnNative(v) => write!(f, "<fn native at {:p}>", v),
             VesObject::Closure(v) => v.fmt(f),
+            VesObject::StructDescriptor(v) => v.fmt(f),
             VesObject::ClosureDescriptor(v) => v.fmt(f),
         }
     }
@@ -356,6 +350,11 @@ impl std::fmt::Debug for VesObject {
             }
             (&VesObject::Struct(ref __self_0),) => {
                 let debug_trait_builder = &mut Formatter::debug_tuple(f, "Struct");
+                let _ = DebugTuple::field(debug_trait_builder, &&(*__self_0));
+                DebugTuple::finish(debug_trait_builder)
+            }
+            (&VesObject::StructDescriptor(ref __self_0),) => {
+                let debug_trait_builder = &mut Formatter::debug_tuple(f, "StructDescriptor");
                 let _ = DebugTuple::field(debug_trait_builder, &&(*__self_0));
                 DebugTuple::finish(debug_trait_builder)
             }

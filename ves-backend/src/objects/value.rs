@@ -8,7 +8,7 @@ use crate::{
     VesObject,
 };
 
-use super::ves_int::VesInt;
+use super::{ves_fn::ClosureDescriptor, ves_int::VesInt};
 
 // TODO: user-facing error type
 #[derive(Clone, PartialEq)]
@@ -140,6 +140,7 @@ impl Value {
             None
         }
     }
+
     pub fn as_ref_mut(&mut self) -> Option<&mut VesRef> {
         if let Self::Ref(v) = self {
             Some(v)
@@ -156,6 +157,7 @@ impl Value {
         }
         None
     }
+
     pub fn as_bigint_mut(&mut self) -> Option<&mut VesInt> {
         if let Self::Ref(v) = self {
             if let VesObject::Int(v) = &mut **v {
@@ -163,6 +165,35 @@ impl Value {
             }
         }
         None
+    }
+
+    pub fn as_closure_descriptor(&self) -> Option<&ClosureDescriptor> {
+        if let Self::Ref(v) = self {
+            if let VesObject::ClosureDescriptor(d) = &**v {
+                return Some(d);
+            }
+        }
+        None
+    }
+
+    pub fn as_int_unchecked(&self) -> &i32 {
+        crate::unwrap_unchecked!(self, Int)
+    }
+
+    pub fn as_float_unchecked(&self) -> &f64 {
+        crate::unwrap_unchecked!(self, Float)
+    }
+
+    pub fn as_bool_unchecked(&self) -> &bool {
+        crate::unwrap_unchecked!(self, Bool)
+    }
+
+    pub fn as_ref_unchecked(&self) -> &VesRef {
+        crate::unwrap_unchecked!(self, Ref)
+    }
+
+    pub fn as_ref_mut_unchecked(&mut self) -> &mut VesRef {
+        crate::unwrap_unchecked!(self, Ref)
     }
 }
 impl GetTypeId for Value {

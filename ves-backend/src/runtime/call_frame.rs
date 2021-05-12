@@ -6,7 +6,7 @@ use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace},
     objects::ves_fn::VesFn,
-    Value,
+    NanBox, Value,
 };
 
 use super::inline_cache::InlineCache;
@@ -18,13 +18,19 @@ pub struct CallFrame {
     code_len: usize,
     cache: NonNull<InlineCache>,
     defer_stack: Vec<GcObj>,
+    upvalues: *mut Vec<NanBox>,
 
     pub(crate) stack_index: usize,
     pub(crate) return_address: usize,
 }
 
 impl CallFrame {
-    pub fn new(mut r#fn: GcObj, stack_index: usize, return_address: usize) -> Self {
+    pub fn new(
+        mut r#fn: GcObj,
+        upvalues: *mut Vec<NanBox>,
+        stack_index: usize,
+        return_address: usize,
+    ) -> Self {
         let obj = r#fn.as_fn_mut_unwrapped();
         let chunk = unsafe { NonNull::new_unchecked(&mut obj.chunk) };
         let code = unsafe { NonNull::new_unchecked(obj.chunk.code.as_mut_ptr()) };
@@ -38,13 +44,14 @@ impl CallFrame {
             code,
             cache,
             code_len,
+            upvalues,
             stack_index,
             return_address,
         }
     }
 
     pub fn main(r#fn: GcObj) -> Self {
-        Self::new(r#fn, 0, 0)
+        Self::new(r#fn, std::ptr::null_mut(), 0, 0)
     }
 
     #[inline]
@@ -67,6 +74,20 @@ impl CallFrame {
 
     pub fn func(&self) -> &VesFn {
         self.r#fn.as_fn().unwrap()
+    }
+
+    pub fn upvalues(&self) -> &Vec<NanBox> {
+        if cfg!(debug_assertions) && self.upvalues.is_null() {
+            panic!("Current CallFrame has no upvalues");
+        }
+        unsafe { &*self.upvalues }
+    }
+
+    pub fn upvalues_mut(&mut self) -> &mut Vec<NanBox> {
+        if cfg!(debug_assertions) && self.upvalues.is_null() {
+            panic!("Current CallFrame has no upvalues");
+        }
+        unsafe { &mut *self.upvalues }
     }
 
     #[cfg(not(feature = "fast"))]

@@ -9,21 +9,21 @@ struct T3(a = 0) {
 
 %output
 
-|0000| CreateStruct
+|0000| CreateStruct(T0, 0+0)
 |0001| SetGlobal(0)
 |0002| Pop
-|0003| CreateStruct
+|0003| CreateStruct(T1, 1+0)
 |0004| SetGlobal(1)
 |0005| Pop
-|0006| CreateStruct
+|0006| CreateStruct(T2, 0+1)
 // because CreateStruct has a defaulted field, it implicitly gets an initializer
 |0007| GetConst(<fn T2.init>)
-|0008| AddMethod(0)
+|0008| AddMethod(3)
 |0009| SetGlobal(2)
 |0010| Pop
-|0011| CreateStruct
+|0011| CreateStruct(T3, 0+1)
 |0012| GetConst(<fn T3.init>)
-|0013| AddMethod(0)
+|0013| AddMethod(3)
 |0014| SetGlobal(3)
 |0015| Pop
 |0016| Return
