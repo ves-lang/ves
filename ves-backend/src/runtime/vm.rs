@@ -7,10 +7,9 @@ use crate::{
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{
         peel::Peeled,
-        ves_fn::{Args, VesClosure},
+        ves_fn::{ArgCountDiff, Args, VesClosure},
         ves_str::view::VesStrView,
     },
-    value::GetTypeId,
     NanBox, Value, VesObject,
 };
 
@@ -78,7 +77,7 @@ macro_rules! num_bin_op {
 
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
-    fn execute(&mut self, obj: GcObj, args: usize) -> Result<Value, VesError>;
+    fn execute(&mut self, obj: GcObj, args: Vec<Value>) -> Result<Value, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -113,48 +112,17 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
             .expect("Failed to allocate the object")
     }
 
-    fn execute(&mut self, mut obj: GcObj, args: usize) -> Result<Value, VesError> {
-        // TODO: default + rest params
-        // before a call, the stack must be:
-        // [receiver, ...args]
-        if args + /* receiver */ 1 > self.stack.len() {
-            return Err(self.error(format!(
-                "Expected receiver and {} args on the stack, got {} total",
-                args,
-                self.stack.len(),
-            )));
-        };
-
-        if let VesObject::FnNative(f) = &mut *obj {
-            let mut args = self.pop_n(args).map(|v| v.unbox()).collect();
-            let result = f.call(self, Args(&mut args))?;
-            self.pop(); // pop receiver
-            return Ok(result);
+    // TODO: currently the caller of this is responsible for setting up the stack for the call
+    // it should be handled automatically
+    fn execute(&mut self, obj: GcObj, args: Vec<Value>) -> Result<Value, VesError> {
+        self.push(obj);
+        let argc = args.len();
+        self.stack.extend(args.into_iter().map(NanBox::from));
+        if self.call(argc)? {
+            return Ok(self.pop().unbox());
         }
-
-        // TODO: bound method
-        // in case of bound methods, it should set the stack slot at which the callee resides to the receiver
-        let (r#fn, upvalues) = if let VesObject::Closure(c) = &mut *obj {
-            (c.fn_ptr(), &mut c.upvalues as _)
-        } else if obj.is_fn() {
-            (
-                Peeled::new(obj, VesObject::as_fn_mut_unwrapped),
-                std::ptr::null_mut(),
-            )
-        } else {
-            return Err(self.error(format!("{:?} is not callable", obj)));
-        };
-
-        let stack_index = self.stack.len() - /* receiver */ 1 - args;
-        self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
-        self.ip = 0;
-
         // TODO: tracebacks / backtraces
-        self.run_dispatch_loop()?;
-
-        let frame = self.pop_frame();
-        self.ip = frame.return_address;
-
+        self.run_dispatch_loop(true)?;
         Ok(self.pop().unbox())
     }
 
@@ -192,15 +160,14 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         .unwrap();
 
         // TODO: tracebacks / backtraces
-        self.run_dispatch_loop()?;
-
-        self.pop_frame();
+        self.run_dispatch_loop(false)?;
         Ok(())
     }
 
-    fn run_dispatch_loop(&mut self) -> Result<(), VesError> {
+    fn run_dispatch_loop(&mut self, early_return: bool) -> Result<(), VesError> {
         use crate::emitter::opcode::Opcode;
 
+        let initial_call_stack_size = self.call_stack.len();
         // TODO: cache the code pointer here for speed
         // let len = self.frame_unchecked().code_len();
         // let code = self.frame_unchecked().code().as_ptr();
@@ -253,7 +220,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::UnwrapOk(_) => unimplemented!(),
                 Opcode::UnwrapErr(_) => unimplemented!(),
                 Opcode::Spread => unimplemented!(),
-                Opcode::Call(args) => self.call(args)?,
+                Opcode::Call(args) => {
+                    self.call(args as usize)?;
+                }
                 Opcode::Defer => unimplemented!(),
                 Opcode::Interpolate(_) => unimplemented!(),
                 Opcode::CreateArray(_) => unimplemented!(),
@@ -278,7 +247,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 }
                 Opcode::Jump(to) => self.jump(to),
                 Opcode::JumpIfFalse(to) => self.jump_if_false(to),
-                Opcode::Return => break,
+                Opcode::Return => {
+                    let frame = self.pop_frame();
+                    self.ip = frame.return_address;
+
+                    let current_call_stack_size = self.call_stack.len();
+                    let should_return = (early_return
+                        && current_call_stack_size == initial_call_stack_size)
+                        || current_call_stack_size == 0;
+                    if should_return {
+                        break;
+                    }
+                }
                 Opcode::Data(_) => {
                     unreachable!("Data instructions aren't supposed to be executed")
                 }
@@ -597,13 +577,83 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
-    fn call(&mut self, args: u32) -> Result<(), VesError> {
-        let args = args as usize;
-        if let Some(v) = self.peek_at(args).unbox().as_ref().copied() {
-            let result = self.execute(v, args)?;
-            self.push(NanBox::from(result));
+    /// On success, returns `Ok(true)` if the callee was a native call
+    fn call(&mut self, args: usize) -> Result<bool, VesError> {
+        let obj = *self.peek_at(args);
+        if let Some(obj) = obj.unbox().as_ref_mut() {
+            // `args` implicitly includes the receiver (reserved 0th stack slot)
+            let stack_index = self.stack.len() - (args + 1);
+
+            // TODO: bound method
+            // in case of bound methods, it should set the stack slot at which the callee resides to the receiver
+            match &mut **obj {
+                VesObject::Fn(_) => {
+                    let r#fn = Peeled::new(*obj, VesObject::as_fn_mut_unwrapped);
+                    let upvalues = std::ptr::null_mut();
+                    match r#fn.get().arity.diff(args) {
+                        // TODO: once Array is implemented, use it here
+                        ArgCountDiff::Extra(n) => todo!("push into rest array"),
+                        ArgCountDiff::Missing(n) => {
+                            for _ in 0..n {
+                                self.push(NanBox::none());
+                            }
+                        }
+                        _ => (),
+                    }
+                    self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
+                    self.ip = 0;
+                    Ok(false)
+                }
+                VesObject::Closure(c) => {
+                    let r#fn = c.fn_ptr();
+                    let upvalues = &mut c.upvalues as _;
+                    match r#fn.get().arity.diff(args) {
+                        // TODO: once Array is implemented, use it here
+                        ArgCountDiff::Extra(n) => todo!("push into rest array"),
+                        ArgCountDiff::Missing(n) => {
+                            for _ in 0..n {
+                                self.push(NanBox::none());
+                            }
+                        }
+                        _ => (),
+                    }
+                    self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
+                    self.ip = 0;
+                    Ok(false)
+                }
+                VesObject::FnNative(f) => {
+                    let arity = f.arity();
+                    let mut args = match f.arity().diff(args) {
+                        ArgCountDiff::Extra(_) => {
+                            if !arity.rest {
+                                return Err(self.error(format!(
+                                    "Function {} does not accept a variable number of arguments",
+                                    obj
+                                )));
+                            }
+                            self.pop_n(args).map(|v| v.unbox()).collect()
+                        }
+                        ArgCountDiff::Missing(n) => self
+                            .pop_n(args)
+                            .map(|v| v.unbox())
+                            .chain((0..n).map(|_| Value::None))
+                            .collect(),
+                        _ => self.pop_n(args).map(|v| v.unbox()).collect(),
+                    };
+                    let result = f.call(self, Args(&mut args))?;
+                    self.pop(); // pop receiver
+                    self.push(result);
+                    Ok(true)
+                }
+                VesObject::Struct(_) => todo!(),
+                _ => return Err(self.error(format!("{} is not callable", obj))),
+            }
+        } else {
+            Err(self.error(format!(
+                "Only objects may be called, attempted to call {}",
+                obj.unbox()
+            )))
         }
-        Ok(())
     }
 
     fn create_closure(&mut self, descriptor_index: u32) -> Result<(), VesError> {
@@ -619,7 +669,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             for upvalue in descriptor.upvalues.iter() {
                 match *upvalue {
                     UpvalueInfo::Local(index) => {
-                        closure.upvalues.push(*self.local_at(index as usize))
+                        closure.upvalues.push(self.local_at(index as usize).unbox())
                     }
                     UpvalueInfo::Upvalue(index) => {
                         closure.upvalues.push(*self.upvalue_at(index as usize))
@@ -672,7 +722,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     fn set_upvalue(&mut self, index: u32) {
         let operand = *self.peek();
-        self.set_upvalue_at(index as usize, operand);
+        self.set_upvalue_at(index as usize, operand.unbox());
     }
 
     #[cfg(not(feature = "fast"))]
@@ -710,7 +760,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.local_at(offset)
     }
 
-    fn upvalue_at(&self, offset: usize) -> &NanBox {
+    fn upvalue_at(&self, offset: usize) -> &Value {
         let frame = self.frame_unchecked();
         let upvalues = frame.upvalues();
         if offset >= upvalues.len() {
@@ -724,7 +774,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         &upvalues[offset]
     }
 
-    fn upvalue_at_mut(&mut self, offset: usize) -> &mut NanBox {
+    fn upvalue_at_mut(&mut self, offset: usize) -> &mut Value {
         let frame = self.frame_unchecked();
         let upvalues = frame.upvalues();
         if offset >= upvalues.len() {
@@ -738,7 +788,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         &mut self.frame_unchecked_mut().upvalues_mut()[offset]
     }
 
-    fn set_upvalue_at(&mut self, offset: usize, value: NanBox) -> &NanBox {
+    fn set_upvalue_at(&mut self, offset: usize, value: Value) -> &Value {
         let frame = self.frame_unchecked();
         let upvalues = frame.upvalues();
         if offset >= upvalues.len() {

@@ -13,18 +13,18 @@ use crate::{
         ves_struct::{VesInstance, VesStruct},
     },
     runtime::vm::VmInterface,
-    value::{GetTypeId, StaticTypeId, TypeId},
     Value,
 };
 
 use super::{
-    ves_fn::{Args, ClosureDescriptor, VesClosure, VesFn},
+    ves_fn::{Args, Arity, ClosureDescriptor, VesClosure, VesFn},
     ves_int::VesInt,
     ves_struct::StructDescriptor,
 };
 
 pub trait FnNative: Trace {
     fn call<'a>(&mut self, vm: &'a mut dyn VmInterface, args: Args<'a>) -> Result<Value, VesError>;
+    fn arity(&self) -> Arity;
     fn name(&self) -> &Cow<'static, str>;
     fn is_magic(&self) -> bool;
 }
@@ -194,22 +194,6 @@ impl VesObject {
     /// Returns `true` if the ves_object is [`Fn`].
     pub fn is_fn(&self) -> bool {
         matches!(self, Self::Fn(..))
-    }
-}
-
-impl GetTypeId for VesObject {
-    fn typeid(&self) -> TypeId {
-        match self {
-            VesObject::Str(_) => StaticTypeId::STR,
-            VesObject::Int(_) => StaticTypeId::BIGINT,
-            VesObject::Fn(_) => StaticTypeId::FN,
-            VesObject::FnNative(_) => StaticTypeId::FN,
-            VesObject::Closure(_) => StaticTypeId::FN,
-            VesObject::Instance(v) => v.ty_ptr().typeid(),
-            VesObject::Struct(v) => v.typeid(),
-            VesObject::StructDescriptor(_) => unreachable!(),
-            VesObject::ClosureDescriptor(_) => unreachable!(),
-        }
     }
 }
 

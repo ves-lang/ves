@@ -26,22 +26,7 @@ impl Debug for RuntimeError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct TypeId(pub i32);
-pub trait GetTypeId {
-    fn typeid(&self) -> TypeId;
-}
-pub struct StaticTypeId;
-impl StaticTypeId {
-    // negative type ids so that the structs can start at 0 without
-    // having to care about how many built-ins there are
-    pub const INT: TypeId = TypeId(-1);
-    pub const FLOAT: TypeId = TypeId(-2);
-    pub const BOOL: TypeId = TypeId(-3);
-    pub const NONE: TypeId = TypeId(-4);
-    pub const STR: TypeId = TypeId(-5);
-    pub const BIGINT: TypeId = TypeId(-6);
-    pub const FN: TypeId = TypeId(-7);
-}
+pub struct TypeId(pub usize);
 
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
@@ -96,6 +81,26 @@ impl Value {
             Some(*ptr)
         } else {
             None
+        }
+    }
+
+    pub fn typeid(&self) -> TypeId {
+        match self {
+            Value::Int(_) => TypeId(0),
+            Value::Float(_) => TypeId(1),
+            Value::Bool(_) => TypeId(2),
+            Value::None => TypeId(3),
+            Value::Ref(v) => match &**v {
+                VesObject::Str(_) => TypeId(4),
+                VesObject::Int(_) => TypeId(5),
+                VesObject::Fn(_) => TypeId(6),
+                VesObject::FnNative(_) => TypeId(6),
+                VesObject::Closure(_) => TypeId(6),
+                VesObject::Instance(v) => TypeId(v.ty_ptr().ptr().as_ptr() as usize),
+                VesObject::Struct(_) => TypeId(v.ptr().as_ptr() as usize),
+                VesObject::StructDescriptor(_) => unreachable!(),
+                VesObject::ClosureDescriptor(_) => unreachable!(),
+            },
         }
     }
 
@@ -194,17 +199,6 @@ impl Value {
 
     pub fn as_ref_mut_unchecked(&mut self) -> &mut VesRef {
         crate::unwrap_unchecked!(self, Ref)
-    }
-}
-impl GetTypeId for Value {
-    fn typeid(&self) -> TypeId {
-        match self {
-            Value::Int(_) => StaticTypeId::INT,
-            Value::Float(_) => StaticTypeId::FLOAT,
-            Value::Bool(_) => StaticTypeId::BOOL,
-            Value::None => StaticTypeId::NONE,
-            Value::Ref(v) => v.typeid(),
-        }
     }
 }
 

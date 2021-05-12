@@ -18,7 +18,7 @@ pub struct CallFrame {
     code_len: usize,
     cache: NonNull<InlineCache>,
     defer_stack: Vec<GcObj>,
-    upvalues: *mut Vec<NanBox>,
+    upvalues: *mut Vec<Value>,
 
     pub(crate) stack_index: usize,
     pub(crate) return_address: usize,
@@ -27,7 +27,7 @@ pub struct CallFrame {
 impl CallFrame {
     pub fn new(
         mut r#fn: Peeled<VesFn>,
-        upvalues: *mut Vec<NanBox>,
+        upvalues: *mut Vec<Value>,
         stack_index: usize,
         return_address: usize,
     ) -> Self {
@@ -75,14 +75,14 @@ impl CallFrame {
         self.r#fn.get()
     }
 
-    pub fn upvalues(&self) -> &Vec<NanBox> {
+    pub fn upvalues(&self) -> &Vec<Value> {
         if cfg!(debug_assertions) && self.upvalues.is_null() {
             panic!("Current CallFrame has no upvalues");
         }
         unsafe { &*self.upvalues }
     }
 
-    pub fn upvalues_mut(&mut self) -> &mut Vec<NanBox> {
+    pub fn upvalues_mut(&mut self) -> &mut Vec<Value> {
         if cfg!(debug_assertions) && self.upvalues.is_null() {
             panic!("Current CallFrame has no upvalues");
         }
@@ -135,7 +135,7 @@ unsafe impl Trace for CallFrame {
             Trace::trace(func, tracer);
         }
         for value in self.upvalues_mut() {
-            Trace::trace(&mut value.unbox(), tracer);
+            value.trace(tracer);
         }
     }
 

@@ -7,7 +7,15 @@ fn test(a) {
 }
 test("test");
 
+fn default(a, b = 0) {
+    print(a, b);
+}
+default(1);
+default(1, 2);
+
 %output
 
 test
 test
+1, 0
+1, 2

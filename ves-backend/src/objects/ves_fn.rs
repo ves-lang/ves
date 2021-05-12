@@ -15,7 +15,7 @@ use crate::{
     runtime::vm::VmInterface,
     value::{FromVes, IntoVes, RuntimeError},
     ves_object::FnNative,
-    NanBox, Value, VesObject,
+    Value, VesObject,
 };
 
 use super::{peel::Peeled, ves_str::view::VesStrView};
@@ -23,7 +23,7 @@ use super::{peel::Peeled, ves_str::view::VesStrView};
 #[derive(Debug)]
 pub struct VesClosure {
     r#fn: Peeled<VesFn>,
-    pub upvalues: Vec<NanBox>,
+    pub upvalues: Vec<Value>,
 }
 impl VesClosure {
     pub fn new(r#fn: GcObj) -> Self {
@@ -50,7 +50,7 @@ unsafe impl Trace for VesClosure {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         Trace::trace(&mut self.r#fn, tracer);
         for value in self.upvalues.iter_mut() {
-            value.unbox().trace(tracer);
+            value.trace(tracer);
         }
     }
 }
@@ -71,12 +71,37 @@ pub struct Arity {
     pub rest: bool,
 }
 
+#[derive(Clone, Copy)]
+pub enum ArgCountDiff {
+    Equal,
+    Missing(usize),
+    Extra(usize),
+}
+
 impl Arity {
+    pub fn new(positional: u32, default: u32, rest: bool) -> Self {
+        Self {
+            positional,
+            default: 0,
+            rest: false,
+        }
+    }
+
     pub fn none() -> Self {
         Self {
             positional: 0,
             default: 0,
             rest: false,
+        }
+    }
+
+    /// Returns the number of missing/extra args.
+    pub fn diff(&self, n: usize) -> ArgCountDiff {
+        let diff = (self.positional + self.default) as isize - n as isize;
+        match diff {
+            n if n > 0 => ArgCountDiff::Missing(n as usize),
+            n if n < 0 => ArgCountDiff::Extra((-n) as usize),
+            _ => ArgCountDiff::Equal,
         }
     }
 }
@@ -267,24 +292,27 @@ pub struct CallableWrapper<C, A> {
     func: C,
     name: Cow<'static, str>,
     is_magic: bool,
+    arity: Arity,
     _args: PhantomData<A>,
 }
 
 impl<C, A> CallableWrapper<C, A> {
-    pub fn new(func: C) -> Self {
+    pub fn new(func: C, arity: Arity) -> Self {
         Self {
             func,
             name: "<fn: native>".into(),
             is_magic: false,
+            arity,
             _args: PhantomData,
         }
     }
 
-    pub fn with_name(func: C, name: impl Into<Cow<'static, str>>) -> Self {
+    pub fn with_name(func: C, name: impl Into<Cow<'static, str>>, arity: Arity) -> Self {
         Self {
             func,
             name: name.into(),
             is_magic: false,
+            arity,
             _args: PhantomData,
         }
     }
@@ -293,41 +321,53 @@ impl<C, A> CallableWrapper<C, A> {
         func: C,
         name: impl Into<Cow<'static, str>>,
         is_magic: bool,
+        arity: Arity,
     ) -> Self {
         Self {
             func,
             name: name.into(),
             is_magic,
+            arity,
             _args: PhantomData,
         }
     }
 }
 
-pub fn wrap<A, R, F>(f: F, name: &'static str) -> CallableWrapper<F, A>
+pub fn wrap<A, R, F>(f: F, name: &'static str, arity: Arity) -> CallableWrapper<F, A>
 where
     F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError>,
     A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
     R: IntoVes,
 {
-    CallableWrapper::with_name(f, name)
+    CallableWrapper::with_name(f, name, arity)
 }
 
-pub fn wrap_with_magic<A, R, F>(f: F, name: &'static str, is_magic: bool) -> CallableWrapper<F, A>
+pub fn wrap_with_magic<A, R, F>(
+    f: F,
+    name: &'static str,
+    is_magic: bool,
+    arity: Arity,
+) -> CallableWrapper<F, A>
 where
     F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError>,
     A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
     R: IntoVes,
 {
-    CallableWrapper::with_name_and_magic(f, name, is_magic)
+    CallableWrapper::with_name_and_magic(f, name, is_magic, arity)
 }
 
-pub fn wrap_native<A, R, F>(f: F, name: &'static str, is_magic: bool) -> Box<dyn FnNative>
+pub fn wrap_native<A, R, F>(
+    f: F,
+    name: &'static str,
+    is_magic: bool,
+    arity: Arity,
+) -> Box<dyn FnNative>
 where
     F: for<'v> Callable<'v, A> + Fn(&mut dyn VmInterface, A) -> Result<R, RuntimeError> + 'static,
     A: for<'v> TryFrom<Args<'v>, Error = RuntimeError> + 'static,
     R: IntoVes,
 {
-    Box::new(wrap_with_magic(f, name, is_magic))
+    Box::new(wrap_with_magic(f, name, is_magic, arity))
 }
 
 unsafe impl<'v, C, A> Trace for CallableWrapper<C, A>
@@ -359,6 +399,10 @@ where
 
     fn is_magic(&self) -> bool {
         self.is_magic
+    }
+
+    fn arity(&self) -> Arity {
+        self.arity
     }
 }
 
@@ -425,10 +469,10 @@ mod tests {
             RuntimeError::new("Something went wrong")
         );
 
-        let wrapper = wrap(fallible, "fallible");
+        let wrapper = wrap(fallible, "fallible", Arity::none());
         assert_eq!(wrapper.name(), "fallible");
 
-        let wrapper = wrap_native(fallible, "fallible", false);
+        let wrapper = wrap_native(fallible, "fallible", false, Arity::none());
         assert_eq!(wrapper.name(), "fallible");
         assert!(!wrapper.is_magic());
     }

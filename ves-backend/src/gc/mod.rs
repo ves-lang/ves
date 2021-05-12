@@ -404,12 +404,6 @@ pub(crate) mod tests {
             stack.pop();
         }
 
-        use std::sync::atomic::{AtomicI32, Ordering};
-        static ID: AtomicI32 = AtomicI32::new(0);
-        VesStruct::new(
-            fields,
-            HashMap::new_in(handle.proxy()),
-            TypeId(ID.fetch_add(1, Ordering::SeqCst)),
-        )
+        VesStruct::new(fields, HashMap::new_in(handle.proxy()))
     }
 }
