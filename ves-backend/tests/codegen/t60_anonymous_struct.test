@@ -19,7 +19,7 @@
 |0008| Return
 >>>>>> T.sm
 |0000| Pop
-|0001| GetUpvalue(0)
+|0001| GetCapture(0)
 |0002| GetProp(0)
 |0003| Data(0)
 |0004| Data(0)
@@ -29,7 +29,7 @@
 |0008| PushNone
 |0009| Return
 >>>>>> T.init
-|0000| GetUpvalue(0)        // get T
+|0000| GetCapture(0)        // get T
 |0001| GetProp(0)           // get T.static
 |0002| Data(0)
 |0003| Data(0)

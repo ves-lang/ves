@@ -6,7 +6,7 @@ use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace},
     objects::{peel::Peeled, ves_fn::VesFn},
-    NanBox, Value,
+    Value,
 };
 
 use super::inline_cache::InlineCache;
@@ -18,7 +18,7 @@ pub struct CallFrame {
     code_len: usize,
     cache: NonNull<InlineCache>,
     defer_stack: Vec<GcObj>,
-    upvalues: *mut Vec<Value>,
+    captures: *mut Vec<Value>,
 
     pub(crate) stack_index: usize,
     pub(crate) return_address: usize,
@@ -27,7 +27,7 @@ pub struct CallFrame {
 impl CallFrame {
     pub fn new(
         mut r#fn: Peeled<VesFn>,
-        upvalues: *mut Vec<Value>,
+        captures: *mut Vec<Value>,
         stack_index: usize,
         return_address: usize,
     ) -> Self {
@@ -43,7 +43,7 @@ impl CallFrame {
             code,
             cache,
             code_len,
-            upvalues,
+            captures,
             stack_index,
             return_address,
         }
@@ -75,18 +75,18 @@ impl CallFrame {
         self.r#fn.get()
     }
 
-    pub fn upvalues(&self) -> &Vec<Value> {
-        if cfg!(debug_assertions) && self.upvalues.is_null() {
-            panic!("Current CallFrame has no upvalues");
+    pub fn captures(&self) -> &Vec<Value> {
+        if cfg!(debug_assertions) && self.captures.is_null() {
+            panic!("Current CallFrame has no captures");
         }
-        unsafe { &*self.upvalues }
+        unsafe { &*self.captures }
     }
 
-    pub fn upvalues_mut(&mut self) -> &mut Vec<Value> {
-        if cfg!(debug_assertions) && self.upvalues.is_null() {
-            panic!("Current CallFrame has no upvalues");
+    pub fn captures_mut(&mut self) -> &mut Vec<Value> {
+        if cfg!(debug_assertions) && self.captures.is_null() {
+            panic!("Current CallFrame has no captures");
         }
-        unsafe { &mut *self.upvalues }
+        unsafe { &mut *self.captures }
     }
 
     #[cfg(not(feature = "fast"))]
@@ -134,7 +134,7 @@ unsafe impl Trace for CallFrame {
         for func in &mut self.defer_stack {
             Trace::trace(func, tracer);
         }
-        for value in self.upvalues_mut() {
+        for value in self.captures_mut() {
             value.trace(tracer);
         }
     }

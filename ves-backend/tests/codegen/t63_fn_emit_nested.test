@@ -34,7 +34,7 @@ test0("test");
 |0009| PushNone
 |0010| Return
 >>>>>> test1
-|0000| GetUpvalue(0)
+|0000| GetCapture(0)
 |0001| Print
 |0002| CreateClosure(<fn test2>, 1)
 |0003| Copy
@@ -46,7 +46,7 @@ test0("test");
 |0009| PushNone
 |0010| Return
 >>>>>> test2
-|0000| GetUpvalue(0)
+|0000| GetCapture(0)
 |0001| Print
 |0002| Pop
 |0003| PushNone

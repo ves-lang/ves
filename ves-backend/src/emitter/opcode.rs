@@ -15,10 +15,10 @@ pub enum Opcode {
     GetLocal(/* stack slot */ u32),
     /// Set a value at specified stack address
     SetLocal(/* stack slot */ u32),
-    /// Get a closure's upvalue
-    GetUpvalue(/* index */ u32),
-    /// Set a closure's upvalue
-    SetUpvalue(/* index */ u32),
+    /// Get a captured value
+    GetCapture(/* index */ u32),
+    /// Set a captured value
+    SetCapture(/* index */ u32),
     /// Get a global value
     GetGlobal(/* global slot */ u32),
     /// Set a global value
@@ -147,11 +147,11 @@ pub enum Opcode {
     /// 1. Create a closure object
     /// 2. Push it onto the stack (!!!)
     /// 3. Get its closure descriptor
-    /// 4. Retrieve, clone and insert upvalues into the closure
+    /// 4. Retrieve, clone and insert captures into the closure
     ///    based on the information in the descriptor
     ///
-    /// Pushing the closure onto the stack before adding upvalues
-    /// is necessary because the closure may use *itself* as an upvalue.
+    /// Pushing the closure onto the stack before adding captures
+    /// is necessary because the closure may use *itself* as an capture.
     CreateClosure(/* descriptor constant index */ u32),
     /// Creates an empty struct
     CreateStruct(/* descriptor constant index */ u32),

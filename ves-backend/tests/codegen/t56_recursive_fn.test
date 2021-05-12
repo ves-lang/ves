@@ -42,7 +42,7 @@ test3(0);
 |0004| PushNone
 |0005| Return
 >>>>>> test2
-|0000| GetUpvalue(0)    // test2 is an upvalue because it exists only as a local when its declared
+|0000| GetCapture(0)    // test2 is an capture because it exists only as a local when its declared
 |0001| Call(0)          // test2();
 |0002| Pop              // pop result
 |0003| Pop              // pop receiver
@@ -61,7 +61,7 @@ test3(0);
 |0001| PushInt32(2)
 |0002| Call(1)          // test3(2);
 |0003| Pop              // pop result
-|0004| GetUpvalue(0)
+|0004| GetCapture(0)
 |0005| PushInt32(3)
 |0006| Call(1)          // test4(3);
 |0007| Pop              // pop result

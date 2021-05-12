@@ -40,11 +40,11 @@ pub enum VesObject {
     Struct(VesStruct),
     /// An object which describes how a struct should be created
     StructDescriptor(StructDescriptor),
-    /// A plain function with no upvalues.
+    /// A plain function with no captures.
     Fn(VesFn),
     /// A native function.
     FnNative(Box<dyn FnNative>),
-    /// A function with upvalues
+    /// A function with captures
     Closure(VesClosure),
     /// An object which describes how a closure should be created
     ClosureDescriptor(ClosureDescriptor),

@@ -27,18 +27,18 @@ struct Local<'a> {
     depth: usize,
 }
 
-/// An upvalue stores the index of a value which should be captured
+/// An capture stores the index of a value which should be captured
 /// into a closure.
 ///
 /// The index may refer to two different places:
 /// 1. An enclosing function's stack slot
-/// 2. An enclosing function's upvalue index
+/// 2. An enclosing function's capture index
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub enum UpvalueInfo {
-    /// Upvalue brought in from the enclosing function's locals
+pub enum CaptureInfo {
+    /// Capture brought in from the enclosing function's locals
     Local(u32),
-    /// Upvalue brought in from the enclosing function's upvalues
-    Upvalue(u32),
+    /// Capture brought in from the enclosing function's captures
+    Capture(u32),
 }
 
 /// A label used in loop control flow (break/continue)
@@ -61,7 +61,7 @@ struct State<'a> {
     fn_kind: Option<FnKind>,
     builder: BytecodeBuilder,
     locals: Vec<Local<'a>>,
-    upvalues: Vec<UpvalueInfo>,
+    captures: Vec<CaptureInfo>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
     struct_name: Option<Cow<'a, str>>,
@@ -85,7 +85,7 @@ impl<'a> State<'a> {
             builder: BytecodeBuilder::new(file_id),
             fn_kind: None,
             locals: vec![],
-            upvalues: vec![],
+            captures: vec![],
             control_labels: HashMap::new(),
             labels: Vec::new(),
             globals,
@@ -239,33 +239,33 @@ impl<'a> State<'a> {
         None
     }
 
-    fn add_upvalue(&mut self, upvalue: UpvalueInfo) -> u32 {
-        println!("{:?}", upvalue);
-        // don't duplicate upvalues
-        for (index, existing) in self.upvalues.iter().enumerate() {
-            if existing == &upvalue {
+    fn add_capture(&mut self, capture: CaptureInfo) -> u32 {
+        println!("{:?}", capture);
+        // don't duplicate captures
+        for (index, existing) in self.captures.iter().enumerate() {
+            if existing == &capture {
                 return index as u32;
             }
         }
-        self.upvalues.push(upvalue);
-        (self.upvalues.len() - 1) as u32
+        self.captures.push(capture);
+        (self.captures.len() - 1) as u32
     }
 
-    /// Try to resolve an upvalue from the locals in the enclosing scope,
-    /// or the upvalues of an enclosing function.
-    fn resolve_upvalue(&mut self, name: &str) -> Option<u32> {
+    /// Try to resolve an capture from the locals in the enclosing scope,
+    /// or the captures of an enclosing function.
+    fn resolve_capture(&mut self, name: &str) -> Option<u32> {
         if let Some(enclosing) = &mut self.enclosing {
-            // try to resolve the upvalue as a local from the enclosing scope
+            // try to resolve the capture as a local from the enclosing scope
             // and if that fails, recurse
             if let Some(index) = enclosing.resolve_local(name) {
-                // When the closure is created, this upvalue will be created from a local variable
+                // When the closure is created, this capture will be created from a local variable
                 // in the enclosing scope
 
-                Some(self.add_upvalue(UpvalueInfo::Local(index)))
+                Some(self.add_capture(CaptureInfo::Local(index)))
             } else {
                 enclosing
-                    .resolve_upvalue(name)
-                    .map(|index| self.add_upvalue(UpvalueInfo::Upvalue(index)))
+                    .resolve_capture(name)
+                    .map(|index| self.add_capture(CaptureInfo::Capture(index)))
             }
         } else {
             None
@@ -275,8 +275,8 @@ impl<'a> State<'a> {
     fn resolve_variable_get(&mut self, name: &str) -> Opcode {
         if let Some(index) = self.resolve_local(name) {
             Opcode::GetLocal(index)
-        } else if let Some(index) = self.resolve_upvalue(name) {
-            Opcode::GetUpvalue(index)
+        } else if let Some(index) = self.resolve_capture(name) {
+            Opcode::GetCapture(index)
         } else if let Some(index) = self.globals.get(name).copied() {
             Opcode::GetGlobal(index)
         } else {
@@ -287,8 +287,8 @@ impl<'a> State<'a> {
     fn resolve_variable_set(&mut self, name: &str) -> Opcode {
         if let Some(index) = self.resolve_local(name) {
             Opcode::SetLocal(index)
-        } else if let Some(index) = self.resolve_upvalue(name) {
-            Opcode::SetUpvalue(index)
+        } else if let Some(index) = self.resolve_capture(name) {
+            Opcode::SetCapture(index)
         } else if let Some(index) = self.globals.get(name).copied() {
             Opcode::SetGlobal(index)
         } else {
@@ -1185,7 +1185,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.state.builder.op(Opcode::PushNone, span.clone());
         }
         self.state.builder.op(Opcode::Return, span.clone());
-        let upvalues = std::mem::take(&mut self.state.upvalues);
+        let captures = std::mem::take(&mut self.state.captures);
         let chunk = self.end_state();
         if info.kind == FnKind::Function && is_sub_expr {
             // close the temporary function local scope, but don't pop the value
@@ -1215,8 +1215,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             }),
             span.clone(),
         )?;
-        // if there are no upvalues, the function does not need to be a closure
-        if upvalues.is_empty() {
+        // if there are no captures, the function does not need to be a closure
+        if captures.is_empty() {
             self.state
                 .builder
                 .op(Opcode::GetConst(fn_constant_index), span.clone());
@@ -1224,7 +1224,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             let closure_desc_index = self.state.builder.constant(
                 self.ctx.alloc_value(ClosureDescriptor {
                     fn_constant_index,
-                    upvalues,
+                    captures,
                 }),
                 span.clone(),
             )?;
@@ -1713,7 +1713,7 @@ mod suite {
                     match c[*i as usize] {
                         Value::Ref(v) => match &*v {
                             VesObject::ClosureDescriptor(v) => {
-                                format!("{}, {}", c[v.fn_constant_index as usize], v.upvalues.len())
+                                format!("{}, {}", c[v.fn_constant_index as usize], v.captures.len())
                             }
                             _ => unreachable!(),
                         },

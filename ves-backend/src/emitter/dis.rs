@@ -136,8 +136,8 @@ where
             | Opcode::SetGlobal(operand)
             | Opcode::UnwrapOk(operand)
             | Opcode::UnwrapErr(operand)
-            | Opcode::GetUpvalue(operand)
-            | Opcode::SetUpvalue(operand) => {
+            | Opcode::GetCapture(operand)
+            | Opcode::SetCapture(operand) => {
                 format!(
                     "{}| {:<indent$} @slot{}= {:>04}",
                     line_fmt(ip, chunk, db),

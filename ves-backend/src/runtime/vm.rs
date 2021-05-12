@@ -3,7 +3,7 @@ use std::usize;
 use ves_error::VesError;
 
 use crate::{
-    emitter::emit::UpvalueInfo,
+    emitter::emit::CaptureInfo,
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{
         peel::Peeled,
@@ -77,7 +77,7 @@ macro_rules! num_bin_op {
 
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
-    fn execute(&mut self, obj: GcObj, args: Vec<Value>) -> Result<Value, VesError>;
+    fn execute(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -114,8 +114,8 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
 
     // TODO: currently the caller of this is responsible for setting up the stack for the call
     // it should be handled automatically
-    fn execute(&mut self, obj: GcObj, args: Vec<Value>) -> Result<Value, VesError> {
-        self.push(obj);
+    fn execute(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, VesError> {
+        self.push(callee);
         let argc = args.len();
         self.stack.extend(args.into_iter().map(NanBox::from));
         if self.call(argc)? {
@@ -187,8 +187,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::PushFalse => self.push(NanBox::bool(false)),
                 Opcode::PushNone => self.push(NanBox::none()),
                 Opcode::GetGlobal(idx) => self.get_global(idx)?,
-                Opcode::GetUpvalue(idx) => self.get_upvalue(idx),
-                Opcode::SetUpvalue(idx) => self.set_upvalue(idx),
+                Opcode::GetCapture(idx) => self.get_capture(idx),
+                Opcode::SetCapture(idx) => self.set_capture(idx),
                 Opcode::SetGlobal(idx) => self.set_global(idx),
                 Opcode::GetMagicProp(_) => unimplemented!(),
                 Opcode::GetProp(_) => unimplemented!(),
@@ -589,7 +589,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             match &mut **obj {
                 VesObject::Fn(_) => {
                     let r#fn = Peeled::new(*obj, VesObject::as_fn_mut_unwrapped);
-                    let upvalues = std::ptr::null_mut();
+                    let captures = std::ptr::null_mut();
                     match r#fn.get().arity.diff(args) {
                         // TODO: once Array is implemented, use it here
                         ArgCountDiff::Extra(n) => todo!("push into rest array"),
@@ -600,13 +600,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         }
                         _ => (),
                     }
-                    self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
+                    self.push_frame(CallFrame::new(r#fn, captures, stack_index, self.ip))?;
                     self.ip = 0;
                     Ok(false)
                 }
                 VesObject::Closure(c) => {
                     let r#fn = c.fn_ptr();
-                    let upvalues = &mut c.upvalues as _;
+                    let captures = &mut c.captures as _;
                     match r#fn.get().arity.diff(args) {
                         // TODO: once Array is implemented, use it here
                         ArgCountDiff::Extra(n) => todo!("push into rest array"),
@@ -617,7 +617,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         }
                         _ => (),
                     }
-                    self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
+                    self.push_frame(CallFrame::new(r#fn, captures, stack_index, self.ip))?;
                     self.ip = 0;
                     Ok(false)
                 }
@@ -661,18 +661,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
             let r#fn = self.const_at(descriptor.fn_constant_index as usize);
             let mut closure = self.alloc(VesClosure::new(*r#fn.unbox().as_ref_unchecked()).into());
-            // because a closure may refer to itself as an upvalue,
-            // it must be on the stack *before* we start adding upvalues
+            // because a closure may refer to itself as a capture,
+            // it must be on the stack *before* we start adding captures
             self.push(closure);
             let closure = closure.as_closure_unchecked_mut();
 
-            for upvalue in descriptor.upvalues.iter() {
-                match *upvalue {
-                    UpvalueInfo::Local(index) => {
-                        closure.upvalues.push(self.local_at(index as usize).unbox())
+            for capture in descriptor.captures.iter() {
+                match *capture {
+                    CaptureInfo::Local(index) => {
+                        closure.captures.push(self.local_at(index as usize).unbox())
                     }
-                    UpvalueInfo::Upvalue(index) => {
-                        closure.upvalues.push(*self.upvalue_at(index as usize))
+                    CaptureInfo::Capture(index) => {
+                        closure.captures.push(*self.capture_at(index as usize))
                     }
                 }
             }
@@ -715,14 +715,14 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.push(value);
     }
 
-    fn get_upvalue(&mut self, index: u32) {
-        let value = *self.upvalue_at(index as usize);
+    fn get_capture(&mut self, index: u32) {
+        let value = *self.capture_at(index as usize);
         self.push(value);
     }
 
-    fn set_upvalue(&mut self, index: u32) {
+    fn set_capture(&mut self, index: u32) {
         let operand = *self.peek();
-        self.set_upvalue_at(index as usize, operand.unbox());
+        self.set_capture_at(index as usize, operand.unbox());
     }
 
     #[cfg(not(feature = "fast"))]
@@ -760,47 +760,33 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.local_at(offset)
     }
 
-    fn upvalue_at(&self, offset: usize) -> &Value {
+    fn capture_at(&self, offset: usize) -> &Value {
         let frame = self.frame_unchecked();
-        let upvalues = frame.upvalues();
-        if offset >= upvalues.len() {
+        let captures = frame.captures();
+        if offset >= captures.len() {
             panic!(
-                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
+                "INVALID CAPTURE ADDRESS `{}` AT {} in `{}`",
                 offset,
                 self.ip,
                 frame.func().name()
             );
         }
-        &upvalues[offset]
+        &captures[offset]
     }
 
-    fn upvalue_at_mut(&mut self, offset: usize) -> &mut Value {
+    fn set_capture_at(&mut self, offset: usize, value: Value) -> &Value {
         let frame = self.frame_unchecked();
-        let upvalues = frame.upvalues();
-        if offset >= upvalues.len() {
+        let captures = frame.captures();
+        if offset >= captures.len() {
             panic!(
-                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
+                "INVALID CAPTURE ADDRESS `{}` AT {} in `{}`",
                 offset,
                 self.ip,
                 frame.func().name()
             );
         }
-        &mut self.frame_unchecked_mut().upvalues_mut()[offset]
-    }
-
-    fn set_upvalue_at(&mut self, offset: usize, value: Value) -> &Value {
-        let frame = self.frame_unchecked();
-        let upvalues = frame.upvalues();
-        if offset >= upvalues.len() {
-            panic!(
-                "INVALID UPVALUE ADDRESS `{}` AT {} in `{}`",
-                offset,
-                self.ip,
-                frame.func().name()
-            );
-        }
-        self.frame_unchecked_mut().upvalues_mut()[offset] = value;
-        self.upvalue_at(offset)
+        self.frame_unchecked_mut().captures_mut()[offset] = value;
+        self.capture_at(offset)
     }
 
     fn print(&mut self) -> Result<(), VesError> {
