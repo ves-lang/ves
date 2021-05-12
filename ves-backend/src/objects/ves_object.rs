@@ -190,6 +190,11 @@ impl VesObject {
             panic!("Couldn't unwrap {:?} as VesObject::Str", self)
         }
     }
+
+    /// Returns `true` if the ves_object is [`Fn`].
+    pub fn is_fn(&self) -> bool {
+        matches!(self, Self::Fn(..))
+    }
 }
 
 impl GetTypeId for VesObject {

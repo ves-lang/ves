@@ -5,14 +5,14 @@ use ves_error::{FileId, Span};
 use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace},
-    objects::ves_fn::VesFn,
+    objects::{peel::Peeled, ves_fn::VesFn},
     NanBox, Value,
 };
 
 use super::inline_cache::InlineCache;
 
 pub struct CallFrame {
-    r#fn: GcObj,
+    r#fn: Peeled<VesFn>,
     chunk: NonNull<Chunk>,
     code: NonNull<Opcode>,
     code_len: usize,
@@ -26,16 +26,15 @@ pub struct CallFrame {
 
 impl CallFrame {
     pub fn new(
-        mut r#fn: GcObj,
+        mut r#fn: Peeled<VesFn>,
         upvalues: *mut Vec<NanBox>,
         stack_index: usize,
         return_address: usize,
     ) -> Self {
-        let obj = r#fn.as_fn_mut_unwrapped();
-        let chunk = unsafe { NonNull::new_unchecked(&mut obj.chunk) };
-        let code = unsafe { NonNull::new_unchecked(obj.chunk.code.as_mut_ptr()) };
-        let code_len = obj.chunk.code.len();
-        let cache = unsafe { NonNull::new_unchecked(&mut obj.chunk.cache) };
+        let chunk = unsafe { NonNull::new_unchecked(&mut r#fn.get_mut().chunk) };
+        let code = unsafe { NonNull::new_unchecked(r#fn.get_mut().chunk.code.as_mut_ptr()) };
+        let code_len = r#fn.get().chunk.code.len();
+        let cache = unsafe { NonNull::new_unchecked(&mut r#fn.get_mut().chunk.cache) };
 
         Self {
             r#fn,
@@ -50,7 +49,7 @@ impl CallFrame {
         }
     }
 
-    pub fn main(r#fn: GcObj) -> Self {
+    pub fn main(r#fn: Peeled<VesFn>) -> Self {
         Self::new(r#fn, std::ptr::null_mut(), 0, 0)
     }
 
@@ -73,7 +72,7 @@ impl CallFrame {
     }
 
     pub fn func(&self) -> &VesFn {
-        self.r#fn.as_fn().unwrap()
+        self.r#fn.get()
     }
 
     pub fn upvalues(&self) -> &Vec<NanBox> {
@@ -134,6 +133,9 @@ unsafe impl Trace for CallFrame {
         Trace::trace(&mut self.r#fn, tracer);
         for func in &mut self.defer_stack {
             Trace::trace(func, tracer);
+        }
+        for value in self.upvalues_mut() {
+            Trace::trace(&mut value.unbox(), tracer);
         }
     }
 

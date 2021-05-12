@@ -1,0 +1,53 @@
+fn test0(a) {
+    print(a);
+    fn test1() {
+        print(a);
+        fn test2() {
+            print(a);
+        }
+        test2();
+    }
+    test1();
+}
+test0("test");
+
+%output
+
+|0000| GetConst(<fn test0>)
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| GetGlobal(0)
+|0004| GetConst(test)
+|0005| Call(1)
+|0006| Pop
+|0007| Return
+>>>>>> test0
+|0000| GetLocal(1)
+|0001| Print
+|0002| CreateClosure(<fn test1>, 1)
+|0003| Copy
+|0004| Pop
+|0005| GetLocal(2)
+|0006| Call(0)
+|0007| Pop
+|0008| PopN(3)
+|0009| PushNone
+|0010| Return
+>>>>>> test1
+|0000| GetUpvalue(0)
+|0001| Print
+|0002| CreateClosure(<fn test2>, 1)
+|0003| Copy
+|0004| Pop
+|0005| GetLocal(1)
+|0006| Call(0)
+|0007| Pop
+|0008| PopN(2)
+|0009| PushNone
+|0010| Return
+>>>>>> test2
+|0000| GetUpvalue(0)
+|0001| Print
+|0002| Pop
+|0003| PushNone
+|0004| Return

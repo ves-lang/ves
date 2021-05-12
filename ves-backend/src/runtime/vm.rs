@@ -6,6 +6,7 @@ use crate::{
     emitter::emit::UpvalueInfo,
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{
+        peel::Peeled,
         ves_fn::{Args, VesClosure},
         ves_str::view::VesStrView,
     },
@@ -77,7 +78,7 @@ macro_rules! num_bin_op {
 
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
-    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError>;
+    fn execute(&mut self, obj: GcObj, args: usize) -> Result<Value, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -112,8 +113,49 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
             .expect("Failed to allocate the object")
     }
 
-    fn call_function(&mut self, obj: GcObj) -> Result<Value, VesError> {
-        todo!("calling arbitrary functions isn't supported yet: {:?}", obj);
+    fn execute(&mut self, mut obj: GcObj, args: usize) -> Result<Value, VesError> {
+        // TODO: default + rest params
+        // before a call, the stack must be:
+        // [receiver, ...args]
+        if args + /* receiver */ 1 > self.stack.len() {
+            return Err(self.error(format!(
+                "Expected receiver and {} args on the stack, got {} total",
+                args,
+                self.stack.len(),
+            )));
+        };
+
+        if let VesObject::FnNative(f) = &mut *obj {
+            let mut args = self.pop_n(args).map(|v| v.unbox()).collect();
+            let result = f.call(self, Args(&mut args))?;
+            self.pop(); // pop receiver
+            return Ok(result);
+        }
+
+        // TODO: bound method
+        // in case of bound methods, it should set the stack slot at which the callee resides to the receiver
+        let (r#fn, upvalues) = if let VesObject::Closure(c) = &mut *obj {
+            (c.fn_ptr(), &mut c.upvalues as _)
+        } else if obj.is_fn() {
+            (
+                Peeled::new(obj, VesObject::as_fn_mut_unwrapped),
+                std::ptr::null_mut(),
+            )
+        } else {
+            return Err(self.error(format!("{:?} is not callable", obj)));
+        };
+
+        let stack_index = self.stack.len() - /* receiver */ 1 - args;
+        self.push_frame(CallFrame::new(r#fn, upvalues, stack_index, self.ip))?;
+        self.ip = 0;
+
+        // TODO: tracebacks / backtraces
+        self.run_dispatch_loop()?;
+
+        let frame = self.pop_frame();
+        self.ip = frame.return_address;
+
+        Ok(self.pop().unbox())
     }
 
     fn create_error(&mut self, msg: String) -> VesError {
@@ -143,10 +185,17 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     // TODO: encapsulate modules and run one module at a time
     pub fn run(&mut self, r#fn: GcObj) -> Result<(), VesError> {
-        self.push_frame(CallFrame::main(r#fn)).unwrap();
+        self.push_frame(CallFrame::main(Peeled::new(
+            r#fn,
+            VesObject::as_fn_mut_unwrapped,
+        )))
+        .unwrap();
 
         // TODO: tracebacks / backtraces
-        self.run_dispatch_loop()
+        self.run_dispatch_loop()?;
+
+        self.pop_frame();
+        Ok(())
     }
 
     fn run_dispatch_loop(&mut self) -> Result<(), VesError> {
@@ -204,7 +253,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::UnwrapOk(_) => unimplemented!(),
                 Opcode::UnwrapErr(_) => unimplemented!(),
                 Opcode::Spread => unimplemented!(),
-                Opcode::Call(_) => unimplemented!(),
+                Opcode::Call(args) => self.call(args)?,
                 Opcode::Defer => unimplemented!(),
                 Opcode::Interpolate(_) => unimplemented!(),
                 Opcode::CreateArray(_) => unimplemented!(),
@@ -219,6 +268,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::AddStaticField(_) => unimplemented!(),
                 Opcode::Print => self.print()?,
                 Opcode::PrintN(n) => self.print_n(n)?,
+                Opcode::Copy => self.copy()?,
+                Opcode::CopyN(n) => self.copy_n(n)?,
                 Opcode::Pop => {
                     self.pop();
                 }
@@ -227,16 +278,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 }
                 Opcode::Jump(to) => self.jump(to),
                 Opcode::JumpIfFalse(to) => self.jump_if_false(to),
-                Opcode::Return => {
-                    let cs_size = self.call_stack.len();
-
-                    if cs_size == 1 {
-                        self.pop_frame();
-                        break; // todo: return result
-                    }
-
-                    todo!("function calls")
-                }
+                Opcode::Return => break,
                 Opcode::Data(_) => {
                     unreachable!("Data instructions aren't supposed to be executed")
                 }
@@ -329,20 +371,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // NOTE: has to return an option since ves calls wouldn't be able to return a value immediately
     ) -> Result<Option<Value>, VesError> {
         let inst = self.ip;
-        let mut method = self
+        let method = self
             .get_magic_method(left, &lhs_method, inst)
             .or_else(|_| self.get_magic_method(right, &rhs_method, inst))?;
 
-        let result = match &mut *method {
-            VesObject::FnNative(func) => {
-                func.call(self, Args(&mut vec![left.unbox(), right.unbox()]))?
-            }
-            VesObject::Fn(_) | VesObject::Closure(_) => {
-                unimplemented!("Functions calls aren't implemented yet")
-            }
-            _ => unreachable!("get_magic_method shouldn't return non-callable objects"),
-        };
-
+        self.push(method);
+        self.push(left);
+        self.push(right);
+        self.call(2)?;
+        let result = self.pop().unbox();
         Ok(Some(result))
     }
 
@@ -560,6 +597,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
+    fn call(&mut self, args: u32) -> Result<(), VesError> {
+        let args = args as usize;
+        if let Some(v) = self.peek_at(args).unbox().as_ref().copied() {
+            let result = self.execute(v, args)?;
+            self.push(NanBox::from(result));
+        }
+        Ok(())
+    }
+
     fn create_closure(&mut self, descriptor_index: u32) -> Result<(), VesError> {
         let descriptor = self.const_at(descriptor_index as usize);
         if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
@@ -580,6 +626,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     }
                 }
             }
+            return Ok(());
         }
         println!("{:?}", self.peek().unbox());
 
@@ -720,6 +767,19 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             output.push(self.stringify(&item.unbox())?);
         }
         writeln!(self.writer, "{}", output.join(", ")).expect("Failed to write to STDOUT");
+        Ok(())
+    }
+
+    fn copy(&mut self) -> Result<(), VesError> {
+        self.push(*self.peek());
+        Ok(())
+    }
+
+    fn copy_n(&mut self, mut n: u32) -> Result<(), VesError> {
+        while n > 0 {
+            self.push(*self.peek_at(n as usize));
+            n -= 1;
+        }
         Ok(())
     }
 

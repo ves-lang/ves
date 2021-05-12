@@ -1,0 +1,13 @@
+fn test(a) {
+    print(a);
+    fn test2() {
+        print(a);
+    }
+    test2();
+}
+test("test");
+
+%output
+
+test
+test

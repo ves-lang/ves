@@ -33,6 +33,10 @@ impl VesClosure {
         }
     }
 
+    pub fn fn_ptr(&self) -> Peeled<VesFn> {
+        self.r#fn
+    }
+
     pub fn r#fn(&self) -> &VesFn {
         self.r#fn.get()
     }

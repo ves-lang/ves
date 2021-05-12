@@ -72,6 +72,7 @@ where
             | Opcode::PushFalse
             | Opcode::Pop
             | Opcode::Print
+            | Opcode::Copy
             | Opcode::Negate
             | Opcode::Not
             | Opcode::Add
@@ -149,6 +150,7 @@ where
             Opcode::CreateArray(operand)
             | Opcode::Interpolate(operand)
             | Opcode::PrintN(operand)
+            | Opcode::CopyN(operand)
             | Opcode::PopN(operand)
             | Opcode::Call(operand) => {
                 format!(

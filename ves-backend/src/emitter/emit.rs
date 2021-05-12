@@ -140,6 +140,10 @@ impl<'a> State<'a> {
         self.op_pop((n_locals - preserve) as u32, scope_span);
     }
 
+    fn is_global_scope(&self) -> bool {
+        self.enclosing.is_none() && self.scope_depth == 0
+    }
+
     fn op_pop(&mut self, n: u32, span: Span) {
         if n == 1 {
             self.builder.op(Opcode::Pop, span);
@@ -1120,9 +1124,15 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         if !is_sub_expr {
             // if the struct isn't in a sub expression, it should define a variable
             // in the scope where it's declared
-            self.state.define_no_pop(info.name.lexeme.clone(), span)?;
+            self.state
+                .define_no_pop(info.name.lexeme.clone(), span.clone())?;
         }
         self.state.end_struct();
+
+        // see the end of `emit_fn_expr` for an explanation of this
+        if !self.state.is_global_scope() && !is_sub_expr {
+            self.state.builder.op(Opcode::Copy, span);
+        }
         Ok(())
     }
 
@@ -1225,7 +1235,16 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         // if the fn isn't in a sub expression, it should define a variable
         // in the scope where it's declared
         if info.kind == FnKind::Function && !is_sub_expr {
-            self.state.define_no_pop(info.name.lexeme.clone(), span)?;
+            self.state
+                .define_no_pop(info.name.lexeme.clone(), span.clone())?;
+        }
+        // in case the declaration is in a nested scope and *not* a sub expression,
+        // it should not be popped off the stack. but because every expression is
+        // *always* popped, we need a way to preserve the value of this declaration
+        // so we just copy it, and because only one of the two copies is popped,
+        // the original remains
+        if !self.state.is_global_scope() && !is_sub_expr {
+            self.state.builder.op(Opcode::Copy, span);
         }
         Ok(())
     }

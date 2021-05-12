@@ -2,7 +2,7 @@ mod macros;
 
 pub mod cache_layer;
 pub mod nanbox;
-mod peel;
+pub(crate) mod peel;
 pub mod value;
 pub mod ves_fn;
 pub mod ves_int;

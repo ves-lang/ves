@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    fmt::{self, Display, Formatter},
     ops::{Deref, DerefMut},
     ptr::NonNull,
     rc::Rc,
@@ -234,6 +235,12 @@ impl Deref for GcRcObj {
 
     fn deref(&self) -> &Self::Target {
         &*self.obj
+    }
+}
+
+impl Display for GcObj {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        (&**self).fmt(f)
     }
 }
 

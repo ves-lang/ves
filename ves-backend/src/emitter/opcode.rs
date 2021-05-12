@@ -167,6 +167,14 @@ pub enum Opcode {
     Print,
     /// Print N values
     PrintN(/* count */ u32),
+    /// Copy a single value on the stack
+    Copy,
+    /// Copy N values on the stack
+    ///
+    /// Copying starts at stack depth `count`, and ends at the stack top.
+    ///
+    /// e.g. given a stack like `[0, 1, 2]` and `CopyN(count: 3)`, the result should be `[0, 1, 2, 0, 1, 2]`
+    CopyN(/* count */ u32),
     /// Pop a value off the stack
     Pop,
     /// Pop N values off the stack
