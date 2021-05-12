@@ -590,10 +590,17 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 VesObject::Fn(_) => {
                     let r#fn = Peeled::new(*obj, VesObject::as_fn_mut_unwrapped);
                     let captures = std::ptr::null_mut();
-                    match r#fn.get().arity.diff(args) {
+                    let arity = r#fn.get().arity;
+                    match arity.diff(args) {
                         // TODO: once Array is implemented, use it here
                         ArgCountDiff::Extra(n) => todo!("push into rest array"),
-                        ArgCountDiff::Missing(n) => {
+                        ArgCountDiff::MissingPositional(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at least {} args, got {}",
+                                obj, arity.positional, args
+                            )))
+                        }
+                        ArgCountDiff::MissingDefaults(n) => {
                             for _ in 0..n {
                                 self.push(NanBox::none());
                             }
@@ -607,10 +614,17 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 VesObject::Closure(c) => {
                     let r#fn = c.fn_ptr();
                     let captures = &mut c.captures as _;
-                    match r#fn.get().arity.diff(args) {
+                    let arity = r#fn.get().arity;
+                    match arity.diff(args) {
                         // TODO: once Array is implemented, use it here
                         ArgCountDiff::Extra(n) => todo!("push into rest array"),
-                        ArgCountDiff::Missing(n) => {
+                        ArgCountDiff::MissingPositional(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at least {} args, got {}",
+                                obj, arity.positional, args
+                            )))
+                        }
+                        ArgCountDiff::MissingDefaults(n) => {
                             for _ in 0..n {
                                 self.push(NanBox::none());
                             }
@@ -633,7 +647,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                             self.pop_n(args).map(|v| v.unbox()).collect()
                         }
-                        ArgCountDiff::Missing(n) => self
+                        ArgCountDiff::MissingPositional(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at least {} args, got {}",
+                                obj, arity.positional, args
+                            )))
+                        }
+                        ArgCountDiff::MissingDefaults(n) => self
                             .pop_n(args)
                             .map(|v| v.unbox())
                             .chain((0..n).map(|_| Value::None))

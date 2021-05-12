@@ -1,0 +1,15 @@
+fn wrong_argc(a, b, c, d) {
+    print(a, b, c, d);
+}
+
+wrong_argc(0);
+
+%output err
+
+error[ in <main>() ]: <fn wrong_argc> expected at least 4 args, got 1
+  ┌─ <source: #1ce5b61cd80eb8de>:3:1
+  │  
+3 │ ╭ }
+4 │ │ 
+5 │ │ wrong_argc(0);
+  │ ╰──────────────^

@@ -1,0 +1,14 @@
+let not_a_fn = 0;
+
+not_a_fn();
+
+%output err
+
+error[ in <main>() ]: Only objects may be called, attempted to call 0
+  ┌─ <source: #f8bb8050730cab46>:1:17
+  │  
+1 │   let not_a_fn = 0;
+  │ ╭─────────────────^
+2 │ │ 
+3 │ │ not_a_fn();
+  │ ╰───────────^

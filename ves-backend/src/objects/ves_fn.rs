@@ -74,7 +74,8 @@ pub struct Arity {
 #[derive(Clone, Copy)]
 pub enum ArgCountDiff {
     Equal,
-    Missing(usize),
+    MissingPositional(usize),
+    MissingDefaults(usize),
     Extra(usize),
 }
 
@@ -82,8 +83,8 @@ impl Arity {
     pub fn new(positional: u32, default: u32, rest: bool) -> Self {
         Self {
             positional,
-            default: 0,
-            rest: false,
+            default,
+            rest,
         }
     }
 
@@ -97,9 +98,12 @@ impl Arity {
 
     /// Returns the number of missing/extra args.
     pub fn diff(&self, n: usize) -> ArgCountDiff {
+        if n < self.positional as usize {
+            return ArgCountDiff::MissingPositional(self.positional as usize - n);
+        }
         let diff = (self.positional + self.default) as isize - n as isize;
         match diff {
-            n if n > 0 => ArgCountDiff::Missing(n as usize),
+            n if n > 0 => ArgCountDiff::MissingDefaults(n as usize),
             n if n < 0 => ArgCountDiff::Extra((-n) as usize),
             _ => ArgCountDiff::Equal,
         }
