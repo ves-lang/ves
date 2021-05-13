@@ -4,42 +4,41 @@ struct t2 { m( /*unclosed*/ }
 struct t3 { m() /* no body */ }
 struct t4(...a) /* rest params invalid in struct field */
 struct t5 { m(self = "bad") {} }
-struct t6 { not_a_keyword m() {} }
 
 %output err
 
 error: Expected a closing `)`
-  ┌─ <source: #fe379a3900dd64a5>:1:31
+  ┌─ <source: #dd6e76285d7e8acd>:1:31
   │
 1 │ struct t0(a, b /* unclosed */ ;
   │                               ^
 
 error: Instance and static methods do not require `fn` to be declared
-  ┌─ <source: #fe379a3900dd64a5>:2:13
+  ┌─ <source: #dd6e76285d7e8acd>:2:13
   │
 2 │ struct t1 { fn nope() {} }
   │             ^^ help: omit the `fn` keyword
 
 error: Expected a parameter name
-  ┌─ <source: #fe379a3900dd64a5>:3:29
+  ┌─ <source: #dd6e76285d7e8acd>:3:29
   │
 3 │ struct t2 { m( /*unclosed*/ }
   │                             ^
 
 error: Expected a function body
-  ┌─ <source: #fe379a3900dd64a5>:4:15
+  ┌─ <source: #dd6e76285d7e8acd>:4:15
   │
 4 │ struct t3 { m() /* no body */ }
   │               ^
 
 error: Rest arguments are not allowed here
-  ┌─ <source: #fe379a3900dd64a5>:5:11
+  ┌─ <source: #dd6e76285d7e8acd>:5:11
   │
 5 │ struct t4(...a) /* rest params invalid in struct field */
   │           ^^^
 
 error: 'self' may not have a default value
-  ┌─ <source: #fe379a3900dd64a5>:6:20
+  ┌─ <source: #dd6e76285d7e8acd>:6:20
   │
 6 │ struct t5 { m(self = "bad") {} }
   │                    ^

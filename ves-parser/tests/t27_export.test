@@ -31,9 +31,6 @@ StmtKind::ExprStmt
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::ExprStmt
   expr: FnInfo
     name: "test"
@@ -79,6 +76,3 @@ StmtKind::ExprStmt
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=

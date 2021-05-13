@@ -357,7 +357,6 @@ impl<'a> Resolver<'a> {
                     ScopeKind::Global
                     | ScopeKind::Local
                     | ScopeKind::Function
-                    | ScopeKind::AssocMethod
                     | ScopeKind::Method => {}
                 }
             }
@@ -495,7 +494,6 @@ impl<'a> Resolver<'a> {
         let prev_kind = self.scope_kind;
         self.scope_kind = match f.kind {
             FnKind::Method | FnKind::MagicMethod => ScopeKind::Method,
-            FnKind::Static => ScopeKind::AssocMethod,
             FnKind::Function => ScopeKind::Function,
             FnKind::Initializer => ScopeKind::Initializer,
         };
@@ -573,7 +571,6 @@ impl<'a> Resolver<'a> {
                 ref mut fields,
                 ref mut methods,
                 ref mut initializer,
-                ref mut r#static,
             }) => {
                 if !is_sub_expr {
                     self.declare(name, Rc::new(Cell::new(0)), NameKind::Let, ex);
@@ -599,11 +596,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_expr(field, true, registry, ex);
                 }
 
-                for field in r#static.fields.iter_mut().filter_map(|(_, f)| f.as_mut()) {
-                    self.resolve_expr(field, true, registry, ex);
-                }
-
-                for method in methods.iter_mut().chain(r#static.methods.iter_mut()) {
+                for method in methods.iter_mut() {
                     self.resolve_function(method, true, registry, ex);
                 }
 

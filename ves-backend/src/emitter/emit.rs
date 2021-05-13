@@ -1089,34 +1089,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 }
             }
         }
-        // static methods
-        for method in info.r#static.methods.iter() {
-            self.emit_fn_expr(method, span.clone(), true)?;
-            let name_index = self.state.builder.constant(
-                self.ctx
-                    .alloc_or_intern(method.name.lexeme.clone())
-                    .into_ves(),
-                span.clone(),
-            )?;
-            self.state
-                .builder
-                .op(Opcode::AddStaticMethod(name_index), span.clone());
-        }
-        // static fields
-        for field in info.r#static.fields.iter() {
-            if let Some(ref init) = field.1 {
-                self.emit_expr(init, true)?;
-            } else {
-                self.state.builder.op(Opcode::PushNone, span.clone());
-            }
-            let name_index = self.state.builder.constant(
-                self.ctx.alloc_or_intern(field.0.lexeme.clone()).into_ves(),
-                span.clone(),
-            )?;
-            self.state
-                .builder
-                .op(Opcode::AddStaticField(name_index), span.clone());
-        }
         // initializer
         if let Some(ref initializer) = info.initializer {
             let name_index = self
