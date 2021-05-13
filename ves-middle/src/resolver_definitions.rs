@@ -23,8 +23,6 @@ pub enum ScopeKind {
     Function,
     /// An `init` block.
     Initializer,
-    /// A static method scope.
-    AssocMethod,
     /// A method scope.
     Method,
 }

@@ -396,7 +396,7 @@ impl<'a> Params<'a> {
     }
 
     pub fn is_instance_method_params(&self) -> bool {
-        !self.is_empty() && self.positional[0].0.lexeme == "self"
+        self.positional.get(0).map(|v| v.0.lexeme.as_ref()) == Some("self")
     }
 }
 
@@ -409,9 +409,6 @@ pub enum FnKind {
     /// A struct method.
     /// Example: `method(self) { return self; }`
     Method,
-    /// A static method.
-    /// Example: `pi() { return 3.141592; }`
-    Static,
     /// An initializer block.
     /// Example: `init { print self.a; }`
     Initializer,
@@ -440,7 +437,7 @@ impl<'a> FnInfo<'a> {
     pub fn is_method(&self) -> bool {
         match self.kind {
             FnKind::Function => false,
-            FnKind::Initializer | FnKind::Method | FnKind::Static | FnKind::MagicMethod => true,
+            FnKind::Initializer | FnKind::Method | FnKind::MagicMethod => true,
         }
     }
 }
@@ -466,15 +463,6 @@ impl<'a> Initializer<'a> {
     }
 }
 
-/// The static properties of a struct.
-#[derive(Debug, Clone, PartialEq, AstToStr)]
-pub struct StructStaticProps<'a> {
-    /// The static fields of the struct.
-    pub fields: Vec<(Token<'a>, Option<Expr<'a>>)>,
-    /// The static methods of the struct.
-    pub methods: Vec<FnInfo<'a>>,
-}
-
 /// A struct declaration statement or expression.
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct StructInfo<'a> {
@@ -486,8 +474,6 @@ pub struct StructInfo<'a> {
     pub methods: Vec<FnInfo<'a>>,
     /// The initializer block of this struct.
     pub initializer: Option<Initializer<'a>>,
-    /// The static fields and methods defined on this struct.
-    pub r#static: StructStaticProps<'a>,
 }
 
 /// A possible condition pattern.

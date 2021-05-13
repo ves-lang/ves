@@ -191,6 +191,3 @@ StmtKind::ExprStmt
               otherwise: None
         kind: Initializer
       may_escape: false
-    r#static: StructStaticProps
-      fields=
-      methods=

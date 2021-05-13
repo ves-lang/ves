@@ -48,9 +48,6 @@ StmtKind::Print
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::Print
   value: ExprKind::Comma
     operands=

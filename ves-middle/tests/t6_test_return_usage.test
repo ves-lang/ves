@@ -6,8 +6,6 @@ struct S(x) {
 
     method1(self) { loop { return; } } // ok
     method2(self) => none  // ok
-    method3() { return; } // ok
-    method4() => none  // ok
 }
 
 fn func1() { return; }
@@ -27,7 +25,7 @@ loop { return; } // ok
 %output
 
 error: Cannot return a value from an init block
-  ┌─ <source: #398ca02a25e735c8>:3:22
+  ┌─ <source: #1b4abf6267bfd24c>:3:22
   │
 3 │         if (false) { return 5; } // error
   │                      ^^^^^^^^

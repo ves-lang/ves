@@ -767,10 +767,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
         // parse struct body
         let mut methods = vec![];
-        let mut r#static = ast::StructStaticProps {
-            fields: vec![],
-            methods: vec![],
-        };
         let mut initializer = None;
         // if we come across a semi or don't come across a left brace,
         // then the struct has no body
@@ -809,7 +805,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                         body,
                         kind: ast::FnKind::Initializer,
                     }));
-                } else if self.match_(&TokenKind::LeftParen) {
+                } else {
+                    self.consume(&TokenKind::LeftParen, "Expected a '(' after method name")?;
                     // this is a method
                     let params = self.param_pack(ParamListKind::Method)?;
                     self.consume(&TokenKind::RightParen, "Expected a closing `)`")?;
@@ -826,21 +823,12 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                             body,
                         });
                     } else {
-                        r#static.methods.push(ast::FnInfo {
-                            name: prop_name,
-                            params,
-                            body,
-                            kind: ast::FnKind::Static,
-                        });
+                        return Err(VesError::parse(
+                            "First method parameter must be `self`",
+                            self.previous.span.clone(),
+                            self.fid,
+                        ));
                     }
-                } else {
-                    // this is a static field
-                    let value = if self.match_(&TokenKind::Equal) {
-                        Some(self.expr(true)?)
-                    } else {
-                        None
-                    };
-                    r#static.fields.push((prop_name, value));
                 }
             }
         }
@@ -871,7 +859,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             fields,
             methods,
             initializer,
-            r#static,
         })
     }
 

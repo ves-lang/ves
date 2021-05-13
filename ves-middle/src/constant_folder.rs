@@ -291,7 +291,6 @@ impl<'a> ConstantFolder<'a> {
                 ref name,
                 ref mut methods,
                 ref mut fields,
-                ref mut r#static,
                 ref mut initializer,
             }) => {
                 self.propagated_variables.add(name.lexeme.clone(), None);
@@ -303,15 +302,6 @@ impl<'a> ConstantFolder<'a> {
                     self.fold_function(&mut init.body);
                 }
                 methods.iter_mut().for_each(|m| self.fold_function(m));
-                r#static
-                    .fields
-                    .iter_mut()
-                    .flat_map(|(_, v)| v.as_mut())
-                    .for_each(|v| self.fold_expr(v));
-                r#static
-                    .methods
-                    .iter_mut()
-                    .for_each(|f| self.fold_function(f));
             }
             ExprKind::Fn(box r#fn) => self.fold_function(r#fn),
             // FIXME: ast change to if expressions

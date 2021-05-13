@@ -6,13 +6,6 @@ struct Test(a, b=0) {
     // methods
     m(self) {}
     ma(self) => 0
-
-    // static methods
-    sm() {}
-    sma() => 0
-
-    // static field
-    sf = 0
 }
 struct Test(a, b, c) { 
     init {
@@ -32,9 +25,6 @@ StmtKind::ExprStmt
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
@@ -44,9 +34,6 @@ StmtKind::ExprStmt
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
@@ -100,9 +87,6 @@ StmtKind::ExprStmt
               otherwise: None
         kind: Initializer
       may_escape: false
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
@@ -112,9 +96,6 @@ StmtKind::ExprStmt
       rest: None
     methods=
     initializer: None
-    r#static: StructStaticProps
-      fields=
-      methods=
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
@@ -194,34 +175,6 @@ StmtKind::ExprStmt
               otherwise: None
         kind: Initializer
       may_escape: false
-    r#static: StructStaticProps
-      fields=
-        tuple
-          field0: "sf"
-          field1: Lit
-            token: "0"
-            value: LitValue::Integer(0)
-      methods=
-        FnInfo
-          name: "sm"
-          params: Params
-            positional=
-            default=
-            rest: None
-          body=
-          kind: Static
-        FnInfo
-          name: "sma"
-          params: Params
-            positional=
-            default=
-            rest: None
-          body=
-            StmtKind::Return
-              return_value: Lit
-                token: "0"
-                value: LitValue::Integer(0)
-          kind: Static
 StmtKind::ExprStmt
   expr: StructInfo
     name: "Test"
@@ -268,6 +221,3 @@ StmtKind::ExprStmt
             return_value: None
         kind: Initializer
       may_escape: true
-    r#static: StructStaticProps
-      fields=
-      methods=
