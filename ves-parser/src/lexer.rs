@@ -443,7 +443,7 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Interpo
 
         bump_count = i;
         match byte {
-            c if c == &quote_kind => {
+            c if c == &quote_kind && bytes.get(i - 1) != Some(&b'\\') => {
                 if previous_fragment_end < i {
                     // + 1 to skip the backslash (\)
                     let span = (previous_fragment_end + 1)..i;
@@ -530,6 +530,8 @@ pub(crate) fn unescape_in_place(s: &mut String) -> Option<()> {
                     'n' => Some('\n'),
                     'r' => Some('\r'),
                     't' => Some('\t'),
+                    '\'' => Some('\''),
+                    '"' => Some('"'),
                     'e' | 'E' => Some('\u{1B}'),
                     'u' => Some(parse_unicode(&mut chars)?),
                     _ => None,
@@ -811,15 +813,15 @@ mod tests {
 
     #[test]
     fn string_interpolation_escape() {
-        const SOURCE: &str = r#"f"\{escaped}""#;
+        const SOURCE: &str = r#"f"\{escaped} \"a string\"""#;
         let actual = test_tokenize(SOURCE);
         //println!("{:#?}", actual);
         assert_eq!(
             actual,
             vec![
-                TestToken(Token::new(r#"f"\{escaped}""#, 0..1, TokenKind::InterpolatedString(InterpolatedString {
+                TestToken(Token::new(r#"f"\{escaped} \"a string\"""#, 0..1, TokenKind::InterpolatedString(InterpolatedString {
                     fragments: vec![
-                        Frag::Str(Token::new(r#"{escaped}"#, 0..1, TokenKind::String))
+                        Frag::Str(Token::new(r#"{escaped} \"a string\""#, 0..1, TokenKind::String))
                     ],
                     state: InterpolatedStringState::Closed
                 })))

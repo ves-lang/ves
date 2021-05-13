@@ -17,6 +17,7 @@ pub struct SymbolTable<T: VesGc> {
     pub pow: VesStrView,
     pub rpow: VesStrView,
     pub cmp: VesStrView,
+    pub str: VesStrView,
     _gc: GcHandle<T>,
 }
 
@@ -36,6 +37,7 @@ impl<T: VesGc> SymbolTable<T> {
             pow: VesStrView::new(gc.alloc_permanent("pow")),
             rpow: VesStrView::new(gc.alloc_permanent("rpow")),
             cmp: VesStrView::new(gc.alloc_permanent("cmp")),
+            str: VesStrView::new(gc.alloc_permanent("str")),
             _gc: gc,
         }
     }
@@ -58,6 +60,7 @@ impl<T: VesGc> Clone for SymbolTable<T> {
             pow: self.pow,
             rpow: self.rpow,
             cmp: self.cmp,
+            str: self.str,
             _gc: self._gc.clone(),
         }
     }

@@ -1,0 +1,14 @@
+
+let int = 1.0 
+let float = 2.0
+let big_int = 3n
+let string = "a string"
+let named = fn test() {}
+let anonymous = fn() {}
+
+
+print(f"int: {int}, float: {float}, big: {big_int}, str: \"{string}\", fn: {named}, lambda: {anonymous}");
+
+%output
+
+int: 1, float: 2, big: 3, str: "a string", fn: <fn test>, lambda: <fn [fn@6:17]>

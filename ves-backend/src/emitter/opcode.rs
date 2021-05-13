@@ -145,7 +145,7 @@ pub enum Opcode {
     /// When a scope closes, any deferred calls from that scope are executed.
     /// When the stack beings unwinding due to a panic, deferred calls are also executed.
     Defer,
-    /// Join `count` fragments on the stack into a single string
+    /// Join `count` fragments on the stack into a single string.
     Interpolate(/* count */ u32),
     /// Create an array from `count` items on the stack
     CreateArray(/* count */ u32),

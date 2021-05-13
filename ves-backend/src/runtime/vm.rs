@@ -117,6 +117,7 @@ pub struct Vm<T: VesGc, W = std::io::Stdout> {
 impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
     fn alloc(&mut self, obj: VesObject) -> GcObj {
         // TODO: don't panic on allocation failure
+        // TODO: intern strings
         self.gc
             .alloc(
                 obj,
@@ -244,7 +245,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.call(args as usize)?;
                 }
                 Opcode::Defer => unimplemented!(),
-                Opcode::Interpolate(_) => unimplemented!(),
+                Opcode::Interpolate(n) => self.interpolate(n)?,
                 Opcode::CreateArray(_) => unimplemented!(),
                 Opcode::CreateEmptyMap => unimplemented!(),
                 Opcode::MapInsert => unimplemented!(),
@@ -308,6 +309,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
                 // TODO: this should probably be behind a trait
                 match &mut *obj {
+                    VesObject::Str(_) if name.str() == "str" => Err({
+                        self.error("str doesn't have a magic method called `@str`".to_string())
+                    }),
                     VesObject::Str(_) => todo!(),
                     // NOTE: this assumes that BigInt has only methods and no fields
                     VesObject::Int(i) => {
@@ -370,7 +374,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         rhs_method: &VesStrView,
         left: NanBox,
         right: NanBox,
-        // NOTE: has to return an option since ves calls wouldn't be able to return a value immediately
     ) -> Result<Option<Value>, VesError> {
         let inst = self.inst();
         if let Ok(method) = self.get_magic_method(left, &lhs_method, inst) {
@@ -658,6 +661,17 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
+    fn interpolate(&mut self, n: u32) -> Result<(), VesError> {
+        let mut interpolated = String::with_capacity(16); // 16 characters
+        for v in self.pop_n(n as usize).collect::<Vec<_>>() {
+            interpolated.extend(Some(self.stringify(&v.unbox())?.into_owned()));
+        }
+        // TODO: intern the string
+        let obj = self.alloc(interpolated.into());
+        self.push(obj);
+        Ok(())
+    }
+
     fn compare_type(&mut self) -> Result<(), VesError> {
         let right = *self.peek();
         let left = *self.peek_at(1);
@@ -797,6 +811,41 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         unreachable!()
     }
 
+    /// TODO: there needs to be a mechanism (such as remembered pointers) to protect native objects from blowing up the rust stack when calling their stringify impls.
+    /// Consider the following code:
+    /// ```ignore
+    /// let a = [];
+    /// let b = [5];
+    /// a.push(b);
+    /// b[0] = a;
+    ///
+    /// print a;  // This line can will cause a stack overflow, but should instead print something like `[[[...]]]`.
+    /// ```
+    fn stringify(&mut self, value: &Value) -> Result<std::borrow::Cow<'static, str>, VesError> {
+        let result = match value {
+            Value::Ref(_) => {
+                let method = self.symbols.str;
+                let inst = self.inst();
+                match self.get_magic_method(NanBox::from(*value), &method, inst) {
+                    Ok(obj) => {
+                        let stringified = self.execute(Value::Ref(obj), vec![*value])?;
+                        match stringified.as_ref().and_then(|r| r.as_str()) {
+                            Some(s) => s.clone_inner(),
+                            None => {
+                                return Err(
+                                    self.error(format!("The @str method must return a string, but returned an object of type {:?}", stringified))
+                                );
+                            }
+                        }
+                    }
+                    Err(_) => value.to_string().into(),
+                }
+            }
+            _ => value.to_string().into(),
+        };
+        Ok(result)
+    }
+
     fn get_const(&mut self, idx: u32) {
         self.push(self.const_at(idx as _));
     }
@@ -932,11 +981,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             n -= 1;
         }
         Ok(())
-    }
-
-    fn stringify(&mut self, value: &Value) -> Result<std::borrow::Cow<'static, str>, VesError> {
-        // TODO: call the magic method here
-        Ok(value.to_string().into())
     }
 
     #[inline]
