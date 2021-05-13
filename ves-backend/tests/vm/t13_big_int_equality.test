@@ -1,0 +1,40 @@
+print("case: ==")
+print(1 == 1 - 1, true);
+print(1n == 1 - 1, true);
+print(1 == 1n - 1, true);
+print(1 == 1 - 1n, true);
+print(1n == 1n - 1n, true);
+
+print("case: !=")
+print(1n != 1n + 1n, true);
+print(1 != 1 + 1n, true);
+print(1n != 1n, false);
+print(1 != 2 - 1n, false);
+
+print("case: < and <=")
+print(1 < 1 + 1n, true);
+print(1 <= 1 + 1n, true);
+
+print("case: > and >=")
+print(2n > 1 + 1, false)
+print(2n >= 1 + 1, true)
+
+%output
+
+case: ==
+true, true
+true, true
+true, true
+true, true
+true, true
+case: !=
+true, true
+true, true
+false, false
+false, false
+case: < and <=
+true, true
+true, true
+case: > and >=
+false, false
+true, true

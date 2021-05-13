@@ -44,7 +44,8 @@ impl VesIntVTable {
             "div" => LHS /,
             "rdiv" => RHS /,
             "rem" => LHS %,
-            "rrem" => RHS %
+            "rrem" => RHS %,
+            "cmp" => CMP ?
         );
 
         Self { methods }

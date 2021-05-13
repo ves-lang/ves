@@ -26,6 +26,34 @@ macro_rules! __zero_division_check {
 
 #[macro_export]
 macro_rules! int_arithm_method {
+    ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, CMP ?) => {{
+        $handle.alloc_permanent(wrap_native(
+            move |_vm: &mut dyn VmInterface, (this, other): (GcObj, Value)| {
+                let this = this.as_int_unchecked();
+
+                let result = match other {
+                    Value::Int(i) => {
+                        this.value.cmp(&IBig::from(i))
+                     },
+                    Value::Ref(obj) if obj.as_int().is_some() => {
+                        this.value.cmp(&obj.as_int_unchecked().value)
+                    }
+                    _ => {
+                        return Ok(Value::None);
+                    }
+                };
+
+                Ok(Value::Int(match result {
+                    std::cmp::Ordering::Less => -1,
+                    std::cmp::Ordering::Equal => 0,
+                    std::cmp::Ordering::Greater => 1,
+                }))
+            },
+            $name,
+            true,
+            $crate::objects::ves_fn::Arity::new(2, 0, false)
+        ))
+    }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, LHS $op:tt) => {{
         let lookup = $lookup.clone();
         let proxy = $proxy.clone();
@@ -61,7 +89,7 @@ macro_rules! int_arithm_method {
         let lookup = $lookup.clone();
         let proxy = $proxy.clone();
         $handle.alloc_permanent(wrap_native(
-            move |vm: &mut dyn VmInterface, (left, right): (Value, GcObj)| {
+            move |vm: &mut dyn VmInterface, (right, left): (GcObj, Value)| {
                 let right = right.as_int_unchecked();
                 $crate::objects::macros::__zero_division_check!($op &right.value);
 

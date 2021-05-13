@@ -36,13 +36,13 @@ macro_rules! num_bin_op {
         // Should this be in a method?
         let lhs_method = $self.symbols.$lhs_method;
         let rhs_method = $self.symbols.$rhs_method;
-        if let Some(result) =
-            $self.call_magic_arithmetics_method(&lhs_method, &rhs_method, $left, $right)?
-        {
-            $self.pop_n(2);
-            $self.push(NanBox::new(result));
-        } else {
-            unimplemented!("The result may be none only when making ves calls");
+        match $self.call_magic_arithmetics_method(&lhs_method, &rhs_method, $left, $right)? {
+            Some(result) => {
+                $self.push(NanBox::new(result));
+            }
+            None => {
+                unimplemented!("The result may be none only when making ves calls");
+            }
         }
     };
     ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr) => {
@@ -342,6 +342,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
+    /// Calls the given LHS or RHS magic method on the left or right operand.
+    /// NOTE: This method expects the operands to be present on the stack.
     fn call_magic_arithmetics_method(
         &mut self,
         lhs_method: &VesStrView,
@@ -351,16 +353,23 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // NOTE: has to return an option since ves calls wouldn't be able to return a value immediately
     ) -> Result<Option<Value>, VesError> {
         let inst = self.ip;
-        let method = self
-            .get_magic_method(left, &lhs_method, inst)
-            .or_else(|_| self.get_magic_method(right, &rhs_method, inst))?;
+        if let Ok(method) = self.get_magic_method(left, &lhs_method, inst) {
+            self.pop_n(2);
+            self.push_many([NanBox::from(method), left, right]);
+        } else {
+            let method = self.get_magic_method(right, &rhs_method, inst)?;
+            self.pop_n(2);
+            self.push_many([NanBox::from(method), right, left]);
+        }
 
-        self.push(method);
-        self.push(left);
-        self.push(right);
-        self.call(2)?;
-        let result = self.pop().unbox();
-        Ok(Some(result))
+        match self.call(2) {
+            Ok(true) => {
+                let result = self.pop().unbox();
+                Ok(Some(result))
+            }
+            Ok(false) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
     fn add(&mut self) -> Result<(), VesError> {
@@ -513,13 +522,44 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let right = *self.peek_at(1);
         let left = *self.peek();
 
-        // two values are equal if their bit representations are equal, which implies:
+        // If two values have the same bit representation, they guaranteed to be equal, which implies:
         // - their types are the same
         // - their values are the same
-        // for objects, we compare identity
-        self.pop_n(2);
-        self.push(NanBox::bool(left == right));
-        Ok(())
+        // Also, if neither of the values is a pointer, they are guaranteed to be different if their bit representations are different.
+        if left == right || !(left.is_ptr() || right.is_ptr()) {
+            self.pop_n(2);
+            self.push(left == right);
+            return Ok(());
+        }
+
+        // Objects may override @cmp
+        let method_name = self.symbols.cmp;
+        let inst = self.ip;
+        if let Ok(method) = self.get_magic_method(left, &method_name, inst) {
+            self.pop_n(2);
+            self.push_many([method.into(), left, right]);
+        } else if let Ok(method) = self.get_magic_method(right, &method_name, inst) {
+            self.pop_n(2);
+            // We have to reverse the order of the arguments since the receiver goes first
+            self.push_many([method.into(), right, left]);
+        } else {
+            self.push(false);
+            return Ok(());
+        };
+
+        if self.call(2)? {
+            let result = self.pop();
+            if !result.is_int() && !result.is_float() {
+                return Err(self.error(format!(
+                    "The @cmp method must return a number, but produced {:?} instead",
+                    result.unbox()
+                )));
+            }
+            self.push(result);
+            Ok(())
+        } else {
+            Ok(())
+        }
     }
 
     fn not_equal(&mut self) -> Result<(), VesError> {
@@ -766,6 +806,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let frame = self.frame_unchecked();
         let frame_start = frame.stack_index;
         let slot = frame_start + offset;
+        #[cfg(not(feature = "fast"))]
         if slot >= self.stack.len() {
             panic!(
                 "INVALID LOCAL ADDRESS `{}` AT {} in `{}` (stack window = {}, stack = {:?})",
@@ -783,6 +824,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn capture_at(&self, offset: usize) -> &Value {
         let frame = self.frame_unchecked();
         let captures = frame.captures();
+        #[cfg(not(feature = "fast"))]
         if offset >= captures.len() {
             panic!(
                 "INVALID CAPTURE ADDRESS `{}` AT {} in `{}`",
@@ -797,6 +839,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn set_capture_at(&mut self, offset: usize, value: Value) -> &Value {
         let frame = self.frame_unchecked();
         let captures = frame.captures();
+        #[cfg(not(feature = "fast"))]
         if offset >= captures.len() {
             panic!(
                 "INVALID CAPTURE ADDRESS `{}` AT {} in `{}`",
@@ -868,6 +911,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     #[inline]
     fn push(&mut self, obj: impl Into<NanBox>) {
         self.stack.push(obj.into());
+    }
+
+    #[inline]
+    fn push_many<const N: usize>(&mut self, objects: [NanBox; N]) {
+        self.stack.extend_from_slice(&objects)
     }
 
     #[cfg(not(feature = "fast"))]
