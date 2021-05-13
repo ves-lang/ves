@@ -11,23 +11,25 @@ for i in 0..10, 2 {
 // @loop.start:
 |0003| GetLocal(0)      // get i
 |0004| GetLocal(1)      // get [[END]]
-|0005| LessThan         // i < [[END]]
-|0006| JumpIfFalse(18)  // jump_if_false @loop.exit
-|0007| Pop              // pop result of condition
-|0008| Jump(15)         // jump @loop.body
+|0005| Compare          // i - [[END]]
+|0006| Negate           // (skipped)
+|0007| IsCmpLessThan    // (i - [[END]]) < 0
+|0008| JumpIfFalse(20)  // jump_if_false @loop.exit
+|0009| Pop              // pop result of condition
+|0010| Jump(17)         // jump @loop.body
 // @loop.latch:
-|0009| GetLocal(0)      // get i
-|0010| GetLocal(2)      // get [[STEP]]
-|0011| Add              // i + [[STEP]]
-|0012| SetLocal(0)      // set i
-|0013| Pop              // pop (i + [[STEP]])
-|0014| Jump(3)          // jump @loop.start
+|0011| GetLocal(0)      // get i
+|0012| GetLocal(2)      // get [[STEP]]
+|0013| Add              // i + [[STEP]]
+|0014| SetLocal(0)      // set i
+|0015| Pop              // pop (i + [[STEP]])
+|0016| Jump(3)          // jump @loop.start
 // @loop.body:
-|0015| GetLocal(0)      // get i
-|0016| Print            // print(i)
-|0017| Jump(9)          // jump @loop.latch
+|0017| GetLocal(0)      // get i
+|0018| Print            // print(i)
+|0019| Jump(11)          // jump @loop.latch
 // @loop.exit:
-|0018| Pop              // pop result of condition
-|0019| PopN(3)          // pop i, [[END]], [[STEP]]
+|0020| Pop              // pop result of condition
+|0021| PopN(3)          // pop i, [[END]], [[STEP]]
 // @loop.end:
-|0020| Return
+|0022| Return

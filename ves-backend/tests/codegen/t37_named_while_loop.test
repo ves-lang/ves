@@ -22,66 +22,72 @@ mut a = 10
 
 %output
 
-|0000| PushInt32(10)  // push 10
+|0000| PushInt32(10)    // push 10
 |0001| SetGlobal(0)     // mut a = 10
 |0002| Pop              // pop (a = 10)
 // @first.start:
 |0003| GetGlobal(0)     // get a
-|0004| PushInt32(0)   // push 0
-|0005| GreaterThan      // a > 0
-|0006| JumpIfFalse(52)  // jump @first.exit
-|0007| Pop              // pop (a > 0)
-|0008| GetGlobal(0)     // get a
-|0009| PushInt32(1)   // push 1
-|0010| Subtract         // b = a - 1
+|0004| PushInt32(0)     // push 0
+|0005| Compare          // (a - 0)
+|0006| Negate           // (skipped)
+|0007| IsCmpGreaterThan // (a - 0) > 0
+|0008| JumpIfFalse(58)  // jump @first.exit
+|0009| Pop              // pop (a > 0)
+|0010| GetGlobal(0)     // get a
+|0011| PushInt32(1)     // push 1
+|0012| Subtract         // b = a - 1
 // @second.start:
-|0011| GetLocal(0)      // get b
-|0012| PushInt32(0)   // push 0
-|0013| GreaterThan      // b > 0
-|0014| JumpIfFalse(28)  // jump @second.exit
-|0015| Pop              // pop (b > 0)
-|0016| GetLocal(0)      // get b
-|0017| PushInt32(1)   // push 1
-|0018| Subtract         // mut c = b - 1
-|0019| GetLocal(1)      // get c
-|0020| SetLocal(0)      // b = c
-|0021| Pop              // pop (b = c)
-|0022| PopN(2)          // pop b, c
-|0023| Jump(3)          // jump @first.start
-|0024| Pop              // (unreachable) pop c
-|0025| Jump(29)         // (unreachable) jump @second.end
-|0026| Pop              // (unreachable) pop c
-|0027| Jump(11)         // (unreachable) jump @second.start
+|0013| GetLocal(0)      // get b
+|0014| PushInt32(0)     // push 0
+|0015| Compare          // (b - 0)
+|0016| Negate           // (skipped)
+|0017| IsCmpGreaterThan // (b - 0) > 0
+|0018| JumpIfFalse(32)  // jump @second.exit
+|0019| Pop              // pop (b > 0)
+|0020| GetLocal(0)      // get b
+|0021| PushInt32(1)     // push 1
+|0022| Subtract         // mut c = b - 1
+|0023| GetLocal(1)      // get c
+|0024| SetLocal(0)      // b = c
+|0025| Pop              // pop (b = c)
+|0026| PopN(2)          // pop b, c
+|0027| Jump(3)          // jump @first.start
+|0028| Pop              // (unreachable) pop c
+|0029| Jump(33)         // (unreachable) jump @second.end
+|0030| Pop              // (unreachable) pop c
+|0031| Jump(13)         // (unreachable) jump @second.start
 // @second.exit:
-|0028| Pop              // pop (b > 0)
+|0032| Pop              // pop (b > 0)
 // @second.end:
 // @third.start:
-|0029| GetLocal(0)      // get b
-|0030| PushInt32(0)   // push 0
-|0031| GreaterThan      // b > 0
-|0032| JumpIfFalse(46)  // jump @third.exit
-|0033| Pop              // pop (b > 0)
-|0034| GetLocal(0)      // get b
-|0035| PushInt32(1)   // push 1
-|0036| Subtract         // mut d = b - 1
-|0037| GetLocal(1)      // get d
-|0038| SetLocal(0)      // b = d
-|0039| Pop              // pop (b = d)
-|0040| PopN(2)          // pop b, d
-|0041| Jump(53)         // jump @first.end
-|0042| Pop              // (unreachable) pop d
-|0043| Jump(29)         // (unreachable) jump @third.start
-|0044| Pop              // (unreachable) pop d
-|0045| Jump(29)         // (unreachable) jump @third.start
+|0033| GetLocal(0)      // get b
+|0034| PushInt32(0)     // push 0
+|0035| Compare          // (b - 0)
+|0036| Negate           // (skipped)
+|0037| IsCmpGreaterThan // (b - 0) > 0
+|0038| JumpIfFalse(52)  // jump @third.exit
+|0039| Pop              // pop (b > 0)
+|0040| GetLocal(0)      // get b
+|0041| PushInt32(1)     // push 1
+|0042| Subtract         // mut d = b - 1
+|0043| GetLocal(1)      // get d
+|0044| SetLocal(0)      // b = d
+|0045| Pop              // pop (b = d)
+|0046| PopN(2)          // pop b, d
+|0047| Jump(59)         // jump @first.end
+|0048| Pop              // (unreachable) pop d
+|0049| Jump(33)         // (unreachable) jump @third.start
+|0050| Pop              // (unreachable) pop d
+|0051| Jump(33)         // (unreachable) jump @third.start
 // @third.exit:
-|0046| Pop              // pop (b > 0)
+|0052| Pop              // pop (b > 0)
 // @third.end:
-|0047| GetLocal(0)      // get b
-|0048| SetGlobal(0)     // a = b
-|0049| Pop              // pop (a = b)
-|0050| Pop              // pop b
-|0051| Jump(3)          // jump @first.start
+|0053| GetLocal(0)      // get b
+|0054| SetGlobal(0)     // a = b
+|0055| Pop              // pop (a = b)
+|0056| Pop              // pop b
+|0057| Jump(3)          // jump @first.start
 // @first.exit:
-|0052| Pop              // pop (a > 0)
+|0058| Pop              // pop (a > 0)
 // @first.end:
-|0053| Return
+|0059| Return

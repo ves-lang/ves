@@ -73,18 +73,32 @@ pub enum Opcode {
     Negate,
     /// Logical '!'
     Not,
-    /// Check if operands are equal
-    Equal,
-    /// Check if operands are not equal
-    NotEqual,
-    /// Check if left operand has a value lower than right operand
-    LessThan,
-    /// Check if left operand has a value lower than or equal to right operand
-    LessEqual,
-    /// Check if left operand has a value greater than right operand
-    GreaterThan,
-    /// Check if left operand has a value greater than or equal to right operand
-    GreaterEqual,
+    /// A comparison instruction similar to the spaceship operator.
+    /// If used as a condition comparison like `==` or `<=`, must be followed by two instructions:
+    /// a `Negate` instruction and a cmp-to-boolean mapping instruction.
+    ///
+    /// At runtime, the instruction will behave like this:
+    /// 1) If both operands are equal at a bitwise level, `0` is pushed onto the stack, and the vm jumps to the mapping instruction.
+    /// 2) If the operands are not equal, but are primitive, the quality check is performed on their values, and the result is pushed onto the stack; the vm then jumps
+    /// to the mapping instruction.
+    /// 3) If the left operand implements the `@cmp` magic method, the method is called. If the method was native, it's result is pushed onto the stack,
+    /// and the vm jumps to the mapping instruction. Otherwise, the vm dispatches the call as a normal ves call, setting its return address to the mapping instruction.
+    /// 4) If the left operand doesn't have `@cmp`, but the right operand does, the method is executed similarly to (2).
+    /// 5) If neither operand overrides `@cmp`, `none` is pushed onto the stack, and vm jumps to the mapping instruction.
+    Compare,
+    /// Checks if the stack stop is zero.
+    IsCmpEqual,
+    /// Checks if the stack stop is `None` or not zero.
+    /// `None` indicates the that objects being compared are (1) not equal and (2) can't be ordered.
+    IsCmpNotEqual,
+    /// Check if the stack top is negative.
+    IsCmpLessThan,
+    /// Check if the stack top is negative or zero.
+    IsCmpLessEqual,
+    /// Check if the stack top is positive.
+    IsCmpGreaterThan,
+    /// Check if the stack top is positive or zero.
+    IsCmpGreaterEqual,
     /// Compare types of operands
     CompareType,
     /// Check if right operand has field or method with name evaluated from left operand

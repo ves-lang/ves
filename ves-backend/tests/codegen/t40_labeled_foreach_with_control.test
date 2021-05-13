@@ -1,6 +1,6 @@
 @first: for i in 0..=10 {
     @second: for j in 0..10 {
-        print(i,j)
+        print(i, j)
         continue @first
     }
 }
@@ -14,50 +14,54 @@
 // @first.start:
 |0003| GetLocal(0)      // get i
 |0004| GetLocal(1)      // get first.[[END]]
-|0005| LessEqual        // i < first.[[END]]
-|0006| JumpIfFalse(39)  // jump_if_false @first.exit
-|0007| Pop              // pop result of condition
-|0008| Jump(15)         // jump @first.body
+|0005| Compare          // i - first.[[END]]
+|0006| Negate           // (skipped)
+|0007| IsCmpLessEqual   // (i - first.[[END]]) < 0
+|0008| JumpIfFalse(43)  // jump_if_false @first.exit
+|0009| Pop              // pop result of condition
+|0010| Jump(17)         // jump @first.body
 // @first.latch:
-|0009| GetLocal(0)      // get i
-|0010| GetLocal(2)      // get first.[[STEP]]
-|0011| Add              // i + first.[[STEP]]
-|0012| SetLocal(0)      // set i
-|0013| Pop              // pop (i + first.[[STEP]])
-|0014| Jump(3)          // jump @first.start
+|0011| GetLocal(0)      // get i
+|0012| GetLocal(2)      // get first.[[STEP]]
+|0013| Add              // i + first.[[STEP]]
+|0014| SetLocal(0)      // set i
+|0015| Pop              // pop (i + first.[[STEP]])
+|0016| Jump(3)          // jump @first.start
 // @first.body:
 // @second.pre_start:
-|0015| PushInt32(0)   // j
-|0016| PushInt32(10)  // second.[[END]] 
-|0017| PushInt32(1)   // second.[[STEP]]
+|0017| PushInt32(0)   // j
+|0018| PushInt32(10)  // second.[[END]] 
+|0019| PushInt32(1)   // second.[[STEP]]
 // @second.start:
-|0018| GetLocal(3)      // get j
-|0019| GetLocal(4)      // get second.[[END]]
-|0020| LessThan         // j < second.[[END]]
-|0021| JumpIfFalse(36)  // jump_if_false @loop.exit
-|0022| Pop              // pop result of condition
-|0023| Jump(30)         // jump @loop.body
+|0020| GetLocal(3)      // get j
+|0021| GetLocal(4)      // get second.[[END]]
+|0022| Compare          // j - second.[[END]]
+|0023| Negate           // (skipped)
+|0024| IsCmpLessThan    // (j - second.[[END]]) < 0
+|0025| JumpIfFalse(40)  // jump_if_false @loop.exit
+|0026| Pop              // pop result of condition
+|0027| Jump(34)         // jump @loop.body
 // @second.latch:
-|0024| GetLocal(3)      // get j
-|0025| GetLocal(5)      // get second.[[STEP]]
-|0026| Add              // j + second.[[STEP]]
-|0027| SetLocal(3)      // set j
-|0028| Pop              // pop (j + second.[[STEP]])
-|0029| Jump(18)         // jump @second.start
+|0028| GetLocal(3)      // get j
+|0029| GetLocal(5)      // get second.[[STEP]]
+|0030| Add              // j + second.[[STEP]]
+|0031| SetLocal(3)      // set j
+|0032| Pop              // pop (j + second.[[STEP]])
+|0033| Jump(20)         // jump @second.start
 // @second.body:
-|0030| GetLocal(0)      // get i
-|0031| GetLocal(3)      // get j
-|0032| PrintN(2)        // print(i, j)
-|0033| PopN(3)          // pop j, second.[[END]], second.[[STEP]]
-|0034| Jump(9)          // continue @first.latch
-|0035| Jump(24)         // jump @second.latch (unreachable)
-// @second.exit:
-|0036| Pop              // pop result of condition
+|0034| GetLocal(0)      // get i
+|0035| GetLocal(3)      // get j
+|0036| PrintN(2)        // print(i, j)
 |0037| PopN(3)          // pop j, second.[[END]], second.[[STEP]]
-// @second.end:
-|0038| Jump(9)          // jump @first.latch
+|0038| Jump(11)          // continue @first.latch
+|0039| Jump(28)         // jump @second.latch (unreachable)
 // @second.exit:
-|0039| Pop              // pop result of condition
-|0040| PopN(3)          // pop i, first.[[END]], first.[[STEP]]
+|0040| Pop              // pop result of condition
+|0041| PopN(3)          // pop j, second.[[END]], second.[[STEP]]
 // @second.end:
-|0041| Return
+|0042| Jump(11)          // jump @first.latch
+// @second.exit:
+|0043| Pop              // pop result of condition
+|0044| PopN(3)          // pop i, first.[[END]], first.[[STEP]]
+// @second.end:
+|0045| Return

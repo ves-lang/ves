@@ -35,22 +35,24 @@ struct T3(a = 0) {
 |0004| Data(0)          //
 |0005| Data(0)          //
 |0006| PushNone
-|0007| Equal            // self.a == none ; <condition>
-|0008| JumpIfFalse(18)  // if false jump @other
-|0009| Pop              // pop <condition> result
-|0010| GetLocal(0)      // get self
-|0011| PushInt32(0)   // push 0
-|0012| SetProp(0)       // self.a = 0
-|0013| Data(0)          //
-|0014| Data(0)          //
+|0007| Compare          // self.a == none ; <condition>
+|0008| Negate
+|0009| IsCmpEqual
+|0010| JumpIfFalse(20)  // if false jump @other
+|0011| Pop              // pop <condition> result
+|0012| GetLocal(0)      // get self
+|0013| PushInt32(0)     // push 0
+|0014| SetProp(0)       // self.a = 0
 |0015| Data(0)          //
-|0016| Pop              // pop 0
-|0017| Jump(19)         // jump @end
+|0016| Data(0)          //
+|0017| Data(0)          //
+|0018| Pop              // pop 0
+|0019| Jump(21)         // jump @end
 // @other:              //
-|0018| Pop              // pop <condition> result
+|0020| Pop              // pop <condition> result
 // @end:                //
-|0019| Pop              // pop [[VALUE]]
-|0020| Return
+|0021| Pop              // pop [[VALUE]]
+|0022| Return
 >>>>>> T3.init          
 |0000| PushNone         // [[VALUE]] = none
 |0001| GetLocal(0)      // get self
@@ -59,25 +61,27 @@ struct T3(a = 0) {
 |0004| Data(0)          //
 |0005| Data(0)          //
 |0006| PushNone         //
-|0007| Equal            // self.a == none ; <condition>
-|0008| JumpIfFalse(18)  // if false jump @other
-|0009| Pop              // pop <condition> result
-|0010| GetLocal(0)      // get self
-|0011| PushInt32(0)   // push 0
-|0012| SetProp(0)       // self.a = 0
-|0013| Data(0)          //
-|0014| Data(0)          //
+|0007| Compare          // self.a == none ; <condition>
+|0008| Negate
+|0009| IsCmpEqual
+|0010| JumpIfFalse(20)  // if false jump @other
+|0011| Pop              // pop <condition> result
+|0012| GetLocal(0)      // get self
+|0013| PushInt32(0)     // push 0
+|0014| SetProp(0)       // self.a = 0
 |0015| Data(0)          //
-|0016| Pop              // pop 0
-|0017| Jump(19)         // jump @end
+|0016| Data(0)          //
+|0017| Data(0)          //
+|0018| Pop              // pop 0
+|0019| Jump(21)         // jump @end
 // @other:              //
-|0018| Pop              // pop <condition> result
+|0020| Pop              // pop <condition> result
 // @end:                //
-|0019| Pop              // pop [[VALUE]]
-|0020| GetLocal(0)      // get self
-|0021| GetProp(0)       // get self.a
-|0022| Data(0)          //
-|0023| Data(0)          //
+|0021| Pop              // pop [[VALUE]]
+|0022| GetLocal(0)      // get self
+|0023| GetProp(0)       // get self.a
 |0024| Data(0)          //
-|0025| Print            // print(self.a)
-|0026| Return
+|0025| Data(0)          //
+|0026| Data(0)          //
+|0027| Print            // print(self.a)
+|0028| Return

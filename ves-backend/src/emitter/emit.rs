@@ -1,4 +1,8 @@
-use std::{borrow::Cow, collections::HashMap, rc::Rc};
+use std::{
+    borrow::{BorrowMut, Cow},
+    collections::HashMap,
+    rc::Rc,
+};
 
 use crate::{
     gc::{GcObj, VesGc},
@@ -639,7 +643,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     /// - `@done` is should return `true` if there are no more values, and `false` otherwise
     fn emit_foreach_loop(&mut self, info: &'b ForEach<'a>, span: Span) -> Result<()> {
         self.state.begin_scope();
-        let mut comparison_op = Opcode::LessThan;
+        let mut comparison_op = Opcode::IsCmpLessThan;
         match info.iterator {
             IteratorKind::Range(Range {
                 ref start,
@@ -648,7 +652,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 inclusive,
             }) => {
                 if inclusive {
-                    comparison_op = Opcode::LessEqual
+                    comparison_op = Opcode::IsCmpLessEqual
                 };
                 // emit item initializer (e.g. the `i` from `for i in 0..10, 2 { ... }`)
                 // this is equivalent to `for i = 0, ...`
@@ -709,6 +713,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 self.state
                     .builder
                     .op(Opcode::GetLocal(end_local), span.clone());
+                self.state.builder.op(Opcode::Compare, span.clone());
+                self.state.builder.op(Opcode::Negate, span.clone());
                 self.state.builder.op(comparison_op, span.clone());
                 self.state
                     .builder
@@ -957,26 +963,31 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.emit_logical_expr(op, right, span)?;
         } else {
             self.emit_expr(right, true)?;
-            self.state.builder.op(
-                match op {
-                    BinOpKind::In => Opcode::HasProperty,
-                    BinOpKind::Add => Opcode::Add,
-                    BinOpKind::Subtract => Opcode::Subtract,
-                    BinOpKind::Multiply => Opcode::Multiply,
-                    BinOpKind::Divide => Opcode::Divide,
-                    BinOpKind::Remainder => Opcode::Remainder,
-                    BinOpKind::Power => Opcode::Power,
-                    BinOpKind::Equal => Opcode::Equal,
-                    BinOpKind::NotEqual => Opcode::NotEqual,
-                    BinOpKind::LessThan => Opcode::LessThan,
-                    BinOpKind::LessEqual => Opcode::LessEqual,
-                    BinOpKind::GreaterThan => Opcode::GreaterThan,
-                    BinOpKind::GreaterEqual => Opcode::GreaterEqual,
-                    BinOpKind::Is => Opcode::CompareType,
-                    BinOpKind::And | BinOpKind::Or => unreachable!(),
-                },
-                span,
-            );
+            let op = match op {
+                BinOpKind::In => Opcode::HasProperty,
+                BinOpKind::Add => Opcode::Add,
+                BinOpKind::Subtract => Opcode::Subtract,
+                BinOpKind::Multiply => Opcode::Multiply,
+                BinOpKind::Divide => Opcode::Divide,
+                BinOpKind::Remainder => Opcode::Remainder,
+                BinOpKind::Power => Opcode::Power,
+                BinOpKind::Is => Opcode::CompareType,
+                BinOpKind::And | BinOpKind::Or => unreachable!(),
+                _ => {
+                    self.state.builder.op(Opcode::Compare, span.clone());
+                    self.state.builder.op(Opcode::Negate, span.clone());
+                    match op {
+                        BinOpKind::Equal => Opcode::IsCmpEqual,
+                        BinOpKind::NotEqual => Opcode::IsCmpNotEqual,
+                        BinOpKind::LessThan => Opcode::IsCmpLessThan,
+                        BinOpKind::LessEqual => Opcode::IsCmpLessEqual,
+                        BinOpKind::GreaterThan => Opcode::IsCmpGreaterThan,
+                        BinOpKind::GreaterEqual => Opcode::IsCmpGreaterEqual,
+                        _ => unreachable!(),
+                    }
+                }
+            };
+            self.state.builder.op(op, span);
         }
         Ok(())
     }
