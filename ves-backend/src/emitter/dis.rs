@@ -81,13 +81,14 @@ where
             | Opcode::Divide
             | Opcode::Power
             | Opcode::Remainder
-            | Opcode::Equal
-            | Opcode::NotEqual
+            | Opcode::Compare
+            | Opcode::IsCmpEqual
             | Opcode::CompareType
-            | Opcode::LessEqual
-            | Opcode::LessThan
-            | Opcode::GreaterEqual
-            | Opcode::GreaterThan
+            | Opcode::IsCmpNotEqual
+            | Opcode::IsCmpLessThan
+            | Opcode::IsCmpLessEqual
+            | Opcode::IsCmpGreaterThan
+            | Opcode::IsCmpGreaterEqual
             | Opcode::Return
             | Opcode::GetItem
             | Opcode::SetItem

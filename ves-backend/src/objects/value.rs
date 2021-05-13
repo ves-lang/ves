@@ -32,7 +32,7 @@ pub struct TypeId(pub usize);
 /// However, for the primitive types, the additional cost is only a single if branch.
 #[derive(Debug, Clone, Copy)]
 pub enum Value {
-    /// A 48-bit integer
+    /// A 32-bit integer
     Int(i32),
     /// A 62-bit floating pointer number. The other 2 bits are reserved for NaN Boxing.
     Float(f64),
@@ -303,6 +303,18 @@ impl<T: FromVes> FromVes for Option<T> {
             Value::None => Ok(None),
             _ => Some(FromVes::from_ves(v)).transpose(),
         }
+    }
+}
+
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
+        Self::Int(v)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(v: f64) -> Self {
+        Self::Float(v)
     }
 }
 

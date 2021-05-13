@@ -9,9 +9,11 @@ print((fn()=>1)() + (fn()=>1)() == (fn()=>2)());
 |0004| Add              // 1 + 1
 |0005| GetConst(<fn [fn@1:37]>)
 |0006| Call(0)
-|0007| Equal            // == 2
-|0008| Print
-|0009| Return
+|0007| Compare          // == 2
+|0008| Negate
+|0009| IsCmpEqual
+|0010| Print
+|0011| Return
 >>>>>> [fn@1:8]
 |0000| Pop              // pop receiver 
 |0001| PushInt32(1)   

@@ -1,9 +1,9 @@
 print("case: ==")
-print(1 == 1 - 1, true);
-print(1n == 1 - 1, true);
-print(1 == 1n - 1, true);
-print(1 == 1 - 1n, true);
-print(1n == 1n - 1n, true);
+print(0 == 1 - 1, true);
+print(0n == 1 - 1, true);
+print(0 == 1n - 1, true);
+print(0 == 1 - 1n, true);
+print(0n == 1n - 1n, true);
 
 print("case: !=")
 print(1n != 1n + 1n, true);

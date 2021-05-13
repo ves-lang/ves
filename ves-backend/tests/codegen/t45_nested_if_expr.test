@@ -28,26 +28,28 @@ print(v)
 |0012| GetConst(int)    // "int"
 |0013| SetLocal(0)      // [[VALUE]] = "int"
 |0014| Pop              // pop "int"
-|0015| Jump(30)         // jump @if.end
+|0015| Jump(32)         // jump @if.end
 // @if.other0:
 |0016| Pop              // pop v is Int
 |0017| GetGlobal(1)     // get v
 |0018| PushNone         // 
-|0019| Equal            // v == none
-|0020| JumpIfFalse(26)  // if false jump @if.other1
-|0021| Pop              // pop v == none
-|0022| GetConst(none)   // "none"
-|0023| SetLocal(0)      // [[VALUE]] = "none"
-|0024| Pop              // pop "none"
-|0025| Jump(30)         // jump @end
+|0019| Compare          // v == none
+|0020| Negate           // (skipped)
+|0021| IsCmpEqual       // v == none
+|0022| JumpIfFalse(28)  // if false jump @if.other1
+|0023| Pop              // pop v == none
+|0024| GetConst(none)   // "none"
+|0025| SetLocal(0)      // [[VALUE]] = "none"
+|0026| Pop              // pop "none"
+|0027| Jump(32)         // jump @end
 // @if.other1:
-|0026| Pop              // pop v == none
-|0027| GetConst(unknown)// "unknown"
-|0028| SetLocal(0)      // [[VALUE]] = "unknown"
-|0029| Pop              // pop "unknown"
+|0028| Pop              // pop v == none
+|0029| GetConst(unknown)// "unknown"
+|0030| SetLocal(0)      // [[VALUE]] = "unknown"
+|0031| Pop              // pop "unknown"
 // @if.end:
-|0030| SetGlobal(1)     // v = [[VALUE]]
-|0031| Pop              // pop [[VALUE]]
-|0032| GetGlobal(1)     // get v
-|0033| Print            // print(v)
-|0034| Return
+|0032| SetGlobal(1)     // v = [[VALUE]]
+|0033| Pop              // pop [[VALUE]]
+|0034| GetGlobal(1)     // get v
+|0035| Print            // print(v)
+|0036| Return

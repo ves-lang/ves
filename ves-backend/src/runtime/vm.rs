@@ -75,6 +75,25 @@ macro_rules! num_bin_op {
     };
 }
 
+macro_rules! cmp_op {
+    ($self:ident, $result:expr, $int:expr, $float:expr, $none:expr) => {
+        let top = $result;
+        #[allow(clippy::redundant_closure_call)]
+        if top.is_int() {
+            $self.push(($int)(top.as_int_unchecked()));
+        } else if top.is_float() {
+            $self.push(($float)(top.as_float_unchecked()));
+        } else if top.is_none() {
+            $none
+        } else {
+            return Err($self.error(format!(
+                "@cmp must return a number, but produced {}",
+                top.unbox()
+            )));
+        }
+    };
+}
+
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
     fn execute(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, VesError>;
@@ -206,12 +225,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::AddOne => self.add1()?,
                 Opcode::SubtractOne => self.sub1()?,
                 Opcode::Not => self.not()?,
-                Opcode::Equal => self.equal()?,
-                Opcode::NotEqual => self.not_equal()?,
-                Opcode::LessThan => self.less_than()?,
-                Opcode::LessEqual => self.less_equal()?,
-                Opcode::GreaterThan => self.greater_than()?,
-                Opcode::GreaterEqual => self.greater_equal()?,
+                Opcode::Compare => self.compare()?,
+                Opcode::IsCmpEqual => self.equal()?,
+                Opcode::IsCmpNotEqual => self.not_equal()?,
+                Opcode::IsCmpLessThan => self.less_than()?,
+                Opcode::IsCmpLessEqual => self.less_equal()?,
+                Opcode::IsCmpGreaterThan => self.greater_than()?,
+                Opcode::IsCmpGreaterEqual => self.greater_equal()?,
                 Opcode::CompareType => self.compare_type()?,
                 Opcode::HasProperty => unimplemented!(),
                 Opcode::Try => unimplemented!(),
@@ -352,7 +372,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         right: NanBox,
         // NOTE: has to return an option since ves calls wouldn't be able to return a value immediately
     ) -> Result<Option<Value>, VesError> {
-        let inst = self.ip;
+        let inst = self.inst();
         if let Ok(method) = self.get_magic_method(left, &lhs_method, inst) {
             self.pop_n(2);
             self.push_many([NanBox::from(method), left, right]);
@@ -518,34 +538,56 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         todo!()
     }
 
-    fn equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek_at(1);
-        let left = *self.peek();
+    fn compare(&mut self) -> Result<(), VesError> {
+        let right = *self.peek();
+        let left = *self.peek_at(1);
 
         // If two values have the same bit representation, they guaranteed to be equal, which implies:
         // - their types are the same
         // - their values are the same
         // Also, if neither of the values is a pointer, they are guaranteed to be different if their bit representations are different.
-        if left == right || !(left.is_ptr() || right.is_ptr()) {
+        if left == right {
             self.pop_n(2);
-            self.push(left == right);
+            self.push(0);
+            // Skip the negate instruction
+            self.ip += 1;
+            return Ok(());
+        } else if !(left.is_ptr() || right.is_ptr()) {
+            self.pop_n(2);
+            let result = match (left.unbox(), right.unbox()) {
+                (Value::Int(l), Value::Int(r)) => (l - r).signum().into(),
+                (Value::Int(l), Value::Float(r)) => (l as f64 - r).into(),
+                (Value::Float(l), Value::Int(r)) => (l - r as f64).into(),
+                (Value::Float(l), Value::Float(r)) => (l - r).into(),
+                _ => Value::None,
+            };
+            self.push(result);
+            // Skip the negate instruction
+            self.ip += 1;
             return Ok(());
         }
 
         // Objects may override @cmp
         let method_name = self.symbols.cmp;
-        let inst = self.ip;
-        if let Ok(method) = self.get_magic_method(left, &method_name, inst) {
+        let inst = self.inst();
+        let jump_by = if let Ok(method) = self.get_magic_method(left, &method_name, inst) {
             self.pop_n(2);
             self.push_many([method.into(), left, right]);
+            1 // have to jump by 1 to land on the mapping instruction
         } else if let Ok(method) = self.get_magic_method(right, &method_name, inst) {
             self.pop_n(2);
             // We have to reverse the order of the arguments since the receiver goes first
             self.push_many([method.into(), right, left]);
+            0 // no need to jump, have to land onto the negate
         } else {
-            self.push(false);
+            self.push(NanBox::none());
+            // Skip the negate instruction
+            self.ip += 1;
             return Ok(());
         };
+
+        // Adjust the ip before calling the @cmp so its return address can be set correctly.
+        self.ip += jump_by;
 
         if self.call(2)? {
             let result = self.pop();
@@ -562,47 +604,57 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
+    fn equal(&mut self) -> Result<(), VesError> {
+        cmp_op!(self, self.pop(), |x| x == 0, |x| x == 0.0, self.push(false));
+        Ok(())
+    }
+
     fn not_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-        self.pop_n(2);
-        self.push(NanBox::bool(left != right));
+        cmp_op!(self, self.pop(), |x| x != 0, |x| x != 0.0, self.push(true));
         Ok(())
     }
 
     fn less_than(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-
-        num_bin_op!(self, left, right, |l, r| Ok(l < r), |l, r| l < r);
-
+        cmp_op!(
+            self,
+            self.pop(),
+            |x| x < 0,
+            |x| x < 0.0,
+            return Err(self.error("The operands do not support ordering."))
+        );
         Ok(())
     }
 
     fn less_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-
-        num_bin_op!(self, left, right, |l, r| Ok(l <= r), |l, r| l <= r);
-
+        cmp_op!(
+            self,
+            self.pop(),
+            |x| x <= 0,
+            |x| x <= 0.0,
+            return Err(self.error("The operands do not support ordering."))
+        );
         Ok(())
     }
 
     fn greater_than(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-
-        num_bin_op!(self, left, right, |l, r| Ok(l > r), |l, r| l > r);
-
+        cmp_op!(
+            self,
+            self.pop(),
+            |x| x > 0,
+            |x| x > 0.0,
+            return Err(self.error("The operands do not support ordering."))
+        );
         Ok(())
     }
 
     fn greater_equal(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
-
-        num_bin_op!(self, left, right, |l, r| Ok(l >= r), |l, r| l >= r);
-
+        cmp_op!(
+            self,
+            self.pop(),
+            |x| x >= 0,
+            |x| x >= 0.0,
+            return Err(self.error("The operands do not support ordering."))
+        );
         Ok(())
     }
 
@@ -885,6 +937,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn stringify(&mut self, value: &Value) -> Result<std::borrow::Cow<'static, str>, VesError> {
         // TODO: call the magic method here
         Ok(value.to_string().into())
+    }
+
+    #[inline]
+    fn inst(&self) -> usize {
+        self.ip - 1
     }
 
     #[cfg(feature = "fast")]
