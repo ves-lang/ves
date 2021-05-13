@@ -1,0 +1,15 @@
+print("add" in none)
+print("add" in 0)
+print("add" in 0n)
+print("radd" in 100n)
+print("cmp" in -999n)
+
+// TODO: more tests
+
+%output
+
+false
+false
+true
+true
+true

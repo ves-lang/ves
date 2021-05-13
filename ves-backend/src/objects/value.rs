@@ -8,7 +8,7 @@ use crate::{
     VesObject,
 };
 
-use super::{ves_fn::ClosureDescriptor, ves_int::VesInt};
+use super::{ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr};
 
 // TODO: user-facing error type
 #[derive(Clone, PartialEq)]
@@ -152,6 +152,15 @@ impl Value {
         } else {
             None
         }
+    }
+
+    pub fn as_str(&self) -> Option<&VesStr> {
+        if let Self::Ref(v) = self {
+            if let VesObject::Str(v) = &**v {
+                return Some(v);
+            }
+        }
+        None
     }
 
     pub fn as_bigint(&self) -> Option<&VesInt> {

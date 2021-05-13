@@ -234,7 +234,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::IsCmpGreaterThan => self.greater_than()?,
                 Opcode::IsCmpGreaterEqual => self.greater_equal()?,
                 Opcode::CompareType => self.compare_type()?,
-                Opcode::HasProperty => unimplemented!(),
+                Opcode::HasProperty => self.has_property()?,
                 Opcode::Try => unimplemented!(),
                 Opcode::WrapOk => unimplemented!(),
                 Opcode::WrapErr => unimplemented!(),
@@ -512,6 +512,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             return Ok(());
         } else if let Some(operand) = operand.unbox().as_bigint_mut() {
             operand.value = -&operand.value;
+            return Ok(());
         }
 
         todo!()
@@ -670,6 +671,30 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let obj = self.alloc(interpolated.into());
         self.push(obj);
         Ok(())
+    }
+
+    fn has_property(&mut self) -> Result<(), VesError> {
+        let object = self.pop();
+        let name = self.pop().unbox();
+
+        if name.as_str().is_some() {
+            if !object.is_ptr() {
+                self.push(false);
+                return Ok(());
+            }
+            let name = VesStrView::new(*name.as_ref().unwrap());
+            let has = self
+                .has_field_with_ic_bypass(name, &**object.unbox().as_ref().unwrap())
+                .map(|_| true)
+                .unwrap_or(false);
+            self.push(has);
+            Ok(())
+        } else {
+            Err(self.error(format!(
+                "Expected the property name to be a string, but got {}",
+                name
+            )))
+        }
     }
 
     fn compare_type(&mut self) -> Result<(), VesError> {
@@ -844,6 +869,31 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             _ => value.to_string().into(),
         };
         Ok(result)
+    }
+
+    /// Returns `true` if the property with the given name exists on the given object, without using the IC.
+    fn has_field_with_ic_bypass(
+        &mut self,
+        name: VesStrView,
+        object: &VesObject,
+    ) -> Result<bool, VesError> {
+        let prop = match object {
+            VesObject::Str(_) => todo!(),
+            VesObject::Int(i) => i.props().get_slot_index(&name).is_some(),
+            VesObject::Instance(i) => i.get_slot_index(&name).is_some(),
+            VesObject::Fn(_)
+            | VesObject::FnNative(_)
+            | VesObject::Closure(_)
+            | VesObject::Struct(_) => {
+                return Err(self.error(format!(
+                    "Cannot access a field on an object of type {}",
+                    object
+                )))
+            }
+            VesObject::ClosureDescriptor(_) => unreachable!(),
+            VesObject::StructDescriptor(_) => unreachable!(),
+        };
+        Ok(prop)
     }
 
     fn get_const(&mut self, idx: u32) {
