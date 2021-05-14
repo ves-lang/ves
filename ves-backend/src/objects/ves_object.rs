@@ -17,7 +17,7 @@ use crate::{
 };
 
 use super::{
-    ves_fn::{Args, Arity, ClosureDescriptor, VesClosure, VesFn},
+    ves_fn::{Args, Arity, ClosureDescriptor, VesClosure, VesFn, VesFnBound},
     ves_int::VesInt,
     ves_struct::StructDescriptor,
 };
@@ -44,6 +44,8 @@ pub enum VesObject {
     Fn(VesFn),
     /// A native function.
     FnNative(Box<dyn FnNative>),
+    /// A bound function.
+    FnBound(VesFnBound),
     /// A function with captures
     Closure(VesClosure),
     /// An object which describes how a closure should be created
@@ -143,6 +145,11 @@ impl VesObject {
     }
 
     /// Safety: The caller *must* ensure that `self` is the right variant
+    pub fn as_instance_mut_unchecked(&mut self) -> &mut VesInstance {
+        crate::unwrap_unchecked!(self, Instance)
+    }
+
+    /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_struct_unchecked(&self) -> &VesStruct {
         crate::unwrap_unchecked!(self, Struct)
     }
@@ -205,6 +212,11 @@ impl VesObject {
     pub fn is_closure_descriptor(&self) -> bool {
         matches!(self, Self::ClosureDescriptor(..))
     }
+
+    /// Returns `true` if the ves_object is [`Closure`].
+    pub fn is_closure(&self) -> bool {
+        matches!(self, Self::Closure(..))
+    }
 }
 
 impl From<VesStr> for VesObject {
@@ -255,6 +267,12 @@ impl From<VesClosure> for VesObject {
     }
 }
 
+impl From<VesFnBound> for VesObject {
+    fn from(v: VesFnBound) -> Self {
+        Self::FnBound(v)
+    }
+}
+
 impl From<VesFn> for VesObject {
     fn from(v: VesFn) -> Self {
         Self::Fn(v)
@@ -287,6 +305,7 @@ unsafe impl Trace for VesObject {
             VesObject::Instance(i) => Trace::trace(i, tracer),
             VesObject::Struct(s) => Trace::trace(s, tracer),
             VesObject::Fn(f) => f.trace(tracer),
+            VesObject::FnBound(f) => f.trace(tracer),
             VesObject::Closure(c) => c.trace(tracer),
             // not traceable, only used as a constant
             VesObject::StructDescriptor(_) => (),
@@ -302,6 +321,7 @@ unsafe impl Trace for VesObject {
             VesObject::Instance(i) => i.after_forwarding(),
             VesObject::Struct(s) => s.after_forwarding(),
             VesObject::Fn(f) => f.after_forwarding(),
+            VesObject::FnBound(f) => f.after_forwarding(),
             VesObject::Closure(c) => c.after_forwarding(),
             // not traceable, only used as a constant
             VesObject::StructDescriptor(_) => (),
@@ -319,6 +339,7 @@ impl Display for VesObject {
             VesObject::Instance(v) => v.fmt(f),
             VesObject::Struct(v) => v.fmt(f),
             VesObject::Fn(v) => v.fmt(f),
+            VesObject::FnBound(v) => v.fmt(f),
             VesObject::FnNative(v) => write!(f, "<fn native at {:p}>", v),
             VesObject::Closure(v) => v.fmt(f),
             VesObject::StructDescriptor(v) => v.fmt(f),
@@ -359,6 +380,11 @@ impl std::fmt::Debug for VesObject {
             }
             (&VesObject::Fn(ref __self_0),) => {
                 let debug_trait_builder = &mut Formatter::debug_tuple(f, "Fn");
+                let _ = DebugTuple::field(debug_trait_builder, &&(*__self_0));
+                DebugTuple::finish(debug_trait_builder)
+            }
+            (&VesObject::FnBound(ref __self_0),) => {
+                let debug_trait_builder = &mut Formatter::debug_tuple(f, "FnBound");
                 let _ = DebugTuple::field(debug_trait_builder, &&(*__self_0));
                 DebugTuple::finish(debug_trait_builder)
             }

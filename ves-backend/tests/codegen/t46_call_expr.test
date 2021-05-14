@@ -7,28 +7,31 @@ f(0, 0, 0, ...rest);
 
 %output
 
-|0000| PushNone         // 
-|0001| SetGlobal(0)     // mut f
-|0002| Pop              // 
-|0003| GetGlobal(0)     // get f
-|0004| Call(0)          // f()
-|0005| Pop              // pop result of f()
-|0006| GetGlobal(0)     // get f
-|0007| PushInt32(0)   // push 0
-|0008| PushInt32(0)   // push 0
-|0009| PushInt32(0)   // push 0
-|0010| Call(3)          // f(0, 0, 0)
-|0011| Pop              // pop result of f(0, 0, 0)
-|0012| PushNone         // 
-|0013| SetGlobal(1)     // mut rest
-|0014| Pop              // 
-|0015| GetGlobal(0)     // get f
-|0016| PushInt32(0)   // push 0
-|0017| PushInt32(0)   // push 0
-|0018| PushInt32(0)   // push 0
-|0019| GetGlobal(1)     // get rest
-|0020| Spread           // ...rest
-|0021| Call(4)          // f(0, 0, 0, ...rest)
-|0022| Pop              // pop result of f(0, 0, 0, ...rest)
-|0023| PushNone
-|0024| Return
+|0000| PushNone
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| GetGlobal(0)
+|0004| PushNone
+|0005| Call(0)
+|0006| Pop
+|0007| GetGlobal(0)
+|0008| PushNone
+|0009| PushInt32(0)
+|0010| PushInt32(0)
+|0011| PushInt32(0)
+|0012| Call(3)
+|0013| Pop
+|0014| PushNone
+|0015| SetGlobal(1)
+|0016| Pop
+|0017| GetGlobal(0)
+|0018| PushNone
+|0019| PushInt32(0)
+|0020| PushInt32(0)
+|0021| PushInt32(0)
+|0022| GetGlobal(1)
+|0023| Spread
+|0024| Call(4)
+|0025| Pop
+|0026| PushNone
+|0027| Return

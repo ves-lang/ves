@@ -95,9 +95,10 @@ impl Value {
             Value::Ref(v) => match &**v {
                 VesObject::Str(_) => TypeId(4),
                 VesObject::Int(_) => TypeId(5),
-                VesObject::Fn(_) => TypeId(6),
-                VesObject::FnNative(_) => TypeId(6),
-                VesObject::Closure(_) => TypeId(6),
+                VesObject::Fn(_)
+                | VesObject::FnBound(_)
+                | VesObject::FnNative(_)
+                | VesObject::Closure(_) => TypeId(6),
                 VesObject::Instance(v) => TypeId(v.ty_ptr().ptr().as_ptr() as usize),
                 VesObject::Struct(_) => TypeId(v.ptr().as_ptr() as usize),
                 VesObject::StructDescriptor(_) => unreachable!(),

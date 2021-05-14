@@ -30,6 +30,11 @@ impl<L: PropertyLookup, V, A: Allocator> CacheLayer<L, V, A> {
     }
 
     #[inline]
+    pub fn slots(&self) -> &Vec<V, A> {
+        &self.slots
+    }
+
+    #[inline]
     pub fn lookup(&self) -> &L {
         &self.lookup
     }

@@ -537,17 +537,22 @@ impl<'a> Resolver<'a> {
     // ugh...
     #[rustfmt::skip]
     fn validate_magic_method(&mut self, info: &FnInfo<'a>, ex: &mut ErrCtx) {
-        // check if the name is a known magic method + if the params match it
-        // TODO: provide a nice error message
-        lazy_static::lazy_static! {
-            static ref TABLE: HashSet<&'static str> = {
-                let mut s = HashSet::new();
-                s.insert("@iter");
-                s.insert("@done");
-                s.insert("@next");
-                s
-            };
+        macro_rules! magic_table {
+            ($($symbol:ident),*) => {
+                lazy_static::lazy_static! {
+                    static ref TABLE: HashSet<&'static str> = {
+                        let mut s = HashSet::new();
+                        $( s.insert(concat!("@", stringify!($symbol))); )*
+                        s
+                    };
+                }
+            }
+        }
+
+        magic_table! {
+            init, add, radd, sub, rsub, mul, rmul, div, rdiv, rem, rrem, pow, rpow, cmp, str
         };
+
         if !TABLE.contains(info.name.lexeme.as_ref()) {
             Self::error_of_kind(
                 VesErrorKind::BadMagicMethod,

@@ -51,7 +51,7 @@ macro_rules! int_arithm_method {
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(2, 0, false)
+            $crate::objects::ves_fn::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, LHS $op:tt) => {{
@@ -82,7 +82,7 @@ macro_rules! int_arithm_method {
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(2, 0, false)
+            $crate::objects::ves_fn::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, RHS $op:tt) => {{
@@ -110,7 +110,7 @@ macro_rules! int_arithm_method {
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(2, 0, false)
+            $crate::objects::ves_fn::Arity::new(1, 0, false)
         ))
     }};
 }

@@ -4,26 +4,27 @@ let v = { a: 0, b: 0, ...obj, [f()]: 0 }
 
 %output
 
-|0000| PushNone         // 
-|0001| SetGlobal(0)     // mut f
-|0002| Pop              // 
-|0003| PushInt32(0)   // push 0
-|0004| SetGlobal(1)     // set obj
-|0005| Pop              // 
-|0006| CreateEmptyMap   // create map
-|0007| GetConst(a)      // push "a"
-|0008| PushInt32(0)   // push 0
-|0009| MapInsert        // insert into map
-|0010| GetConst(b)      // push "b"
-|0011| PushInt32(0)   // push 0
-|0012| MapInsert        // insert into map
-|0013| GetGlobal(1)     // get obj
-|0014| MapExtend        // extend map with entries from obj
-|0015| GetGlobal(0)     // get f
-|0016| Call(0)          // f()
-|0017| PushInt32(0)   // push 0
-|0018| MapInsert        // insert into map
-|0019| SetGlobal(2)     // set v
-|0020| Pop              // pop map
-|0021| PushNone
-|0022| Return
+|0000| PushNone
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| PushInt32(0)
+|0004| SetGlobal(1)
+|0005| Pop
+|0006| CreateEmptyMap
+|0007| GetConst(a)
+|0008| PushInt32(0)
+|0009| MapInsert
+|0010| GetConst(b)
+|0011| PushInt32(0)
+|0012| MapInsert
+|0013| GetGlobal(1)
+|0014| MapExtend
+|0015| GetGlobal(0)
+|0016| PushNone
+|0017| Call(0)
+|0018| PushInt32(0)
+|0019| MapInsert
+|0020| SetGlobal(2)
+|0021| Pop
+|0022| PushNone
+|0023| Return

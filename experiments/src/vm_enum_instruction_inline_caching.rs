@@ -2,6 +2,7 @@ use ves_backend::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
     objects::{
+        ves_fn::Arity,
         ves_str::view::VesStrView,
         ves_struct::{VesInstance, VesStruct},
     },
@@ -52,7 +53,7 @@ impl<T: VesGc> VmEnum<T> {
         fields.push(VesStrView::new(gc.alloc_permanent("a")));
         fields.push(VesStrView::new(gc.alloc_permanent("b")));
         let name = VesStrView::new(gc.alloc_permanent("Fib"));
-        let ty = VesStruct::new(name, &fields, 0);
+        let ty = VesStruct::new(name, Arity::none(), &fields, 0);
         let ty = gc.alloc_permanent(ty);
         let ic = InlineCache::new(instructions.len());
         Self {
@@ -313,21 +314,23 @@ impl<T: VesGc> VmEnum<T> {
             // Fast path
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
             if struct_ptr == ptr {
-                *instance.get_by_slot_index_unchecked_mut(slot as usize) = self.pop().unbox();
+                *instance
+                    .fields_mut()
+                    .get_by_slot_index_unchecked_mut(slot as usize) = self.pop().unbox();
                 return;
             }
 
             // Slow path
             let name = n.unbox().as_ptr().unwrap();
             let name = VesStrView::new(name);
-            let slot = match instance.get_slot_index(&name) {
+            let slot = match instance.fields().get_slot_index(&name) {
                 Some(slot) => slot,
                 None => {
                     return self.error(format!("Object is missing the field `{}`.", name.str()))
                 }
             } as usize;
 
-            *instance.get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
+            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
             self.update_inst_ic_cache(struct_ptr, slot as u32);
             return;
         }
@@ -343,13 +346,15 @@ impl<T: VesGc> VmEnum<T> {
             self.error(format!("{:?} is not an object", obj.unbox()));
             return;
         }
-        let obj = unsafe { obj.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &*obj {
+        let mut obj = unsafe { obj.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *obj {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             if struct_ptr == ptr {
                 self.push(NanBox::new(
-                    *instance.get_by_slot_index_unchecked(slot as usize),
+                    *instance
+                        .fields_mut()
+                        .get_by_slot_index_unchecked(slot as usize),
                 ));
                 return;
             }
@@ -357,14 +362,14 @@ impl<T: VesGc> VmEnum<T> {
             // Slow path
             let name = n.unbox().as_ptr().unwrap();
             let name = VesStrView::new(name);
-            let slot = match instance.get_slot_index(&name) {
+            let slot = match instance.fields().get_slot_index(&name) {
                 Some(slot) => slot,
                 None => {
                     return self.error(format!("Object is missing the field `{}`.", name.str()))
                 }
             } as usize;
 
-            let value = NanBox::new(*instance.get_by_slot_index_unchecked(slot));
+            let value = NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot));
             self.update_inst_ic_cache(struct_ptr, slot as u32);
             self.push(value);
             return;
