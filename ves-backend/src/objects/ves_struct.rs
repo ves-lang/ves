@@ -62,7 +62,7 @@ impl Eq for ViewKey {}
 pub struct StructDescriptor {
     pub name: VesStrView,
     pub fields: Vec<VesStrView, ProxyAllocator>,
-    // Isn't really need, just a micro-optimization
+    // Isn't really needed, just a micro-optimization
     pub n_methods: usize,
     /// Field arity (rest field is ignored)
     pub arity: Arity,
