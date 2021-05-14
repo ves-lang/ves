@@ -19,11 +19,8 @@ struct Z(a, b, c = 10) {
 
 print(Z)
 
-// TODO: instantiation
-// TODO: fields, method invocation, method binding
-
 %output
 
-<struct: S>
-<struct: Y>
-<struct: Z>
+<struct S>
+<struct Y>
+<struct Z>

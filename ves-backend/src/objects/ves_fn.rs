@@ -21,6 +21,33 @@ use crate::{
 use super::{peel::Peeled, ves_str::view::VesStrView};
 
 #[derive(Debug)]
+pub struct VesFnBound {
+    r#fn: GcObj,
+    receiver: Value,
+}
+impl VesFnBound {
+    pub fn new(r#fn: GcObj, receiver: Value) -> Self {
+        Self { r#fn, receiver }
+    }
+
+    #[inline]
+    pub fn inner(&self) -> GcObj {
+        self.r#fn
+    }
+
+    #[inline]
+    pub fn receiver(&self) -> Value {
+        self.receiver
+    }
+}
+unsafe impl Trace for VesFnBound {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        self.r#fn.trace(tracer);
+        self.receiver.trace(tracer);
+    }
+}
+
+#[derive(Debug)]
 pub struct VesClosure {
     r#fn: Peeled<VesFn>,
     pub captures: Vec<Value>,
@@ -152,6 +179,12 @@ impl Display for VesFn {
     }
 }
 
+impl Display for VesFnBound {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "<fn {} -> {}>", self.r#fn, self.receiver)
+    }
+}
+
 impl Display for VesClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.r#fn.get().fmt(f)
@@ -258,6 +291,14 @@ macro_rules! impl_try_from_args_for_tuple {
         }
     };
 }
+
+// ████████  ██████  ██████   ██████
+//    ██    ██    ██ ██   ██ ██    ██
+//    ██    ██    ██ ██   ██ ██    ██
+//    ██    ██    ██ ██   ██ ██    ██
+//    ██     ██████  ██████   ██████
+//
+// TODO: change native args deserialization to handle implicit receiver for non-instance functions
 impl_try_from_args_for_tuple!();
 impl_try_from_args_for_tuple!(1, A);
 impl_try_from_args_for_tuple!(2, A, B);
@@ -276,7 +317,6 @@ pub trait Callable<'v, A>
 where
     A: TryFrom<Args<'v>>,
 {
-    // TODO: accept some kind of VmInterface here, for allocating objects and so on
     fn ves_call(&self, vm: &'v mut dyn VmInterface, args: Args<'v>) -> Result<Value, RuntimeError>;
 }
 

@@ -3,30 +3,33 @@ print((fn()=>1)() + (fn()=>1)() == (fn()=>2)());
 %output
 
 |0000| GetConst(<fn [fn@1:8]>)
-|0001| Call(0)
-|0002| GetConst(<fn [fn@1:22]>)
-|0003| Call(0)
-|0004| Add              // 1 + 1
-|0005| GetConst(<fn [fn@1:37]>)
-|0006| Call(0)
-|0007| Compare          // == 2
-|0008| Negate
-|0009| IsCmpEqual
-|0010| Print
-|0011| PushNone
-|0012| Return
+|0001| PushNone
+|0002| Call(0)
+|0003| GetConst(<fn [fn@1:22]>)
+|0004| PushNone
+|0005| Call(0)
+|0006| Add
+|0007| GetConst(<fn [fn@1:37]>)
+|0008| PushNone
+|0009| Call(0)
+|0010| Compare
+|0011| Negate
+|0012| IsCmpEqual
+|0013| Print
+|0014| PushNone
+|0015| Return
 >>>>>> [fn@1:8]
-|0000| PushInt32(1)   
-|0001| Return           // return 1
+|0000| PushInt32(1)
+|0001| Return
 |0002| PushNone
 |0003| Return
 >>>>>> [fn@1:22]
 |0000| PushInt32(1)
-|0001| Return           // return 1
+|0001| Return
 |0002| PushNone
 |0003| Return
 >>>>>> [fn@1:37]
 |0000| PushInt32(2)
-|0001| Return           // return 2
+|0001| Return
 |0002| PushNone
 |0003| Return

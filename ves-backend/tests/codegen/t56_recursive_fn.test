@@ -18,50 +18,58 @@ test3(0);
 %output
 
 |0000| GetConst(<fn test>)
-|0001| SetGlobal(0)     // fn test() { ... }
+|0001| SetGlobal(0)
 |0002| Pop
 |0003| GetGlobal(0)
-|0004| Call(0)
-|0005| Pop
-|0006| CreateClosure(<fn test2>, 1)
-|0007| Call(0)          // (fn test2() { ... })();
-|0008| Pop
-|0009| GetConst(<fn test3>)
-|0010| SetGlobal(1)
-|0011| Pop
-|0012| GetGlobal(1)
-|0013| PushInt32(0)
-|0014| Call(1)          // (fn test3() { ... })(0);
-|0015| Pop
-|0016| PushNone
-|0017| Return
+|0004| PushNone
+|0005| Call(0)
+|0006| Pop
+|0007| CreateClosure(<fn test2>, 1)
+|0008| PushNone
+|0009| Call(0)
+|0010| Pop
+|0011| GetConst(<fn test3>)
+|0012| SetGlobal(1)
+|0013| Pop
+|0014| GetGlobal(1)
+|0015| PushNone
+|0016| PushInt32(0)
+|0017| Call(1)
+|0018| Pop
+|0019| PushNone
+|0020| Return
 >>>>>> test
 |0000| GetGlobal(0)
-|0001| Call(0)          // test();
-|0002| Pop
-|0003| PushNone
-|0004| Return
->>>>>> test2
-|0000| GetCapture(0)    // test2 is an capture because it exists only as a local when its declared
-|0001| Call(0)          // test2();
-|0002| Pop              // pop result
-|0003| PushNone
-|0004| Return
->>>>>> test3
-|0000| CreateClosure(<fn test4>, 1)
-|0001| PushInt32(1)
-|0002| Call(1)          // (fn test4(b) { ... })(1);
-|0003| Pop              // pop result
+|0001| PushNone
+|0002| Call(0)
+|0003| Pop
 |0004| PushNone
 |0005| Return
+>>>>>> test2
+|0000| GetCapture(0)
+|0001| PushNone
+|0002| Call(0)
+|0003| Pop
+|0004| PushNone
+|0005| Return
+>>>>>> test3
+|0000| CreateClosure(<fn test4>, 1)
+|0001| PushNone
+|0002| PushInt32(1)
+|0003| Call(1)
+|0004| Pop
+|0005| PushNone
+|0006| Return
 >>>>>> test4
 |0000| GetGlobal(1)
-|0001| PushInt32(2)
-|0002| Call(1)          // test3(2);
-|0003| Pop              // pop result
-|0004| GetCapture(0)
-|0005| PushInt32(3)
-|0006| Call(1)          // test4(3);
-|0007| Pop              // pop result
-|0008| PushNone
-|0009| Return
+|0001| PushNone
+|0002| PushInt32(2)
+|0003| Call(1)
+|0004| Pop
+|0005| GetCapture(0)
+|0006| PushNone
+|0007| PushInt32(3)
+|0008| Call(1)
+|0009| Pop
+|0010| PushNone
+|0011| Return

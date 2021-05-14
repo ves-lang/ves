@@ -12,7 +12,8 @@
 |0003| Return
 >>>>>> T.init
 |0000| GetCapture(0)
-|0001| PushInt32(0)
-|0002| Call(1)
-|0003| Print
-|0004| Return
+|0001| PushNone
+|0002| PushInt32(0)
+|0003| Call(1)
+|0004| Print
+|0005| Return

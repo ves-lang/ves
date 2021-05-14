@@ -1,15 +1,15 @@
-use std::usize;
+use std::{borrow::Cow, usize};
 
 use ves_error::VesError;
 
 use crate::{
-    emitter::emit::CaptureInfo,
+    emitter::{emit::CaptureInfo, opcode::Opcode},
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{
         peel::Peeled,
-        ves_fn::{ArgCountDiff, Args, VesClosure},
+        ves_fn::{ArgCountDiff, Args, VesClosure, VesFnBound},
         ves_str::view::VesStrView,
-        ves_struct::{VesStruct, ViewKey},
+        ves_struct::{VesInstance, VesStruct, ViewKey},
     },
     NanBox, Value, VesObject,
 };
@@ -18,7 +18,7 @@ use super::{call_frame::CallFrame, symbols::SymbolTable, Context, VmGlobals};
 
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
-const DEBUG_STACK_PRINT_SIZE: usize = 5;
+const DEBUG_STACK_PRINT_SIZE: usize = 20;
 
 macro_rules! num_bin_op {
     ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr, lhs => $lhs_method:ident, rhs => $rhs_method:ident) => {
@@ -41,9 +41,7 @@ macro_rules! num_bin_op {
             Some(result) => {
                 $self.push(NanBox::new(result));
             }
-            None => {
-                unimplemented!("The result may be none only when making ves calls");
-            }
+            None => (),
         }
     };
     ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr) => {
@@ -97,7 +95,12 @@ macro_rules! cmp_op {
 
 pub trait VmInterface {
     fn alloc(&mut self, obj: VesObject) -> GcObj;
-    fn execute(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, VesError>;
+    fn execute(
+        &mut self,
+        receiver: Option<Value>,
+        callee: Value,
+        args: Vec<Value>,
+    ) -> Result<Value, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -133,11 +136,19 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
             .expect("Failed to allocate the object")
     }
 
-    // TODO: currently the caller of this is responsible for setting up the stack for the call
-    // it should be handled automatically
-    fn execute(&mut self, callee: Value, args: Vec<Value>) -> Result<Value, VesError> {
+    fn execute(
+        &mut self,
+        receiver: Option<Value>,
+        callee: Value,
+        args: Vec<Value>,
+    ) -> Result<Value, VesError> {
         self.push(callee);
         let argc = args.len();
+        if let Some(receiver) = receiver {
+            self.push(receiver);
+        } else {
+            self.push(NanBox::none())
+        }
         self.stack.extend(args.into_iter().map(NanBox::from));
         if self.call(argc)? {
             return Ok(self.pop().unbox());
@@ -186,8 +197,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn run_dispatch_loop(&mut self, early_return: bool) -> Result<(), VesError> {
-        use crate::emitter::opcode::Opcode;
-
         let initial_call_stack_size = self.call_stack.len();
         // TODO: cache the code pointer here for speed
         // let len = self.frame_unchecked().code_len();
@@ -212,9 +221,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::SetCapture(idx) => self.set_capture(idx),
                 Opcode::SetGlobal(idx) => self.set_global(idx),
                 Opcode::GetMagicProp(_) => unimplemented!(),
-                Opcode::GetProp(_) => unimplemented!(),
-                Opcode::TryGetProp(_) => unimplemented!(),
-                Opcode::SetProp(_) => unimplemented!(),
+                Opcode::GetProp(n) => self.get_prop(n)?,
+                Opcode::TryGetProp(n) => unimplemented!(),
+                Opcode::SetProp(n) => self.set_prop(n)?,
                 Opcode::GetItem => unimplemented!(),
                 Opcode::SetItem => unimplemented!(),
                 Opcode::Add => self.add()?,
@@ -268,12 +277,18 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::Return => {
                     let frame = self.pop_frame();
                     self.ip = frame.return_address;
+                    let current_call_stack_size = self.call_stack.len();
 
                     let result = self.pop();
-                    drop(self.stack.drain(frame.stack_index..));
+                    if current_call_stack_size == 0 {
+                        drop(self.stack.drain(frame.stack_index..));
+                    } else {
+                        // -1 because this is returning from a function call
+                        // with an implicit receiver
+                        drop(self.stack.drain(frame.stack_index - 1..));
+                    }
                     self.push(result);
 
-                    let current_call_stack_size = self.call_stack.len();
                     let should_return_early =
                         early_return && current_call_stack_size == initial_call_stack_size;
                     if current_call_stack_size == 0 || should_return_early {
@@ -296,11 +311,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     fn get_magic_method(
         &mut self,
-        obj: NanBox,
+        value: NanBox,
         name: &VesStrView,
         inst: usize,
-    ) -> Result<GcObj, VesError> {
-        match obj.unbox() {
+    ) -> Result<Option<GcObj>, VesError> {
+        match value.unbox() {
             Value::Ref(mut obj) => {
                 let slot = self
                     .frame_unchecked_mut()
@@ -317,7 +332,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     VesObject::Int(i) => {
                         if let Some(slot) = slot {
                             let method = i.props().get_by_slot_index(slot).expect("Unexpected cache misconfiguration (expected to find a method according to the IC)");
-                            Ok(method.as_ptr().unwrap())
+                            Ok(Some(method.as_ptr().unwrap()))
                         } else {
                             let index = i.props().get_slot_index(&name);
                             if let Some(method) = index
@@ -338,7 +353,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                                 self.frame_unchecked_mut()
                                     .cache_mut()
                                     .update_property_cache(inst, index.unwrap(), obj);
-                                Ok(method)
+                                Ok(Some(method))
                             } else {
                                 Err({
                                     self.error(format!(
@@ -349,9 +364,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                         }
                     }
-                    VesObject::Instance(_) => {
-                        unimplemented!()
-                    }
+                    VesObject::Instance(i) => Ok(self.bind_method(i, name, value.unbox())),
                     rest => Err(self.error(format!(
                         "Cannot access a magic method `@{}` on an object of type {}",
                         name.str(),
@@ -364,6 +377,41 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 rest
             ))),
         }
+    }
+
+    /// Safety: The caller must ensure that `instance` and `receiver` refer to the same object.
+    pub fn bind_method(
+        &mut self,
+        instance: &mut VesInstance,
+        name: &VesStrView,
+        receiver: Value,
+    ) -> Option<GcObj> {
+        instance
+            .methods_mut()
+            .get_slot_value_mut(name)
+            .map(|v| {
+                let method = v.method.as_ref_unchecked();
+                if method
+                    .as_closure()
+                    .map(|v| v.r#fn())
+                    .or_else(|| method.as_fn())
+                    .map(|v| v.is_magic_method)
+                    .unwrap_or(false)
+                {
+                    // lazily bind method
+                    if v.is_bound {
+                        Some(*method)
+                    } else {
+                        let method = self.alloc(VesFnBound::new(*method, receiver).into());
+                        v.method = Value::Ref(method);
+                        v.is_bound = true;
+                        Some(method)
+                    }
+                } else {
+                    None
+                }
+            })
+            .flatten()
     }
 
     /// Calls the given LHS or RHS magic method on the left or right operand.
@@ -385,7 +433,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             self.push_many([NanBox::from(method), right, left]);
         }
 
-        match self.call(2) {
+        match self.call(1) {
             Ok(true) => {
                 let result = self.pop().unbox();
                 Ok(Some(result))
@@ -593,11 +641,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // Adjust the ip before calling the @cmp so its return address can be set correctly.
         self.ip += jump_by;
 
-        if self.call(2)? {
+        if self.call(1)? {
             let result = self.pop();
             if !result.is_int() && !result.is_float() {
                 return Err(self.error(format!(
-                    "The @cmp method must return a number, but produced {:?} instead",
+                    "The @cmp method must return a number, but returned {} instead",
                     result.unbox()
                 )));
             }
@@ -710,7 +758,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     /// On success, returns `Ok(true)` if the callee was a native call
     fn call(&mut self, args: usize) -> Result<bool, VesError> {
-        let obj = *self.peek_at(args);
+        let obj = *self.peek_at(args + 1);
         if let Some(obj) = obj.unbox().as_ref_mut() {
             // `args` implicitly includes the receiver (reserved 0th stack slot)
             let stack_index = self.stack.len() - (args + 1);
@@ -742,6 +790,42 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.ip = 0;
                     Ok(false)
                 }
+                VesObject::FnBound(f) => {
+                    let (arity, r#fn, captures) = match &mut *f.inner() {
+                        VesObject::Fn(contained) => (
+                            contained.arity,
+                            Peeled::new(f.inner(), VesObject::as_fn_mut_unwrapped),
+                            std::ptr::null_mut(),
+                        ),
+                        VesObject::Closure(contained) => (
+                            contained.r#fn().arity,
+                            contained.fn_ptr(),
+                            &mut contained.captures as _,
+                        ),
+                        _ => unreachable!(),
+                    };
+                    match arity.diff(args) {
+                        // TODO: once Array is implemented, use it here
+                        ArgCountDiff::Extra(_n) => todo!("push into rest array"),
+                        ArgCountDiff::MissingPositional(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at least {} args, got {}",
+                                obj, arity.positional, args
+                            )))
+                        }
+                        ArgCountDiff::MissingDefaults(n) => {
+                            for _ in 0..n {
+                                self.push(NanBox::none());
+                            }
+                        }
+                        _ => (),
+                    };
+                    // set receiver
+                    self.set_local_at(stack_index, f.receiver().into());
+                    self.push_frame(CallFrame::new(r#fn, captures, stack_index, self.ip))?;
+                    self.ip = 0;
+                    Ok(false)
+                }
                 VesObject::Closure(c) => {
                     let r#fn = c.fn_ptr();
                     let captures = &mut c.captures as _;
@@ -767,8 +851,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     Ok(false)
                 }
                 VesObject::FnNative(f) => {
+                    // +1 for implicit receiver
+                    let args = args + 1;
                     let arity = f.arity();
-                    let mut args = match f.arity().diff(args) {
+                    // the arity doesnt care about the receiver in this case,
+                    // so we skip it
+                    let mut args = match arity.diff(args - 1) {
                         ArgCountDiff::Extra(_) => {
                             if !arity.rest {
                                 return Err(self.error(format!(
@@ -792,11 +880,74 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         _ => self.pop_n(args).map(|v| v.unbox()).collect(),
                     };
                     let result = f.call(self, Args(&mut args))?;
-                    self.pop(); // pop receiver
+                    self.pop(); // pop the function
                     self.push(result);
                     Ok(true)
                 }
-                VesObject::Struct(_) => todo!(),
+                VesObject::Struct(s) => {
+                    let arity = s.arity;
+                    let argc = match arity.diff(args) {
+                        ArgCountDiff::Extra(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at most {} args, got {}",
+                                obj,
+                                arity.positional + arity.default,
+                                args
+                            )));
+                        }
+                        ArgCountDiff::MissingPositional(_) => {
+                            return Err(self.error(format!(
+                                "{} expected at least {} args, got {}",
+                                obj, arity.positional, args
+                            )))
+                        }
+                        ArgCountDiff::MissingDefaults(n) => {
+                            for _ in 0..n {
+                                self.push(NanBox::none());
+                            }
+                            args + n
+                        }
+                        _ => args,
+                    };
+                    let mut instance = self.alloc(VesInstance::new(*obj, self.gc.proxy()).into());
+                    // initialize fields
+                    for (i, value) in self.stack.drain(self.stack.len() - argc..).enumerate() {
+                        (*instance
+                            .as_instance_mut_unchecked()
+                            .fields_mut()
+                            .get_by_slot_index_unchecked_mut(i)) = value.unbox();
+                    }
+                    self.pop(); // pop struct
+                    self.push(instance);
+                    {
+                        // call initializer, if present
+                        let instance = instance.as_instance_mut_unchecked();
+                        if let Some(init) = instance
+                            .methods_mut()
+                            .get_slot_value_mut(&self.symbols.init)
+                        {
+                            let init = init.method.as_ref_mut_unchecked();
+                            let stack_index = self.stack.len() - 1;
+                            let return_address = self.ip;
+                            let call_frame = match &mut **init {
+                                VesObject::Fn(_) => {
+                                    let r#fn = Peeled::new(*init, VesObject::as_fn_mut_unwrapped);
+                                    let captures = std::ptr::null_mut();
+                                    CallFrame::new(r#fn, captures, stack_index, return_address)
+                                }
+                                VesObject::Closure(ref mut c) => {
+                                    let r#fn = c.fn_ptr();
+                                    let captures = &mut c.captures as _;
+                                    CallFrame::new(r#fn, captures, stack_index, return_address)
+                                }
+                                _ => unreachable!(),
+                            };
+                            self.push_frame(call_frame)?;
+                            self.ip = 0;
+                        }
+                    }
+                    Ok(false)
+                }
                 _ => return Err(self.error(format!("{} is not callable", obj))),
             }
         } else {
@@ -815,6 +966,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
         let mut ty = VesStruct::new(
             descriptor.name,
+            descriptor.arity,
             &descriptor.fields,
             descriptor.methods.len(),
         );
@@ -875,14 +1027,16 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     ///
     /// print a;  // This line can will cause a stack overflow, but should instead print something like `[[[...]]]`.
     /// ```
-    fn stringify(&mut self, value: &Value) -> Result<std::borrow::Cow<'static, str>, VesError> {
+    fn stringify(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError> {
         let result = match value {
             Value::Ref(_) => {
                 let method = self.symbols.str;
                 let inst = self.inst();
+
                 match self.get_magic_method(NanBox::from(*value), &method, inst) {
-                    Ok(obj) => {
-                        let stringified = self.execute(Value::Ref(obj), vec![*value])?;
+                    Ok(Some(obj)) => {
+                        let stringified =
+                            self.execute(Some(*value), Value::Ref(obj), vec![*value])?;
                         match stringified.as_ref().and_then(|r| r.as_str()) {
                             Some(s) => s.clone_inner(),
                             None => {
@@ -892,7 +1046,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                         }
                     }
-                    Err(_) => value.to_string().into(),
+                    _ => value.to_string().into(),
                 }
             }
             _ => value.to_string().into(),
@@ -910,9 +1064,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             VesObject::Str(_) => todo!(),
             VesObject::Int(i) => i.props().get_slot_index(&name).is_some(),
             VesObject::Instance(i) => {
-                i.get_slot_index(&name).is_some() || i.methods().get_slot_index(&name).is_some()
+                i.fields().get_slot_index(&name).is_some()
+                    || i.methods().get_slot_index(&name).is_some()
             }
             VesObject::Fn(_)
+            | VesObject::FnBound(_)
             | VesObject::FnNative(_)
             | VesObject::Closure(_)
             | VesObject::Struct(_) => {
@@ -957,6 +1113,130 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.push(value);
     }
 
+    fn get_prop(&mut self, name_index: u32) -> Result<(), VesError> {
+        let ptr = self.read_ic_ptr();
+        let slot = self.read_ic_slot();
+        let name = self.const_at(name_index as usize);
+
+        let obj = self.pop();
+        if !obj.is_ptr() {
+            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+        }
+        let mut obj = unsafe { obj.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *obj {
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+
+            // TODO: this will panic if you try to get a method
+            // Fast path (inline cache hit)
+            if struct_ptr == ptr {
+                self.push(NanBox::new(
+                    *instance
+                        .fields_mut()
+                        .get_by_slot_index_unchecked(slot as usize),
+                ));
+                return Ok(());
+            }
+
+            // Slow path (inline cache miss)
+            let name = name.unbox().as_ptr().unwrap();
+            let name = VesStrView::new(name);
+            let slot = match instance.fields().get_slot_index(&name) {
+                Some(slot) => slot,
+                None => {
+                    return Err(self.error(format!("{} has no property `{}`.", obj, name.str())))
+                }
+            } as usize;
+
+            let value = NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot));
+            self.update_inst_ic_cache(struct_ptr, slot as u32);
+            self.push(value);
+            return Ok(());
+        }
+
+        self.error(format!(
+            "Object `{:?}` does not support field accesses",
+            obj
+        ));
+        Ok(())
+    }
+
+    fn set_prop(&mut self, name_index: u32) -> Result<(), VesError> {
+        // TODO: handle methods
+        let ptr = self.read_ic_ptr();
+        let slot = self.read_ic_slot();
+        let name = self.const_at(name_index as usize);
+
+        let value = *self.peek();
+        let obj = *self.peek_at(1);
+        if !obj.is_ptr() {
+            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+        }
+        let mut obj = unsafe { obj.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *obj {
+            // Fast path
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+            if struct_ptr == ptr {
+                *instance
+                    .fields_mut()
+                    .get_by_slot_index_unchecked_mut(slot as usize) = value.unbox();
+                self.pop_n(2);
+                self.push(value);
+                return Ok(());
+            }
+
+            // Slow path
+            let name = name.unbox().as_ptr().unwrap();
+            let name = VesStrView::new(name);
+            let slot = match instance.fields().get_slot_index(&name) {
+                Some(slot) => slot,
+                None => {
+                    return Err(
+                        self.error(format!("Object is missing the field `{}`.", name.str()))
+                    );
+                }
+            } as usize;
+
+            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = value.unbox();
+            self.pop_n(2);
+            self.push(value);
+            self.update_inst_ic_cache(struct_ptr, slot as u32);
+            return Ok(());
+        }
+        Err(self.error(format!(
+            "Object `{:?}` does not support field assignment",
+            obj
+        )))
+    }
+
+    fn read_ic_ptr(&mut self) -> u64 {
+        self.ip += 2;
+        let hi = self.frame_unchecked().code()[self.ip - 2];
+        let lo = self.frame_unchecked().code()[self.ip - 1];
+
+        match (hi, lo) {
+            (Opcode::Data(hi), Opcode::Data(lo)) => ((hi as u64) << 32) | lo as u64,
+            _ => unsafe { std::intrinsics::unreachable() },
+        }
+    }
+
+    fn read_ic_slot(&mut self) -> u32 {
+        self.ip += 1;
+        match self.frame_unchecked().code()[self.ip - 1] {
+            Opcode::Data(slot) => slot,
+            _ => unsafe { std::intrinsics::unreachable() },
+        }
+    }
+
+    #[inline]
+    fn update_inst_ic_cache(&mut self, ptr: u64, slot: u32) {
+        let ip = self.ip;
+        let lo = (ptr & u32::MAX as u64) as u32;
+        let hi = (ptr >> 32) as u32;
+        self.frame_unchecked_mut().code_mut()[ip - 1] = Opcode::Data(slot);
+        self.frame_unchecked_mut().code_mut()[ip - 2] = Opcode::Data(lo);
+        self.frame_unchecked_mut().code_mut()[ip - 3] = Opcode::Data(hi);
+    }
+
     fn get_capture(&mut self, index: u32) {
         let value = *self.capture_at(index as usize);
         self.push(value);
@@ -984,22 +1264,20 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
-    fn set_local_at(&mut self, offset: usize, obj: NanBox) -> &NanBox {
+    fn set_local_at(&mut self, offset: usize, value: NanBox) -> &NanBox {
         let frame = self.frame_unchecked();
         let frame_start = frame.stack_index;
         let slot = frame_start + offset;
         #[cfg(not(feature = "fast"))]
         if slot >= self.stack.len() {
             panic!(
-                "INVALID LOCAL ADDRESS `{}` AT {} in `{}` (stack window = {}, stack = {:?})",
+                "INVALID LOCAL ADDRESS `{}` AT {} in `{}`",
                 offset,
                 self.ip,
-                frame.func().name(),
-                frame_start,
-                self.stack
+                frame.func().name()
             );
         }
-        self.stack[slot] = obj;
+        self.stack[slot] = value;
         self.local_at(offset)
     }
 
@@ -1267,7 +1545,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 .rev()
                 .take(DEBUG_STACK_PRINT_SIZE)
                 .rev()
-                .map(|v| format!("{:?}", v.unbox()))
+                .map(|v| format!("{}", v.unbox()))
                 .collect::<Vec<_>>()
                 .join(", ")
         );

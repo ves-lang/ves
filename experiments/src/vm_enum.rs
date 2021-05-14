@@ -2,6 +2,7 @@ use ves_backend::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
     objects::{
+        ves_fn::Arity,
         ves_str::view::VesStrView,
         ves_struct::{VesInstance, VesStruct},
     },
@@ -47,7 +48,7 @@ impl<T: VesGc> VmEnum<T> {
         fields.push(VesStrView::new(gc.alloc_permanent("a")));
         fields.push(VesStrView::new(gc.alloc_permanent("b")));
         let name = VesStrView::new(gc.alloc_permanent("Fib"));
-        let ty = VesStruct::new(name, &fields, 0);
+        let ty = VesStruct::new(name, Arity::none(), &fields, 0);
         let ty = gc.alloc_permanent(ty);
 
         Self {
@@ -246,7 +247,7 @@ impl<T: VesGc> VmEnum<T> {
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         match &mut *obj {
             VesObject::Instance(obj) => {
-                *obj.get_slot_value_mut(&name).unwrap() = self.pop().unbox()
+                *obj.fields_mut().get_slot_value_mut(&name).unwrap() = self.pop().unbox()
             }
             _ => {
                 self.error("Only struct instances support field assignment".to_string());
@@ -267,7 +268,7 @@ impl<T: VesGc> VmEnum<T> {
         };
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
-            VesObject::Instance(instance) => match instance.get_slot_value(&name) {
+            VesObject::Instance(instance) => match instance.fields().get_slot_value(&name) {
                 Some(r#ref) => self.push(NanBox::new(*r#ref)),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },

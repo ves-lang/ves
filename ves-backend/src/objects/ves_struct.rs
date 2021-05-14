@@ -1,12 +1,11 @@
 use std::{
     cell::UnsafeCell,
-    fmt::{self, Display, Formatter},
-    ops::{Deref, DerefMut},
+    fmt::{self, Debug, Display, Formatter},
     vec::from_elem_in,
 };
 
 use crate::{
-    gc::{proxy_allocator::ProxyAllocator, GcObj, Trace},
+    gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, Trace, VesGc},
     VesObject,
 };
 use ahash::RandomState;
@@ -25,6 +24,14 @@ pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
 pub struct ViewKey {
     pub(super) view: UnsafeCell<VesStrView>,
+}
+
+impl ViewKey {
+    #[inline]
+    pub fn str(&self) -> &str {
+        let view = unsafe { &*self.view.get() };
+        view.str().as_ref()
+    }
 }
 
 impl std::fmt::Debug for ViewKey {
@@ -80,6 +87,7 @@ unsafe impl Trace for StructDescriptor {
 #[derive(Debug)]
 pub struct VesStruct {
     name: VesStrView,
+    pub arity: Arity,
     fields: VesHashMap<ViewKey, u8>,
     vtable: VesHashMap<ViewKey, (u8, GcObj)>,
 }
@@ -88,11 +96,13 @@ impl VesStruct {
     #[allow(clippy::ptr_arg)]
     pub fn new(
         name: VesStrView,
+        arity: Arity,
         fields: &Vec<VesStrView, ProxyAllocator>,
         vtable_size: usize,
     ) -> Self {
         Self {
             name,
+            arity,
             vtable: VesHashMap::with_capacity_in(vtable_size, fields.allocator().clone()),
             fields: fields
                 .iter()
@@ -174,7 +184,7 @@ impl PropertyLookup for MethodLookup {
 #[derive(Debug, Clone)]
 pub struct MethodEntry {
     pub method: Value,
-    pub bound: bool,
+    pub is_bound: bool,
 }
 
 unsafe impl Trace for MethodEntry {
@@ -206,7 +216,7 @@ impl VesInstance {
         let fields = from_elem_in(Value::None, ty_instance.fields.len(), proxy.clone());
         let mut methods = from_elem_in(
             MethodEntry {
-                bound: false,
+                is_bound: false,
                 method: Value::None,
             },
             ty_instance.vtable.len(),
@@ -240,6 +250,16 @@ impl VesInstance {
     }
 
     #[inline]
+    pub fn fields(&self) -> &CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator> {
+        &self.fields
+    }
+
+    #[inline]
+    pub fn fields_mut(&mut self) -> &mut CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator> {
+        &mut self.fields
+    }
+
+    #[inline]
     pub fn methods(&self) -> &CacheLayer<MethodLookup, MethodEntry, ProxyAllocator> {
         &self.methods
     }
@@ -247,20 +267,6 @@ impl VesInstance {
     #[inline]
     pub fn methods_mut(&mut self) -> &mut CacheLayer<MethodLookup, MethodEntry, ProxyAllocator> {
         &mut self.methods
-    }
-}
-
-impl Deref for VesInstance {
-    type Target = CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.fields
-    }
-}
-
-impl DerefMut for VesInstance {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.fields
     }
 }
 
@@ -273,7 +279,7 @@ unsafe impl Trace for VesInstance {
 
 impl Display for VesStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "<struct: {}>", self.name.str())
+        write!(f, "<struct {}>", self.name.str())
     }
 }
 
@@ -290,9 +296,32 @@ impl Display for StructDescriptor {
     }
 }
 
+struct DebugAsDisplay<'a, T: Debug + Display>(&'a T);
+impl<'a, T: Debug + Display> Debug for DebugAsDisplay<'a, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(self.0, f)
+    }
+}
+
 impl Display for VesInstance {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
-        write!(f, "<instance of {} at {:p}", self.ty().name(), self)
+        let mut s = f.debug_struct(self.ty().name());
+        // NOTE this nested loop is needed to maintain order without allocations
+        for (i0, value) in self.fields().slots().iter().enumerate() {
+            for (key, i1) in self.ty().fields.iter() {
+                if *i1 as usize == i0 {
+                    s.field(key.str(), &DebugAsDisplay(&value));
+                }
+            }
+        }
+        for (i0, _) in self.methods().slots().iter().enumerate() {
+            for (key, (i1, method)) in self.ty().vtable.iter() {
+                if *i1 as usize == i0 {
+                    s.field(key.str(), &DebugAsDisplay(&method));
+                }
+            }
+        }
+        s.finish()
     }
 }

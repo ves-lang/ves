@@ -249,6 +249,7 @@ pub(crate) mod tests {
     use crate::{
         gc::{Roots, Trace},
         objects::{
+            ves_fn::Arity,
             ves_str::view::VesStrView,
             ves_struct::{VesInstance, VesStruct},
         },
@@ -411,6 +412,7 @@ pub(crate) mod tests {
 
         VesStruct::new(
             crate::objects::ves_str::view::VesStrView::new(name),
+            Arity::none(),
             &fields,
             0,
         )

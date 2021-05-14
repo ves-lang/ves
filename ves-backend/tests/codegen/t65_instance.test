@@ -1,0 +1,148 @@
+struct Vec3(x = 0, y = 0, z = 0) {
+    @add(self, other) => Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
+}
+
+let v0 = Vec3(2);
+print(v0);
+let v1 = Vec3(2, 3, 4);
+print(v1);
+
+print(v0 + v1);
+
+%output
+
+|0000| CreateStruct(Vec3, 0+3)
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| GetGlobal(0)
+|0004| PushNone
+|0005| PushInt32(2)
+|0006| Call(1)
+|0007| SetGlobal(1)
+|0008| Pop
+|0009| GetGlobal(1)
+|0010| Print
+|0011| GetGlobal(0)
+|0012| PushNone
+|0013| PushInt32(2)
+|0014| PushInt32(3)
+|0015| PushInt32(4)
+|0016| Call(3)
+|0017| SetGlobal(2)
+|0018| Pop
+|0019| GetGlobal(2)
+|0020| Print
+|0021| GetGlobal(1)
+|0022| GetGlobal(2)
+|0023| Add
+|0024| Print
+|0025| PushNone
+|0026| Return
+>>>>>> Vec3.@add
+|0000| GetGlobal(0)
+|0001| PushNone
+|0002| GetLocal(0)
+|0003| GetProp(0)
+|0004| Data(0)
+|0005| Data(0)
+|0006| Data(0)
+|0007| GetLocal(1)
+|0008| GetProp(0)
+|0009| Data(0)
+|0010| Data(0)
+|0011| Data(0)
+|0012| Add
+|0013| GetLocal(0)
+|0014| GetProp(1)
+|0015| Data(0)
+|0016| Data(0)
+|0017| Data(0)
+|0018| GetLocal(1)
+|0019| GetProp(1)
+|0020| Data(0)
+|0021| Data(0)
+|0022| Data(0)
+|0023| Add
+|0024| GetLocal(0)
+|0025| GetProp(2)
+|0026| Data(0)
+|0027| Data(0)
+|0028| Data(0)
+|0029| GetLocal(1)
+|0030| GetProp(2)
+|0031| Data(0)
+|0032| Data(0)
+|0033| Data(0)
+|0034| Add
+|0035| Call(3)
+|0036| Return
+|0037| PushNone
+|0038| Return
+>>>>>> Vec3.init
+|0000| PushNone
+|0001| GetLocal(0)
+|0002| GetProp(0)
+|0003| Data(0)
+|0004| Data(0)
+|0005| Data(0)
+|0006| PushNone
+|0007| Compare
+|0008| Negate
+|0009| IsCmpEqual
+|0010| JumpIfFalse(20)
+|0011| Pop
+|0012| GetLocal(0)
+|0013| PushInt32(0)
+|0014| SetProp(0)
+|0015| Data(0)
+|0016| Data(0)
+|0017| Data(0)
+|0018| Pop
+|0019| Jump(21)
+|0020| Pop
+|0021| Pop
+|0022| PushNone
+|0023| GetLocal(0)
+|0024| GetProp(1)
+|0025| Data(0)
+|0026| Data(0)
+|0027| Data(0)
+|0028| PushNone
+|0029| Compare
+|0030| Negate
+|0031| IsCmpEqual
+|0032| JumpIfFalse(42)
+|0033| Pop
+|0034| GetLocal(0)
+|0035| PushInt32(0)
+|0036| SetProp(1)
+|0037| Data(0)
+|0038| Data(0)
+|0039| Data(0)
+|0040| Pop
+|0041| Jump(43)
+|0042| Pop
+|0043| Pop
+|0044| PushNone
+|0045| GetLocal(0)
+|0046| GetProp(2)
+|0047| Data(0)
+|0048| Data(0)
+|0049| Data(0)
+|0050| PushNone
+|0051| Compare
+|0052| Negate
+|0053| IsCmpEqual
+|0054| JumpIfFalse(64)
+|0055| Pop
+|0056| GetLocal(0)
+|0057| PushInt32(0)
+|0058| SetProp(2)
+|0059| Data(0)
+|0060| Data(0)
+|0061| Data(0)
+|0062| Pop
+|0063| Jump(65)
+|0064| Pop
+|0065| Pop
+|0066| Return

@@ -1185,7 +1185,13 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         let fn_pointer = self.ctx.alloc_value(VesFn {
             name: VesStrView::new(name),
             arity: Arity {
-                positional: info.params.positional.len() as u32,
+                positional: if matches!(info.kind, FnKind::Method | FnKind::MagicMethod) {
+                    // in case of methods, the arity is actually `n - 1`
+                    // because of implicit `self`
+                    info.params.positional.len() - 1
+                } else {
+                    info.params.positional.len()
+                } as u32,
                 default: info.params.default.len() as u32,
                 rest: info.params.rest.is_some(),
             },
@@ -1445,6 +1451,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
     fn emit_call_expr(&mut self, call: &'b Call<'a>, span: Span) -> Result<()> {
         self.emit_expr(&call.callee, true)?;
+        // push receiver slot
+        self.state.builder.op(Opcode::PushNone, span.clone());
         for expr in call.args.iter() {
             self.emit_expr(expr, true)?;
         }
