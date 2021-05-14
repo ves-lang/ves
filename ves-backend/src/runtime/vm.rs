@@ -363,7 +363,16 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                         }
                     }
-                    VesObject::Instance(i) => Ok(self.bind_method(i, name, value.unbox())),
+                    VesObject::Instance(i) => {
+                        if let Some(slot) = slot {
+                            let method = i.methods().get_by_slot_index(slot).expect("Unexpected cache misconfiguration (expected to find a method according to the IC)");
+                            Ok(Some(method.method.as_ptr().unwrap()))
+                        } else {
+                            Ok(i.methods_mut()
+                                .get_slot_value_mut(name)
+                                .and_then(|v| v.method.as_ref().copied()))
+                        }
+                    }
                     rest => Err(self.error(format!(
                         "Cannot access a magic method `@{}` on an object of type {}",
                         name.str(),
