@@ -9,6 +9,7 @@ use crate::{
         peel::Peeled,
         ves_fn::{ArgCountDiff, Args, VesClosure},
         ves_str::view::VesStrView,
+        ves_struct::{VesInstance, VesStruct, ViewKey},
     },
     NanBox, Value, VesObject,
 };
@@ -251,11 +252,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::MapInsert => unimplemented!(),
                 Opcode::MapExtend => unimplemented!(),
                 Opcode::CreateClosure(d) => self.create_closure(d)?,
-                Opcode::CreateStruct(_) => unimplemented!(),
-                Opcode::AddMethod(_) => unimplemented!(),
-                Opcode::AddMagicMethod(_) => unimplemented!(),
-                Opcode::AddStaticMethod(_) => unimplemented!(),
-                Opcode::AddStaticField(_) => unimplemented!(),
+                Opcode::CreateStruct(d) => self.create_struct(d)?,
+                Opcode::AddMethod(m) => self.add_method(m)?,
                 Opcode::Print => self.print()?,
                 Opcode::PrintN(n) => self.print_n(n)?,
                 Opcode::Copy => self.copy()?,
@@ -807,6 +805,41 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         }
     }
 
+    fn create_struct(&mut self, descriptor_index: u32) -> Result<(), VesError> {
+        let descriptor = self.const_at(descriptor_index as usize).unbox();
+        let descriptor = descriptor
+            .as_struct_descriptor()
+            .expect("Struct miscompilation: expected to find a descriptor");
+
+        let ty = VesStruct::new(descriptor.name, &descriptor.fields, descriptor.n_methods);
+        let ptr = self.alloc(ty.into());
+        self.push(ptr);
+
+        Ok(())
+    }
+
+    fn add_method(&mut self, m: u32) -> Result<(), VesError> {
+        let method_ptr = self.pop().unbox();
+        let mut struct_ptr = self.peek().unbox();
+        let name_ptr = *self.const_at(m as _).unbox().as_ref_unchecked();
+
+        debug_assert!(method_ptr
+            .as_ptr()
+            .as_ref()
+            .and_then(|f| f.as_fn())
+            .is_some());
+        debug_assert!(struct_ptr
+            .as_ptr()
+            .as_ref()
+            .and_then(|f| f.as_struct())
+            .is_some());
+
+        let ty = unsafe { struct_ptr.as_struct_mut_unchecked() };
+        ty.add_method(ViewKey::from(name_ptr), method_ptr.as_ptr().unwrap());
+
+        Ok(())
+    }
+
     fn create_closure(&mut self, descriptor_index: u32) -> Result<(), VesError> {
         let descriptor = self.const_at(descriptor_index as usize);
         if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
@@ -880,7 +913,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let prop = match object {
             VesObject::Str(_) => todo!(),
             VesObject::Int(i) => i.props().get_slot_index(&name).is_some(),
-            VesObject::Instance(i) => i.get_slot_index(&name).is_some(),
+            VesObject::Instance(i) => {
+                i.get_slot_index(&name).is_some() || i.methods().get_slot_index(&name).is_some()
+            }
             VesObject::Fn(_)
             | VesObject::FnNative(_)
             | VesObject::Closure(_)

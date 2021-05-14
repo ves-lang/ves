@@ -248,14 +248,15 @@ impl Display for GcObj {
 pub(crate) mod tests {
     use crate::{
         gc::{Roots, Trace},
-        objects::ves_struct::{VesInstance, VesStruct, ViewKey},
-        value::TypeId,
+        objects::{
+            ves_str::view::VesStrView,
+            ves_struct::{VesInstance, VesStruct},
+        },
         NanBox, Value, VesObject,
     };
 
     use super::{GcHandle, GcObj, VesGc};
 
-    use hashbrown::HashMap;
     use rand::prelude::*;
     use rand::rngs::StdRng;
     use rand::SeedableRng;
@@ -390,20 +391,28 @@ pub(crate) mod tests {
         structs: &mut Vec<GcObj>,
         mut handle: GcHandle<T>,
     ) -> VesStruct {
-        let mut fields = HashMap::new_in(handle.proxy());
+        let mut fields = Vec::new_in(handle.proxy());
 
         for i in 0..rng.gen_range(5..10) {
             let s = handle
                 .alloc(random_string(rng, 15), roots!(stack, structs))
                 .unwrap();
             stack.push(NanBox::from(s));
-            fields.insert(ViewKey::from(s), i);
+            fields.push(VesStrView::new(s));
         }
+
+        let name = handle
+            .alloc(random_string(rng, 10), roots!(stack, structs))
+            .unwrap();
 
         for _ in 0..fields.len() {
             stack.pop();
         }
 
-        VesStruct::new(fields, HashMap::new_in(handle.proxy()))
+        VesStruct::new(
+            crate::objects::ves_str::view::VesStrView::new(name),
+            &fields,
+            0,
+        )
     }
 }

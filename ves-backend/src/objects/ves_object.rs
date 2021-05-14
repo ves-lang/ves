@@ -13,7 +13,6 @@ use crate::{
         ves_struct::{VesInstance, VesStruct},
     },
     runtime::vm::VmInterface,
-    value::TypeId,
     Value,
 };
 

@@ -1,0 +1,12 @@
+struct S {
+    method(self) {}
+}
+
+print(S)
+
+// TODO: instantiation
+// TODO: fields, method invocation, method binding
+
+%output
+
+<struct: S>

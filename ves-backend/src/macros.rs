@@ -9,4 +9,16 @@ macro_rules! unwrap_unchecked {
             unsafe { std::hint::unreachable_unchecked() }
         }
     };
+    ($T:path, $obj:expr) => {
+        if let $T(v) = $obj {
+            v
+        } else if cfg!(debug_assertions) {
+            unreachable!()
+        } else {
+            #[allow(unused_unsafe)]
+            unsafe {
+                std::hint::unreachable_unchecked()
+            }
+        }
+    };
 }

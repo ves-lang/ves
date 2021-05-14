@@ -45,11 +45,12 @@ pub struct VmBytes<T: VesGc> {
 
 impl<T: VesGc> VmBytes<T> {
     pub fn new(mut gc: GcHandle<T>, constants: Vec<NanBox>, instructions: Vec<u8>) -> Self {
-        let mut fields = VesHashMap::new_in(gc.proxy());
-        fields.insert(ViewKey::from(gc.alloc_permanent("n")), 0);
-        fields.insert(ViewKey::from(gc.alloc_permanent("a")), 1);
-        fields.insert(ViewKey::from(gc.alloc_permanent("b")), 2);
-        let ty = VesStruct::new(fields, VesHashMap::new_in(gc.proxy()));
+        let mut fields = Vec::new_in(gc.proxy());
+        fields.push(VesStrView::new(gc.alloc_permanent("n")));
+        fields.push(VesStrView::new(gc.alloc_permanent("a")));
+        fields.push(VesStrView::new(gc.alloc_permanent("b")));
+        let name = VesStrView::new(gc.alloc_permanent("Fib"));
+        let ty = VesStruct::new(name, &fields, 0);
         let ty = gc.alloc_permanent(ty);
 
         Self {

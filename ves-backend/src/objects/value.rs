@@ -8,7 +8,9 @@ use crate::{
     VesObject,
 };
 
-use super::{ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr};
+use super::{
+    ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr, ves_struct::StructDescriptor,
+};
 
 // TODO: user-facing error type
 #[derive(Clone, PartialEq)]
@@ -188,6 +190,32 @@ impl Value {
             }
         }
         None
+    }
+
+    pub fn as_struct_descriptor(&self) -> Option<&StructDescriptor> {
+        if let Self::Ref(v) = self {
+            if let VesObject::StructDescriptor(d) = &**v {
+                return Some(d);
+            }
+        }
+        None
+    }
+
+    pub fn as_struct_mut(&mut self) -> Option<&mut super::ves_struct::VesStruct> {
+        if let Self::Ref(v) = self {
+            if let VesObject::Struct(s) = &mut **v {
+                return Some(s);
+            }
+        }
+        None
+    }
+
+    pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
+        crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_mut_unchecked())
+    }
+
+    pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
+        crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_mut_unchecked())
     }
 
     pub fn as_int_unchecked(&self) -> &i32 {

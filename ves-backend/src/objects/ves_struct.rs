@@ -61,21 +61,63 @@ impl Eq for ViewKey {}
 #[derive(Debug)]
 pub struct StructDescriptor {
     pub name: VesStrView,
+    pub fields: Vec<VesStrView, ProxyAllocator>,
+    // Isn't really need, just a micro-optimization
+    pub n_methods: usize,
     /// Field arity (rest field is ignored)
     pub arity: Arity,
 }
 
+unsafe impl Trace for StructDescriptor {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        for field in &mut self.fields {
+            Trace::trace(field, tracer);
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VesStruct {
-    // TODO: store name
-    // TODO: static fields
-    methods: VesHashMap<ViewKey, GcObj>,
+    name: VesStrView,
     fields: VesHashMap<ViewKey, u8>,
+    vtable: VesHashMap<ViewKey, (u8, GcObj)>,
 }
 
 impl VesStruct {
-    pub fn new(fields: VesHashMap<ViewKey, u8>, methods: VesHashMap<ViewKey, GcObj>) -> Self {
-        Self { methods, fields }
+    #[allow(clippy::ptr_arg)]
+    pub fn new(
+        name: VesStrView,
+        fields: &Vec<VesStrView, ProxyAllocator>,
+        vtable_size: usize,
+    ) -> Self {
+        Self {
+            name,
+            vtable: VesHashMap::with_capacity_in(vtable_size, fields.allocator().clone()),
+            fields: fields
+                .iter()
+                .enumerate()
+                .map(|(i, name)| {
+                    (
+                        ViewKey {
+                            view: UnsafeCell::new(*name),
+                        },
+                        i as u8,
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        self.name.str()
+    }
+
+    /// Updates the vtable without affecting already existing instances.
+    /// The given name must already be present in the vtable.
+    #[inline]
+    pub fn add_method(&mut self, name: ViewKey, value: GcObj) {
+        let n = self.vtable.len();
+        self.vtable.insert(name, (n as u8, value));
     }
 }
 
@@ -90,9 +132,13 @@ unsafe impl Trace for VesHashMap<ViewKey, GcObj> {
 
 unsafe impl Trace for VesStruct {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.methods, tracer);
+        Trace::trace(&mut self.name, tracer);
         for (name, _) in &mut self.fields {
             Trace::trace(unsafe { &mut *name.view.get() }, tracer);
+        }
+        for (name, (_, ptr)) in &mut self.vtable {
+            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
+            Trace::trace(ptr, tracer);
         }
     }
 }
@@ -110,18 +156,71 @@ impl PropertyLookup for Peeled<VesStruct> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct MethodLookup(Peeled<VesStruct>);
+impl PropertyLookup for MethodLookup {
+    fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
+        self.0
+            .get()
+            .vtable
+            .get(&ViewKey {
+                view: UnsafeCell::new(*name),
+            })
+            .copied()
+            .map(|(x, _)| x as _)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MethodEntry {
+    pub method: Value,
+    pub bound: bool,
+}
+
+unsafe impl Trace for MethodEntry {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.method, tracer);
+    }
+}
+
+unsafe impl Trace for MethodLookup {
+    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.0, tracer);
+    }
+}
+
 #[derive(Debug)]
 pub struct VesInstance {
-    // Should also include bound methods (lazily copied by default).
+    // NOTE: Methods and fields are separated into two cache lines to optimize for field access speed.
+    //       Since a method may need to be bound after retrieval, storing methods and fields together
+    //       would introduce the check overhead to field access, which is not desirable as raw field accesses
+    //       are much more common than raw method accesses.
     fields: CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator>,
+    methods: CacheLayer<MethodLookup, MethodEntry, ProxyAllocator>,
 }
 
 impl VesInstance {
     pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
-        let fields = from_elem_in(Value::None, ty.as_struct().unwrap().fields.len(), proxy);
+        let ty_instance = ty.as_struct().unwrap();
+
+        let fields = from_elem_in(Value::None, ty_instance.fields.len(), proxy.clone());
+        let mut methods = from_elem_in(
+            MethodEntry {
+                bound: false,
+                method: Value::None,
+            },
+            ty_instance.vtable.len(),
+            proxy,
+        );
+        for (_, (i, obj)) in &ty_instance.vtable {
+            methods[*i as usize].method = Value::Ref(*obj);
+        }
+
         let lookup = Peeled::new(ty, VesObject::as_struct_mut_unwrapped);
+        let method_lookup = MethodLookup(Peeled::new(ty, VesObject::as_struct_mut_unwrapped));
         Self {
             fields: CacheLayer::new(lookup, fields),
+            methods: CacheLayer::new(method_lookup, methods),
         }
     }
 
@@ -138,6 +237,16 @@ impl VesInstance {
     #[inline]
     pub fn ty_mut(&mut self) -> &mut VesStruct {
         self.fields.lookup_mut().get_mut()
+    }
+
+    #[inline]
+    pub fn methods(&self) -> &CacheLayer<MethodLookup, MethodEntry, ProxyAllocator> {
+        &self.methods
+    }
+
+    #[inline]
+    pub fn methods_mut(&mut self) -> &mut CacheLayer<MethodLookup, MethodEntry, ProxyAllocator> {
+        &mut self.methods
     }
 }
 
@@ -158,13 +267,13 @@ impl DerefMut for VesInstance {
 unsafe impl Trace for VesInstance {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
         Trace::trace(&mut self.fields, tracer);
+        Trace::trace(&mut self.methods, tracer);
     }
 }
 
 impl Display for VesStruct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        // TODO: better formatting
-        f.debug_struct("Struct").finish()
+        write!(f, "<struct: {}>", self.name.str())
     }
 }
 
@@ -184,6 +293,6 @@ impl Display for StructDescriptor {
 impl Display for VesInstance {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
-        f.debug_struct("Instance").finish()
+        write!(f, "<instance of {} at {:p}", self.ty().name(), self)
     }
 }

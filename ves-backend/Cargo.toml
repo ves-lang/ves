@@ -10,7 +10,7 @@ ves_parser = { package = "ves-parser", path = "../ves-parser" }
 ves_middle = { package = "ves-middle", path = "../ves-middle" }
 
 static_assertions = "1.1.0"
-hashbrown = { version  = "0.11.2", features = ["nightly"] }
+hashbrown = { git  = "https://github.com/rust-lang/hashbrown", features = ["nightly"] }
 ahash = "0.7.2"
 const-random = "0.1.13"
 ibig = "0.3.2"

@@ -171,12 +171,6 @@ pub enum Opcode {
     CreateStruct(/* descriptor constant index */ u32),
     /// Add a method to a struct
     AddMethod(/* name constant index */ u32),
-    /// Add a magic method to a struct
-    AddMagicMethod(/* name constant index */ u32),
-    /// Add a static method to a struct
-    AddStaticMethod(/* name constant index */ u32),
-    /// Add a static field to a struct
-    AddStaticField(/* name constant index */ u32),
     /// Print a single value
     Print,
     /// Print N values

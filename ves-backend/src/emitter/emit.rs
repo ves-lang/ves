@@ -1,6 +1,7 @@
 use std::{
     borrow::{BorrowMut, Cow},
     collections::HashMap,
+    convert::TryInto,
     rc::Rc,
 };
 
@@ -10,7 +11,7 @@ use crate::{
         ves_fn::{Arity, ClosureDescriptor, VesFn},
         ves_int::VesInt,
         ves_str::view::VesStrView,
-        ves_struct::StructDescriptor,
+        ves_struct::{StructDescriptor, VesHashMap, VesStruct, ViewKey},
     },
     value::IntoVes,
     Span, Value, VesObject,
@@ -917,7 +918,9 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             ExprKind::Binary(op, ref a, ref b) => self.emit_binary_expr(op, a, b, span)?,
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
             ExprKind::Struct(ref info) => self.emit_struct_expr(info, span, is_sub_expr)?,
-            ExprKind::Fn(ref info) => self.emit_fn_expr(info, span, is_sub_expr)?,
+            ExprKind::Fn(ref info) => {
+                self.emit_fn_expr(info, span, is_sub_expr)?;
+            }
             ExprKind::If(ref info) => self.emit_if_expr(info, span)?,
             ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
             ExprKind::Comma(ref exprs) => self.emit_comma_expr(exprs, span)?,
@@ -1047,9 +1050,29 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.state.define(info.name.lexeme.clone(), span.clone())?;
         }
         let struct_name = self.ctx.alloc_or_intern(info.name.lexeme.clone());
+
+        let fields = {
+            let mut fields = Vec::new_in(self.ctx.gc.proxy());
+
+            for field in info
+                .fields
+                .positional
+                .iter()
+                .map(|(name, _)| name)
+                .chain(info.fields.default.iter().map(|(name, _, _)| name))
+            {
+                let name = self.ctx.alloc_or_intern(field.lexeme.clone());
+                fields.push(VesStrView::new(name))
+            }
+
+            fields
+        };
+
         let struct_desc_index = self.state.builder.constant(
             self.ctx.alloc_value(StructDescriptor {
                 name: VesStrView::new(struct_name),
+                fields,
+                n_methods: info.methods.len(),
                 arity: Arity {
                     positional: info.fields.positional.len() as u32,
                     default: info.fields.default.len() as u32,
@@ -1061,33 +1084,23 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state
             .builder
             .op(Opcode::CreateStruct(struct_desc_index), span.clone());
+
         // (magic) methods
         for method in info.methods.iter() {
             self.emit_fn_expr(method, span.clone(), true)?;
-            match method.name.lexeme.strip_prefix('@') {
-                Some(name) => {
-                    let name_index = self.state.builder.constant(
-                        // TODO: can the to_string call be avoided?
-                        self.ctx.alloc_or_intern(name.to_string()).into_ves(),
-                        span.clone(),
-                    )?;
-                    self.state
-                        .builder
-                        .op(Opcode::AddMagicMethod(name_index), span.clone());
-                }
-                None => {
-                    let name_index = self.state.builder.constant(
-                        // TODO: can the to_string call be avoided?
-                        self.ctx
-                            .alloc_or_intern(method.name.lexeme.to_string())
-                            .into_ves(),
-                        span.clone(),
-                    )?;
-                    self.state
-                        .builder
-                        .op(Opcode::AddMethod(name_index), span.clone());
-                }
-            }
+            let name_ptr = match method.name.lexeme.strip_prefix('@') {
+                Some(name) => self.ctx.alloc_or_intern(name.to_string()),
+                None => self.ctx.alloc_or_intern(method.name.lexeme.clone()),
+            };
+
+            let name_index = self
+                .state
+                .builder
+                .constant(name_ptr.into_ves(), span.clone())?;
+
+            self.state
+                .builder
+                .op(Opcode::AddMethod(name_index), span.clone());
         }
         // initializer
         if let Some(ref initializer) = info.initializer {
@@ -1119,7 +1132,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         Ok(())
     }
 
-    fn emit_fn_expr(&mut self, info: &'b FnInfo<'a>, span: Span, is_sub_expr: bool) -> Result<()> {
+    fn emit_fn_expr(
+        &mut self,
+        info: &'b FnInfo<'a>,
+        span: Span,
+        is_sub_expr: bool,
+    ) -> Result<GcObj> {
         // just like structs, if the fn is in a sub expression,
         // then it should only be accessible from its own body
         if info.kind == FnKind::Function && is_sub_expr {
@@ -1184,20 +1202,18 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             )
             .into()
         });
-        let fn_constant_index = self.state.builder.constant(
-            self.ctx.alloc_value(VesFn {
-                name: VesStrView::new(name),
-                arity: Arity {
-                    positional: info.params.positional.len() as u32,
-                    default: info.params.default.len() as u32,
-                    rest: info.params.rest.is_some(),
-                },
-                chunk,
-                file_id: self.ast.file_id,
-                is_magic_method: info.kind == FnKind::MagicMethod,
-            }),
-            span.clone(),
-        )?;
+        let fn_pointer = self.ctx.alloc_value(VesFn {
+            name: VesStrView::new(name),
+            arity: Arity {
+                positional: info.params.positional.len() as u32,
+                default: info.params.default.len() as u32,
+                rest: info.params.rest.is_some(),
+            },
+            chunk,
+            file_id: self.ast.file_id,
+            is_magic_method: info.kind == FnKind::MagicMethod,
+        });
+        let fn_constant_index = self.state.builder.constant(fn_pointer, span.clone())?;
         // if there are no captures, the function does not need to be a closure
         if captures.is_empty() {
             self.state
@@ -1229,7 +1245,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         if !self.state.is_global_scope() && !is_sub_expr {
             self.state.builder.op(Opcode::Copy, span);
         }
-        Ok(())
+        Ok(fn_pointer.as_ptr().unwrap())
     }
 
     /// Emits the conditional assignment to a default parameter

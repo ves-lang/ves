@@ -118,9 +118,6 @@ where
             | Opcode::TryGetProp(operand)
             | Opcode::GetMagicProp(operand)
             | Opcode::AddMethod(operand)
-            | Opcode::AddMagicMethod(operand)
-            | Opcode::AddStaticMethod(operand)
-            | Opcode::AddStaticField(operand)
             | Opcode::CreateStruct(operand) => {
                 format!(
                     "{}| {:<indent$} %const = {}",
