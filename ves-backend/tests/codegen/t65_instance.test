@@ -145,4 +145,5 @@ print(v0 + v1);
 |0063| Jump(65)
 |0064| Pop
 |0065| Pop
-|0066| Return
+|0066| GetLocal(0)
+|0067| Return

@@ -468,7 +468,7 @@ impl<'a> Initializer<'a> {
 pub struct StructInfo<'a> {
     /// The name of the struct (auto generated for anonymous structs).
     pub name: Token<'a>,
-    /// The fields defined on this struct.
+    /// The fields declared in this struct's constructor.
     pub fields: Params<'a>,
     /// The methods defined on this struct.
     pub methods: Vec<FnInfo<'a>>,

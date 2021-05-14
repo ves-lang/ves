@@ -181,7 +181,24 @@ impl Display for VesFn {
 
 impl Display for VesFnBound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "<fn {} -> {}>", self.r#fn, self.receiver)
+        write!(
+            f,
+            "<fn {} -> {}>",
+            match self
+                .r#fn
+                .as_closure()
+                .map(|c| c.r#fn.get().name())
+                .or_else(|| self.r#fn.as_fn().map(|f| f.name()))
+            {
+                Some(name) => {
+                    name.to_string()
+                }
+                None => {
+                    format!("{}", self.r#fn)
+                }
+            },
+            self.receiver.as_instance().unwrap().ty().name(),
+        )
     }
 }
 

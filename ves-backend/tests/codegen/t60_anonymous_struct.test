@@ -16,4 +16,5 @@
 |0002| PushInt32(0)
 |0003| Call(1)
 |0004| Print
-|0005| Return
+|0005| GetLocal(0)
+|0006| Return

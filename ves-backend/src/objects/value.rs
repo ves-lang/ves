@@ -211,6 +211,15 @@ impl Value {
         None
     }
 
+    pub fn as_instance(&self) -> Option<&super::ves_struct::VesInstance> {
+        if let Self::Ref(v) = self {
+            if let VesObject::Instance(i) = &**v {
+                return Some(i);
+            }
+        }
+        None
+    }
+
     pub fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
         crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_mut_unchecked())
     }
@@ -386,7 +395,7 @@ impl Display for Value {
             Value::Float(v) => Display::fmt(v, f),
             Value::Bool(v) => Display::fmt(v, f),
             Value::None => write!(f, "none"),
-            Value::Ref(v) => Display::fmt(&**v, f),
+            Value::Ref(v) => Display::fmt(v, f),
         }
     }
 }

@@ -390,11 +390,13 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 
     pub fn emit(mut self) -> Result<GcObj> {
+        let mut last_span = 0..0;
         for stmt in self.ast.body.iter() {
+            last_span = stmt.span.clone();
             self.emit_stmt(stmt)?;
         }
-        self.state.builder.op(Opcode::PushNone, 0..0);
-        self.state.builder.op(Opcode::Return, 0..0);
+        self.state.builder.op(Opcode::PushNone, last_span.clone());
+        self.state.builder.op(Opcode::Return, last_span);
 
         let f = VesFn {
             name: VesStrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
@@ -1159,13 +1161,20 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         if let Some(rest) = &info.params.rest {
             self.state.add_local(rest.lexeme.clone());
         }
+        let mut last_span = span.clone();
         for stmt in info.body.iter() {
+            last_span = stmt.span.clone();
             self.emit_stmt(stmt)?;
         }
         if info.kind != FnKind::Initializer {
-            self.state.builder.op(Opcode::PushNone, span.clone());
+            self.state.builder.op(Opcode::PushNone, last_span.clone());
+        } else {
+            let local = self.state.resolve_local("self").unwrap();
+            self.state
+                .builder
+                .op(Opcode::GetLocal(local), last_span.clone());
         }
-        self.state.builder.op(Opcode::Return, span.clone());
+        self.state.builder.op(Opcode::Return, last_span);
         let captures = std::mem::take(&mut self.state.captures);
         let chunk = self.end_state();
         if info.kind == FnKind::Function && is_sub_expr {

@@ -1,0 +1,169 @@
+struct Node(val, prev=none, next=none);
+
+struct NodeIterator(node) {
+    @iter(self) => self
+
+    @done(self) => !(self.node is none)
+
+    @next(self) {
+        return if !(self.node is none) {
+            let node = self.node
+            self.node = self.node.next
+            node
+        }
+    }
+}
+
+struct LinkedList(head = none, tail = none, _len = 0) {
+    len(self) => self._len
+
+    count(self) {
+        mut count = 0
+
+        for node = self.head; !(node is none); node = node.next {
+            ++count
+            // vs: count += 1
+        }
+
+        self.len = count
+        return count
+    }
+
+    push_back(self, x) {
+        self._len += 1
+
+        if !(self.tail is none) {
+            self.tail.next = Node(x, self.tail)
+            self.tail = self.tail.next
+        } else {
+            self.tail = self.head = Node(x)
+        }
+
+        return self
+    }
+
+    push_front(self, x) {
+        self._len += 1
+
+        if self.head is none {
+            self.head = self.tail = Node(x)
+        } else {
+            let n = Node(x, none, self.head)
+            if self.head.prev {
+                self.head.prev = n;
+            }
+            self.head = n
+        }
+
+        return self
+    }
+
+    append_back(self, node) {
+        if node is Node {
+            self.append_node_back(node)
+        } else if node is LinkedList {
+            self.append_list_back(node)
+        } else {
+            print(f"Expected a Node or a LinkedList, but got `{node}`")
+            print(1/0)
+        }
+    }
+
+    append_node_back(self, mut node) {
+        if self.tail {
+            self.tail.next = node
+            node.prev = self.tail
+        } else {
+            self.head = self.tail = node
+        }
+        self._len += 1
+        while node.next {
+            node = node.next
+            self._len += 1
+        }
+        self.tail = node
+    }
+
+    append_list_back(self, list) {
+        if self.tail  {
+            self.tail.next = list.head
+            list.head.prev = self.tail
+            self.tail = list.tail
+        } else {
+            self.head = list.head
+            self.tail = list.tail
+        }
+        self._len += list._len
+    }
+
+    find(self, x) {
+        for n in self {
+            if n.val == x {
+                return n
+            }
+        }
+        none
+    }
+
+    remove(self, x) {
+        for n in self {
+            if n.val != x { continue }
+            if n.prev {
+                n.prev.next = n.next
+            }
+            if n.next {
+                n.next.prev = n.prev
+            }
+            self._len -= 1
+            if self.head && n == self.head { self.head = n.next }
+            if self.tail && n == self.tail { self.tail = n.prev }
+        }
+    }
+
+    contains(self, x) {
+        self.find(x) != none
+    }
+
+    equals(self, list) {
+        mut other_node = if list is LinkedList { list.head } else { list }
+        mut node = self.head
+
+        while node && other_node {
+            if node.val != other_node.val { return false }
+            node = node.next
+            other_node = node.next
+        }
+
+        !(node || other_node)
+    }
+
+    @iter(self) => NodeIterator(self.head)
+
+    @str(self) {
+        mut s = "LinkedList [ "
+        mut node = self.head
+
+        while node {
+            s s = f"{s}{node.val}"
+            node = node.next
+            if node { s = f"{s} -> " }
+        }
+        s = f"{s} ]"
+
+        return s
+    }
+}
+
+let list = LinkedList();
+
+for i in 0..5 {
+    list.push_back(i);
+}
+
+print(list)
+
+// TODO: test more methods here
+
+%output
+
+LinkedList [ 0 -> 1 -> 2 -> 3 -> 4 ]

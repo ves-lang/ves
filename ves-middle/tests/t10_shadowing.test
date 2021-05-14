@@ -20,10 +20,22 @@ b = 5; // ok
 use(b);
 mut b; // not ok
 
+struct Test {
+    count(self) {
+        let count = 0  // ok
+        return count
+    }
+}
+
+fn count() { 
+    let count = 0;
+    return count
+}
+
 %output
 
 error: Attempted to shadow a variable `a`
-   ┌─ <source: #565aea8b46b03658>:11:5
+   ┌─ <source: #a70b045f9c15a1f1>:11:5
    │
  5 │ let a = 0;
    │     - First declared on line 5
@@ -32,7 +44,7 @@ error: Attempted to shadow a variable `a`
    │     ^ Later shadowed here
 
 error: Attempted to shadow a variable `b`
-   ┌─ <source: #565aea8b46b03658>:21:5
+   ┌─ <source: #a70b045f9c15a1f1>:21:5
    │
 13 │ mut b = 0;
    │     - First declared on line 13

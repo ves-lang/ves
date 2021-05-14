@@ -240,7 +240,15 @@ impl Deref for GcRcObj {
 
 impl Display for GcObj {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        (&**self).fmt(f)
+        use crate::runtime::vm;
+        if vm::pset_check_pointer(&self) {
+            write!(f, "...")
+        } else {
+            vm::pset_add_pointer(*self);
+            (&**self).fmt(f)?;
+            vm::pset_remove_pointer(&self);
+            Ok(())
+        }
     }
 }
 

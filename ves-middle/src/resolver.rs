@@ -487,7 +487,7 @@ impl<'a> Resolver<'a> {
         // if this function is declared in a sub expression, it should not declare
         // a variable in its enclosing scope, but only in the scope of its own body
         if !is_sub_expr && f.kind != FnKind::Initializer {
-            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
+            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::from(f.kind), ex);
             self.assign(&f.name, ex);
         }
 
@@ -501,7 +501,7 @@ impl<'a> Resolver<'a> {
 
         // function is always accessible from its own body, but don't re-declare it
         if is_sub_expr && f.kind != FnKind::Initializer {
-            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::Fn, ex);
+            self.declare(&f.name, Rc::new(Cell::new(0)), NameKind::from(f.kind), ex);
             self.assign(&f.name, ex);
         }
 
@@ -550,7 +550,8 @@ impl<'a> Resolver<'a> {
         }
 
         magic_table! {
-            init, add, radd, sub, rsub, mul, rmul, div, rdiv, rem, rrem, pow, rpow, cmp, str
+            init, add, radd, sub, rsub, mul, rmul, div, rdiv, rem, rrem, pow, rpow, cmp, str,
+            iter, done, next
         };
 
         if !TABLE.contains(info.name.lexeme.as_ref()) {
@@ -573,7 +574,7 @@ impl<'a> Resolver<'a> {
         match &mut expr.kind {
             ExprKind::Struct(box StructInfo {
                 ref name,
-                ref mut fields,
+                fields,
                 ref mut methods,
                 ref mut initializer,
             }) => {
@@ -587,6 +588,7 @@ impl<'a> Resolver<'a> {
                     self.assign(name, ex);
                 }
 
+                // TODO: check the field and method usage in all methods
                 if let Some(init) = initializer {
                     self.push();
                     let this = Token::new("self", name.span.clone(), TokenKind::Self_);
@@ -602,7 +604,7 @@ impl<'a> Resolver<'a> {
                 }
 
                 for method in methods.iter_mut() {
-                    self.resolve_function(method, true, registry, ex);
+                    self.resolve_function(method, false, registry, ex);
                 }
 
                 self.pop(ex);
@@ -746,7 +748,7 @@ impl<'a> Resolver<'a> {
         ex: &mut ErrCtx,
     ) {
         if let Some(vu) = self.env.in_current_scope(&name.lexeme) {
-            if vu.declared && name.lexeme != "_" {
+            if vu.declared && vu.kind != NameKind::Method && name.lexeme != "_" {
                 Self::error_of_kind(
                     VesErrorKind::AttemptedToShadowLocalVariable(vu.span.clone()),
                     format!(

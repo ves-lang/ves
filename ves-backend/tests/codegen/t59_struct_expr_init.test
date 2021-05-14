@@ -49,7 +49,8 @@ struct T3(a = 0) {
 |0020| Pop              // pop <condition> result
 // @end:                //
 |0021| Pop              // pop [[VALUE]]
-|0022| Return
+|0022| GetLocal(0)
+|0023| Return
 >>>>>> T3.init          
 |0000| PushNone         // [[VALUE]] = none
 |0001| GetLocal(0)      // get self
@@ -81,4 +82,5 @@ struct T3(a = 0) {
 |0025| Data(0)          //
 |0026| Data(0)          //
 |0027| Print            // print(self.a)
-|0028| Return
+|0028| GetLocal(0)
+|0029| Return

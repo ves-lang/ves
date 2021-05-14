@@ -1,6 +1,9 @@
 use std::{cell::Cell, rc::Rc};
 
-use ves_parser::{ast::VarKind, Span};
+use ves_parser::{
+    ast::{FnKind, VarKind},
+    Span,
+};
 
 /// The kind of the loop currently being resolved.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -40,6 +43,8 @@ pub enum NameKind {
     Param,
     /// A function declaration.
     Fn,
+    // A method declaration.
+    Method,
     /// A struct declaration
     Struct,
     /// An imported module.
@@ -64,6 +69,18 @@ impl From<VarKind> for NameKind {
             VarKind::Mut => NameKind::Mut,
             VarKind::Fn => NameKind::Fn,
             VarKind::Struct => NameKind::Struct,
+        }
+    }
+}
+
+impl From<FnKind> for NameKind {
+    #[inline]
+    fn from(kind: FnKind) -> Self {
+        match kind {
+            FnKind::Function => NameKind::Fn,
+            FnKind::Method => NameKind::Method,
+            FnKind::Initializer => NameKind::Method,
+            FnKind::MagicMethod => NameKind::Method,
         }
     }
 }

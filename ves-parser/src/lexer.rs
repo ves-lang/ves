@@ -443,7 +443,7 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Interpo
 
         bump_count = i;
         match byte {
-            c if c == &quote_kind && bytes.get(i - 1) != Some(&b'\\') => {
+            c if c == &quote_kind && bytes.get(i.saturating_sub(1)) != Some(&b'\\') => {
                 if previous_fragment_end < i {
                     // + 1 to skip the backslash (\)
                     let span = (previous_fragment_end + 1)..i;
@@ -455,7 +455,7 @@ fn interpolated_string<'a>(lex: &mut logos::Lexer<'a, TokenKind<'a>>) -> Interpo
                 state = InterpolatedStringState::Closed;
                 break;
             }
-            b'{' if bytes.get(i - 1) != Some(&b'\\') => {
+            b'{' if bytes.get(i.saturating_sub(1)) != Some(&b'\\') => {
                 let span = if previous_fragment_end != 0 {
                     (previous_fragment_end + 1)..i
                 } else {

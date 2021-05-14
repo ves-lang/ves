@@ -1,4 +1,4 @@
-use std::{borrow::Cow, usize};
+use std::{borrow::Cow, cell::RefCell, collections::HashSet, usize};
 
 use ves_error::VesError;
 
@@ -91,6 +91,29 @@ macro_rules! cmp_op {
             )));
         }
     };
+}
+
+thread_local! {
+    /// This set is used when serializing recursive data structures to avoid blowing up the Rust stack
+    /// with recursive calls to Display::fmt.
+    pub(crate) static VISITED_POINTERS_SET: RefCell<HashSet<GcObj>> = RefCell::new(HashSet::with_capacity(256));
+}
+
+/// Add a pointer to the set of visited pointers.
+pub(crate) fn pset_add_pointer(ptr: GcObj) {
+    VISITED_POINTERS_SET.with(|set| {
+        set.borrow_mut().insert(ptr);
+    })
+}
+
+/// Check if a pointer is in the set of visited pointers.
+pub(crate) fn pset_check_pointer(ptr: &GcObj) -> bool {
+    VISITED_POINTERS_SET.with(|set| set.borrow().contains(ptr))
+}
+
+/// Remove a pointer from the set of visited pointers.
+pub(crate) fn pset_remove_pointer(ptr: &GcObj) -> bool {
+    VISITED_POINTERS_SET.with(|set| set.borrow_mut().remove(ptr))
 }
 
 pub trait VmInterface {
@@ -275,8 +298,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::JumpIfFalse(to) => self.jump_if_false(to),
                 Opcode::Return => {
                     let frame = self.pop_frame();
-                    self.ip = frame.return_address;
                     let current_call_stack_size = self.call_stack.len();
+                    self.ip = frame.return_address;
 
                     let result = self.pop();
                     if current_call_stack_size == 0 {
@@ -289,7 +312,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.push(result);
 
                     let should_return_early =
-                        early_return && current_call_stack_size == initial_call_stack_size;
+                        early_return && current_call_stack_size == initial_call_stack_size - 1;
                     if current_call_stack_size == 0 || should_return_early {
                         break;
                     }
@@ -399,11 +422,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             .get_slot_value_mut(name)
             .map(|v| {
                 let method = v.method.as_ref_unchecked();
-                debug_assert!(method.as_closure().is_some() || method.as_fn().is_some());
                 // lazily bind method
                 if v.is_bound {
                     Some(*method)
                 } else {
+                    debug_assert!(
+                        method.as_closure().is_some() || method.as_fn().is_some(),
+                        "{}",
+                        &**method
+                    );
                     let method = self.alloc(VesFnBound::new(*method, receiver).into());
                     v.method = Value::Ref(method);
                     v.is_bound = true;
@@ -423,13 +450,14 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         right: NanBox,
     ) -> Result<Option<Value>, VesError> {
         let inst = self.inst();
-        if let Ok(method) = self.get_magic_method(left, &lhs_method, inst) {
+        if let Ok(Some(method)) = self.get_magic_method(left, &lhs_method, inst) {
             self.pop_n(2);
             self.push_many([NanBox::from(method), left, right]);
-        } else {
-            let method = self.get_magic_method(right, &rhs_method, inst)?;
+        } else if let Some(method) = self.get_magic_method(right, &rhs_method, inst)? {
             self.pop_n(2);
             self.push_many([NanBox::from(method), right, left]);
+        } else {
+            return Ok(None);
         }
 
         match self.call(1) {
@@ -621,11 +649,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // Objects may override @cmp
         let method_name = self.symbols.cmp;
         let inst = self.inst();
-        let jump_by = if let Ok(method) = self.get_magic_method(left, &method_name, inst) {
+        let jump_by = if let Ok(Some(method)) = self.get_magic_method(left, &method_name, inst) {
             self.pop_n(2);
             self.push_many([method.into(), left, right]);
             1 // have to jump by 1 to land on the mapping instruction
-        } else if let Ok(method) = self.get_magic_method(right, &method_name, inst) {
+        } else if let Ok(Some(method)) = self.get_magic_method(right, &method_name, inst) {
             self.pop_n(2);
             // We have to reverse the order of the arguments since the receiver goes first
             self.push_many([method.into(), right, left]);
@@ -745,8 +773,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     fn compare_type(&mut self) -> Result<(), VesError> {
-        let right = *self.peek();
-        let left = *self.peek_at(1);
+        let right = self.pop();
+        let left = self.pop();
 
         self.push(NanBox::bool(
             left.unbox().typeid() == right.unbox().typeid(),
@@ -1034,8 +1062,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
                 match self.get_magic_method(NanBox::from(*value), &method, inst) {
                     Ok(Some(obj)) => {
-                        let stringified =
-                            self.execute(Some(*value), Value::Ref(obj), vec![*value])?;
+                        let stringified = self.execute(Some(*value), Value::Ref(obj), vec![])?;
                         match stringified.as_ref().and_then(|r| r.as_str()) {
                             Some(s) => s.clone_inner(),
                             None => {
