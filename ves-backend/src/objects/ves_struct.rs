@@ -112,8 +112,7 @@ impl VesStruct {
         self.name.str()
     }
 
-    /// Updates the vtable without affecting already existing instances.
-    /// The given name must already be present in the vtable.
+    /// Adds the given method to the struct's vtalbe.
     #[inline]
     pub fn add_method(&mut self, name: ViewKey, value: GcObj) {
         let n = self.vtable.len();
