@@ -57,6 +57,10 @@ fn const_at(at: usize, chunk: &Chunk) -> String {
     )
 }
 
+fn const_at_value(at: usize, chunk: &Chunk) -> Option<&crate::Value> {
+    chunk.constants.get(at)
+}
+
 pub fn dis_chunk<N, S>(chunk: &Chunk, db: Option<&VesFileDatabase<N, S>>, indent: usize) -> String
 where
     N: AsRef<str> + std::fmt::Display + Clone,
@@ -116,9 +120,7 @@ where
             | Opcode::SetProp(operand)
             | Opcode::GetProp(operand)
             | Opcode::TryGetProp(operand)
-            | Opcode::GetMagicProp(operand)
-            | Opcode::AddMethod(operand)
-            | Opcode::CreateStruct(operand) => {
+            | Opcode::GetMagicProp(operand) => {
                 format!(
                     "{}| {:<indent$} %const = {}",
                     line_fmt(ip, chunk, db),
@@ -126,6 +128,63 @@ where
                     const_at(*operand as usize, chunk),
                     indent = indent
                 )
+            }
+
+            Opcode::CreateStruct(operand) => {
+                let line = line_fmt(ip, chunk, db);
+                let line_len = line.len() + 2 + (indent > 0) as usize;
+                let mut out = format!(
+                    "{}| {:<indent$} %const = {}",
+                    line,
+                    format!("{:?}", op),
+                    const_at(*operand as usize, chunk),
+                    indent = indent
+                );
+
+                if let Some(descriptor) =
+                    const_at_value(*operand as _, chunk).and_then(|v| v.as_struct_descriptor())
+                {
+                    if descriptor.fields.is_empty() && descriptor.methods.is_empty() {
+                        out.push_str(&format!(
+                            "\n{: >pad$} <empty descriptor>",
+                            "",
+                            pad = line_len
+                        ));
+                    }
+
+                    for (i, field) in descriptor.fields.iter().enumerate() {
+                        out.push_str(&format!(
+                            "\n{: >pad$} {:<indent$}%field @{} = {}",
+                            "",
+                            "",
+                            i,
+                            field.str(),
+                            pad = line_len,
+                            indent = indent,
+                        ));
+                    }
+
+                    for (name, method) in &descriptor.methods {
+                        out.push_str(&format!(
+                            "\n{: >pad$} {:<indent$}%method @[{:02},{:02}] = {{ name: {}, fn: {} }}",
+                            "",
+                            "",
+                            name,
+                            method,
+                            const_at(*name as _, chunk),
+                            const_at(*method as _, chunk),
+                            pad = line_len,
+                            indent = indent
+                        ));
+                    }
+                } else {
+                    out.push_str(&format!(
+                        "\n{: >pad$} <ERROR: FAILED TO RETRIEVE THE DESCRIPTOR>",
+                        "",
+                        pad = line_len
+                    ));
+                }
+                out
             }
 
             Opcode::GetLocal(operand)

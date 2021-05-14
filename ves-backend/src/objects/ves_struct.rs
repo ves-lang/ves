@@ -62,14 +62,15 @@ impl Eq for ViewKey {}
 pub struct StructDescriptor {
     pub name: VesStrView,
     pub fields: Vec<VesStrView, ProxyAllocator>,
-    // Isn't really needed, just a micro-optimization
-    pub n_methods: usize,
+    // The indices of the methods' constant slots.
+    pub methods: Vec<(u32, u32), ProxyAllocator>,
     /// Field arity (rest field is ignored)
     pub arity: Arity,
 }
 
 unsafe impl Trace for StructDescriptor {
     fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+        Trace::trace(&mut self.name, tracer);
         for field in &mut self.fields {
             Trace::trace(field, tracer);
         }

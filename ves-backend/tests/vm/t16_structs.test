@@ -1,8 +1,23 @@
+
 struct S {
     method(self) {}
 }
 
 print(S)
+
+{
+    let x = 5;
+    struct Y {
+        closure(self) => x
+    }
+    print(Y)
+}
+
+struct Z(a, b, c = 10) {
+    func(self) {}
+}
+
+print(Z)
 
 // TODO: instantiation
 // TODO: fields, method invocation, method binding
@@ -10,3 +25,5 @@ print(S)
 %output
 
 <struct: S>
+<struct: Y>
+<struct: Z>

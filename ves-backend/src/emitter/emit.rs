@@ -245,7 +245,6 @@ impl<'a> State<'a> {
     }
 
     fn add_capture(&mut self, capture: CaptureInfo) -> u32 {
-        println!("{:?}", capture);
         // don't duplicate captures
         for (index, existing) in self.captures.iter().enumerate() {
             if existing == &capture {
@@ -919,7 +918,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             ExprKind::Unary(op, ref operand) => self.emit_unary_expr(op, operand, span)?,
             ExprKind::Struct(ref info) => self.emit_struct_expr(info, span, is_sub_expr)?,
             ExprKind::Fn(ref info) => {
-                self.emit_fn_expr(info, span, is_sub_expr)?;
+                self.emit_fn_expr(info, span, is_sub_expr, true)?;
             }
             ExprKind::If(ref info) => self.emit_if_expr(info, span)?,
             ExprKind::DoBlock(ref block) => self.emit_do_block_expr(block, span)?,
@@ -1068,26 +1067,25 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             fields
         };
 
-        let struct_desc_index = self.state.builder.constant(
-            self.ctx.alloc_value(StructDescriptor {
-                name: VesStrView::new(struct_name),
-                fields,
-                n_methods: info.methods.len(),
-                arity: Arity {
-                    positional: info.fields.positional.len() as u32,
-                    default: info.fields.default.len() as u32,
-                    rest: false,
-                },
-            }),
-            span.clone(),
-        )?;
+        let descriptor = StructDescriptor {
+            name: VesStrView::new(struct_name),
+            fields,
+            methods: Vec::with_capacity_in(info.methods.len(), self.ctx.gc.proxy()),
+            arity: Arity {
+                positional: info.fields.positional.len() as u32,
+                default: info.fields.default.len() as u32,
+                rest: false,
+            },
+        };
+        let mut descriptor = self.ctx.alloc_value(descriptor);
+        let struct_desc_index = self.state.builder.constant(descriptor, span.clone())?;
         self.state
             .builder
             .op(Opcode::CreateStruct(struct_desc_index), span.clone());
 
         // (magic) methods
         for method in info.methods.iter() {
-            self.emit_fn_expr(method, span.clone(), true)?;
+            let fn_index = self.emit_fn_expr(method, span.clone(), true, false)?;
             let name_ptr = match method.name.lexeme.strip_prefix('@') {
                 Some(name) => self.ctx.alloc_or_intern(name.to_string()),
                 None => self.ctx.alloc_or_intern(method.name.lexeme.clone()),
@@ -1098,9 +1096,10 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .builder
                 .constant(name_ptr.into_ves(), span.clone())?;
 
-            self.state
-                .builder
-                .op(Opcode::AddMethod(name_index), span.clone());
+            debug_assert!(descriptor.as_ref().unwrap().is_struct_descriptor());
+            unsafe { descriptor.as_struct_descriptor_mut_unchecked() }
+                .methods
+                .push((name_index, fn_index));
         }
         // initializer
         if let Some(ref initializer) = info.initializer {
@@ -1108,10 +1107,11 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .state
                 .builder
                 .constant(self.ctx.alloc_or_intern("init").into_ves(), span.clone())?;
-            self.emit_fn_expr(&initializer.body, span.clone(), true)?;
-            self.state
-                .builder
-                .op(Opcode::AddMethod(name_index), span.clone());
+            let fn_index = self.emit_fn_expr(&initializer.body, span.clone(), true, false)?;
+            debug_assert!(descriptor.as_ref().unwrap().is_struct_descriptor());
+            unsafe { descriptor.as_struct_descriptor_mut_unchecked() }
+                .methods
+                .push((name_index, fn_index));
         }
         if is_sub_expr {
             // close the temporary function local scope, but don't pop the value
@@ -1132,12 +1132,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         Ok(())
     }
 
+    /// Returns the index of the created function or closure descriptor.
     fn emit_fn_expr(
         &mut self,
         info: &'b FnInfo<'a>,
         span: Span,
         is_sub_expr: bool,
-    ) -> Result<GcObj> {
+        should_emit_function_load: bool,
+    ) -> Result<u32> {
         // just like structs, if the fn is in a sub expression,
         // then it should only be accessible from its own body
         if info.kind == FnKind::Function && is_sub_expr {
@@ -1213,12 +1215,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             file_id: self.ast.file_id,
             is_magic_method: info.kind == FnKind::MagicMethod,
         });
-        let fn_constant_index = self.state.builder.constant(fn_pointer, span.clone())?;
+        let mut fn_constant_index = self.state.builder.constant(fn_pointer, span.clone())?;
         // if there are no captures, the function does not need to be a closure
         if captures.is_empty() {
-            self.state
-                .builder
-                .op(Opcode::GetConst(fn_constant_index), span.clone());
+            if should_emit_function_load {
+                self.state
+                    .builder
+                    .op(Opcode::GetConst(fn_constant_index), span.clone());
+            }
         } else {
             let closure_desc_index = self.state.builder.constant(
                 self.ctx.alloc_value(ClosureDescriptor {
@@ -1227,9 +1231,12 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 }),
                 span.clone(),
             )?;
-            self.state
-                .builder
-                .op(Opcode::CreateClosure(closure_desc_index), span.clone());
+            fn_constant_index = closure_desc_index;
+            if should_emit_function_load {
+                self.state
+                    .builder
+                    .op(Opcode::CreateClosure(closure_desc_index), span.clone());
+            }
         }
         // if the fn isn't in a sub expression, it should define a variable
         // in the scope where it's declared
@@ -1245,7 +1252,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         if !self.state.is_global_scope() && !is_sub_expr {
             self.state.builder.op(Opcode::Copy, span);
         }
-        Ok(fn_pointer.as_ptr().unwrap())
+        Ok(fn_constant_index)
     }
 
     /// Emits the conditional assignment to a default parameter

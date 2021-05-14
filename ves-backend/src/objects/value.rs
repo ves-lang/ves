@@ -218,6 +218,15 @@ impl Value {
         crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_mut_unchecked())
     }
 
+    pub unsafe fn as_struct_descriptor_mut_unchecked(
+        &mut self,
+    ) -> &mut super::ves_struct::StructDescriptor {
+        crate::unwrap_unchecked!(
+            VesObject::StructDescriptor,
+            &mut **self.as_ref_mut_unchecked()
+        )
+    }
+
     pub fn as_int_unchecked(&self) -> &i32 {
         crate::unwrap_unchecked!(self, Int)
     }

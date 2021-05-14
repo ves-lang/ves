@@ -253,7 +253,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::MapExtend => unimplemented!(),
                 Opcode::CreateClosure(d) => self.create_closure(d)?,
                 Opcode::CreateStruct(d) => self.create_struct(d)?,
-                Opcode::AddMethod(m) => self.add_method(m)?,
                 Opcode::Print => self.print()?,
                 Opcode::PrintN(n) => self.print_n(n)?,
                 Opcode::Copy => self.copy()?,
@@ -811,31 +810,25 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             .as_struct_descriptor()
             .expect("Struct miscompilation: expected to find a descriptor");
 
-        let ty = VesStruct::new(descriptor.name, &descriptor.fields, descriptor.n_methods);
+        let mut ty = VesStruct::new(
+            descriptor.name,
+            &descriptor.fields,
+            descriptor.methods.len(),
+        );
+        for (name_index, fn_index) in descriptor.methods.iter().copied() {
+            let name = self.const_at(name_index as _).unbox().as_ptr().unwrap();
+            let mut func = self.const_at(fn_index as _).unbox().as_ptr().unwrap();
+
+            if func.is_closure_descriptor() {
+                self.create_closure(fn_index)?;
+                func = self.pop().unbox().as_ptr().unwrap();
+            }
+
+            ty.add_method(ViewKey::from(name), func);
+        }
+
         let ptr = self.alloc(ty.into());
         self.push(ptr);
-
-        Ok(())
-    }
-
-    fn add_method(&mut self, m: u32) -> Result<(), VesError> {
-        let method_ptr = self.pop().unbox();
-        let mut struct_ptr = self.peek().unbox();
-        let name_ptr = *self.const_at(m as _).unbox().as_ref_unchecked();
-
-        debug_assert!(method_ptr
-            .as_ptr()
-            .as_ref()
-            .and_then(|f| f.as_fn())
-            .is_some());
-        debug_assert!(struct_ptr
-            .as_ptr()
-            .as_ref()
-            .and_then(|f| f.as_struct())
-            .is_some());
-
-        let ty = unsafe { struct_ptr.as_struct_mut_unchecked() };
-        ty.add_method(ViewKey::from(name_ptr), method_ptr.as_ptr().unwrap());
 
         Ok(())
     }

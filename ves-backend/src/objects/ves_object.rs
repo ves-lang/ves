@@ -195,6 +195,16 @@ impl VesObject {
     pub fn is_fn(&self) -> bool {
         matches!(self, Self::Fn(..))
     }
+
+    /// Returns `true` if the ves_object is [`StructDescriptor`].
+    pub fn is_struct_descriptor(&self) -> bool {
+        matches!(self, Self::StructDescriptor(..))
+    }
+
+    /// Returns `true` if the ves_object is [`ClosureDescriptor`].
+    pub fn is_closure_descriptor(&self) -> bool {
+        matches!(self, Self::ClosureDescriptor(..))
+    }
 }
 
 impl From<VesStr> for VesObject {

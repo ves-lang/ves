@@ -169,8 +169,6 @@ pub enum Opcode {
     CreateClosure(/* descriptor constant index */ u32),
     /// Creates an empty struct
     CreateStruct(/* descriptor constant index */ u32),
-    /// Add a method to a struct
-    AddMethod(/* name constant index */ u32),
     /// Print a single value
     Print,
     /// Print N values

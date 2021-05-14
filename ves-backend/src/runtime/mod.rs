@@ -193,6 +193,12 @@ pub mod suite {
             let mut output = Vec::new();
             let mut vm = Vm::with_writer(context, &mut output);
 
+            #[cfg(feature = "vm-debug")]
+            println!(
+                "{}",
+                crate::emitter::dis::dis_func(entry.as_fn().unwrap(), Some(&result.db), None)
+            );
+
             match vm.run(entry) {
                 Ok(_) => String::from_utf8(output).unwrap(),
                 Err(e) => result.db.report_one_to_string(&e).unwrap(),

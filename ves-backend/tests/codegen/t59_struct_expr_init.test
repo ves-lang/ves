@@ -17,16 +17,12 @@ struct T3(a = 0) {
 |0005| Pop
 |0006| CreateStruct(T2, 0+1)
 // because CreateStruct has a defaulted field, it implicitly gets an initializer
-|0007| GetConst(<fn T2.init>)
-|0008| AddMethod(3)
-|0009| SetGlobal(2)
-|0010| Pop
-|0011| CreateStruct(T3, 0+1)
-|0012| GetConst(<fn T3.init>)
-|0013| AddMethod(3)
-|0014| SetGlobal(3)
-|0015| Pop
-|0016| Return
+|0007| SetGlobal(2)
+|0008| Pop
+|0009| CreateStruct(T3, 0+1)
+|0010| SetGlobal(3)
+|0011| Pop
+|0012| Return
 >>>>>> T2.init
 |0000| PushNone         // [[VALUE]] = none
 |0001| GetLocal(0)      // get self

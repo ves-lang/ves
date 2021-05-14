@@ -7,10 +7,8 @@
 %output
 
 |0000| CreateStruct(T, 1+0)
-|0001| CreateClosure(<fn T.init>, 1)
-|0002| AddMethod(1)
-|0003| Pop
-|0004| Return
+|0001| Pop
+|0002| Return
 >>>>>> T.init
 |0000| GetCapture(0)
 |0001| PushInt32(0)
