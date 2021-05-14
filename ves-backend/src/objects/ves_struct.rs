@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, Trace, VesGc},
+    gc::{proxy_allocator::ProxyAllocator, GcObj, Trace},
     VesObject,
 };
 use ahash::RandomState;

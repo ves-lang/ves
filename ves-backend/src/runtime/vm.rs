@@ -399,24 +399,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             .get_slot_value_mut(name)
             .map(|v| {
                 let method = v.method.as_ref_unchecked();
-                if method
-                    .as_closure()
-                    .map(|v| v.r#fn())
-                    .or_else(|| method.as_fn())
-                    .map(|v| v.is_magic_method)
-                    .unwrap_or(false)
-                {
-                    // lazily bind method
-                    if v.is_bound {
-                        Some(*method)
-                    } else {
-                        let method = self.alloc(VesFnBound::new(*method, receiver).into());
-                        v.method = Value::Ref(method);
-                        v.is_bound = true;
-                        Some(method)
-                    }
+                debug_assert!(method.as_closure().is_some() || method.as_fn().is_some());
+                // lazily bind method
+                if v.is_bound {
+                    Some(*method)
                 } else {
-                    None
+                    let method = self.alloc(VesFnBound::new(*method, receiver).into());
+                    v.method = Value::Ref(method);
+                    v.is_bound = true;
+                    Some(method)
                 }
             })
             .flatten()
@@ -1130,8 +1121,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         if !obj.is_ptr() {
             return Err(self.error(format!("{:?} is not an object", obj.unbox())));
         }
-        let mut obj = unsafe { obj.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &mut *obj {
+        let instance = obj;
+        let mut instance = unsafe { instance.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *instance {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             // TODO: this will panic if you try to get a method
@@ -1148,15 +1140,26 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             // Slow path (inline cache miss)
             let name = name.unbox().as_ptr().unwrap();
             let name = VesStrView::new(name);
-            let slot = match instance.fields().get_slot_index(&name) {
-                Some(slot) => slot,
-                None => {
-                    return Err(self.error(format!("{} has no property `{}`.", obj, name.str())))
+            let value = match instance.fields().get_slot_index(&name) {
+                Some(slot) => {
+                    self.update_inst_ic_cache(struct_ptr, slot as u32);
+                    NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot))
                 }
-            } as usize;
+                None => {
+                    // Double miss, the user might be trying to get a method by value
+                    match self.bind_method(instance, &name, obj.unbox()) {
+                        Some(method) => NanBox::from(method),
+                        None => {
+                            return Err(self.error(format!(
+                                "{} has no property or method `{}`.",
+                                obj.unbox(),
+                                name.str()
+                            )));
+                        }
+                    }
+                }
+            };
 
-            let value = NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot));
-            self.update_inst_ic_cache(struct_ptr, slot as u32);
             self.push(value);
             return Ok(());
         }

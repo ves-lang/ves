@@ -1,5 +1,9 @@
 struct Vec3(x = 0, y = 0, z = 0) {
     @add(self, other) => Vec3(self.x + other.x, self.y + other.y, self.z + other.z)
+    dist(self, other) {
+        let sum = (self.x - other.x) ** 2 + (self.y - other.y) ** 2 + (self.z - other.z) ** 2;
+        return sum ** 0.5;
+    }
 }
 
 let v0 = Vec3(2);
@@ -9,8 +13,11 @@ print(v1);
 
 print(v0 + v1);
 
+print(v0.dist(v1));
+
 %output
 
-Vec3 { x: 2, y: 0, z: 0, add: <fn Vec3.@add>, init: <fn Vec3.init> }
-Vec3 { x: 2, y: 3, z: 4, add: <fn Vec3.@add>, init: <fn Vec3.init> }
-Vec3 { x: 4, y: 3, z: 4, add: <fn Vec3.@add>, init: <fn Vec3.init> }
+Vec3 { x: 2, y: 0, z: 0, add: <fn Vec3.@add>, dist: <fn Vec3.dist>, init: <fn Vec3.init> }
+Vec3 { x: 2, y: 3, z: 4, add: <fn Vec3.@add>, dist: <fn Vec3.dist>, init: <fn Vec3.init> }
+Vec3 { x: 4, y: 3, z: 4, add: <fn Vec3.@add>, dist: <fn Vec3.dist>, init: <fn Vec3.init> }
+5

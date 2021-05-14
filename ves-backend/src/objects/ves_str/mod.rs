@@ -31,6 +31,16 @@ impl VesStr {
     pub fn clone_inner(&self) -> Cow<'static, str> {
         self.s.clone()
     }
+
+    pub fn compute_hash(&self) -> u64 {
+        if let Some(hash) = self.hash.get() {
+            hash
+        } else {
+            let hash = super::ves_str::view::hash(&self.s);
+            self.hash.set(Some(hash));
+            hash
+        }
+    }
 }
 
 impl From<&'static str> for VesStr {

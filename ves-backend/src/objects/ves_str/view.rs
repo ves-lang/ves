@@ -74,7 +74,7 @@ impl std::hash::Hash for VesStrView {
     }
 }
 
-fn hash(s: &str) -> u64 {
+pub(super) fn hash(s: &str) -> u64 {
     use std::hash::Hash;
     let mut r = RandomState::with_seeds(
         const_random::const_random!(u64),
