@@ -25,7 +25,7 @@ impl InlineCache {
     }
 
     /// Attempts to retrieve the cached field slot corresponding to the given instruction.
-    /// Returns `None` if the cache slot is empty, stores a method, or has a different struct type.
+    /// Returns `None` if the cache slot is empty.
     pub fn get_property_cache(&self, instruction: usize, ty: &GcObj) -> Option<usize> {
         debug_assert!(instruction < self.cache.len());
         match unsafe { self.cache.get_unchecked(instruction) } {

@@ -143,8 +143,7 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
             return Ok(self.pop().unbox());
         }
         // TODO: tracebacks / backtraces
-        self.run_dispatch_loop(true)?;
-        Ok(self.pop().unbox())
+        self.run_dispatch_loop(true)
     }
 
     fn create_error(&mut self, msg: String) -> VesError {
@@ -185,7 +184,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         Ok(())
     }
 
-    fn run_dispatch_loop(&mut self, early_return: bool) -> Result<(), VesError> {
+    fn run_dispatch_loop(&mut self, early_return: bool) -> Result<Value, VesError> {
         use crate::emitter::opcode::Opcode;
 
         let initial_call_stack_size = self.call_stack.len();
@@ -291,7 +290,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             }
         }
 
-        Ok(())
+        Ok(self.pop().unbox())
     }
 
     fn get_magic_method(
