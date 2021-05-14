@@ -84,7 +84,7 @@ impl Drop for VmGlobals {
 // TODO: think through what exactly this needs to hold.
 pub struct Context<T: VesGc> {
     gc: GcHandle<T>,
-    pub(crate) registry: ModuleRegistry<()>,
+    pub(crate) _registry: ModuleRegistry<()>,
     globals: VmGlobals,
     symbols: SymbolTable<T>,
 }
@@ -98,7 +98,7 @@ impl<T: VesGc> Context<T> {
     ) -> Self {
         Self {
             gc,
-            registry,
+            _registry: registry,
             globals,
             symbols,
         }
@@ -185,7 +185,7 @@ pub mod suite {
             let entry = modules.pop().unwrap();
             let context = SharedPtr::new(Context {
                 gc: gc.clone(),
-                registry: result.registry,
+                _registry: result.registry,
                 globals,
                 symbols: SymbolTable::new(gc),
             });

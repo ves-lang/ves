@@ -34,4 +34,5 @@
 |0029| SetItem
 |0030| Pop
 |0031| Pop
-|0032| Return
+|0032| PushNone
+|0033| Return

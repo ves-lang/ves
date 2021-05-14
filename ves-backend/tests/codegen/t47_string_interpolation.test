@@ -8,4 +8,5 @@ f"test {1 + 1}"
 |0003| Add
 |0004| Interpolate(2)
 |0005| Pop
-|0006| Return
+|0006| PushNone
+|0007| Return

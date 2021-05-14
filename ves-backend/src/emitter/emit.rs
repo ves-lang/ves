@@ -1,9 +1,4 @@
-use std::{
-    borrow::{BorrowMut, Cow},
-    collections::HashMap,
-    convert::TryInto,
-    rc::Rc,
-};
+use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 use crate::{
     gc::{GcObj, VesGc},
@@ -11,7 +6,7 @@ use crate::{
         ves_fn::{Arity, ClosureDescriptor, VesFn},
         ves_int::VesInt,
         ves_str::view::VesStrView,
-        ves_struct::{StructDescriptor, VesHashMap, VesStruct, ViewKey},
+        ves_struct::StructDescriptor,
     },
     value::IntoVes,
     Span, Value, VesObject,
@@ -398,6 +393,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         for stmt in self.ast.body.iter() {
             self.emit_stmt(stmt)?;
         }
+        self.state.builder.op(Opcode::PushNone, 0..0);
         self.state.builder.op(Opcode::Return, 0..0);
 
         let f = VesFn {
@@ -473,8 +469,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
     }
 
     fn emit_return_stmt(&mut self, value: Option<&'b Expr<'a>>, span: Span) -> Result<()> {
-        let n_locals = self.state.locals.len() as u32;
-        self.state.op_pop(n_locals, span.clone());
         if let Some(value) = value {
             self.emit_expr(value, true)?;
         } else if self.state.fn_kind == Some(FnKind::Initializer) {
@@ -1083,6 +1077,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             .builder
             .op(Opcode::CreateStruct(struct_desc_index), span.clone());
 
+        let descriptor = descriptor.as_struct_descriptor_mut_unchecked();
         // (magic) methods
         for method in info.methods.iter() {
             let fn_index = self.emit_fn_expr(method, span.clone(), true, false)?;
@@ -1090,16 +1085,11 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 Some(name) => self.ctx.alloc_or_intern(name.to_string()),
                 None => self.ctx.alloc_or_intern(method.name.lexeme.clone()),
             };
-
             let name_index = self
                 .state
                 .builder
                 .constant(name_ptr.into_ves(), span.clone())?;
-
-            debug_assert!(descriptor.as_ref().unwrap().is_struct_descriptor());
-            unsafe { descriptor.as_struct_descriptor_mut_unchecked() }
-                .methods
-                .push((name_index, fn_index));
+            descriptor.methods.push((name_index, fn_index));
         }
         // initializer
         if let Some(ref initializer) = info.initializer {
@@ -1108,10 +1098,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .builder
                 .constant(self.ctx.alloc_or_intern("init").into_ves(), span.clone())?;
             let fn_index = self.emit_fn_expr(&initializer.body, span.clone(), true, false)?;
-            debug_assert!(descriptor.as_ref().unwrap().is_struct_descriptor());
-            unsafe { descriptor.as_struct_descriptor_mut_unchecked() }
-                .methods
-                .push((name_index, fn_index));
+            descriptor.methods.push((name_index, fn_index));
         }
         if is_sub_expr {
             // close the temporary function local scope, but don't pop the value
@@ -1175,15 +1162,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         for stmt in info.body.iter() {
             self.emit_stmt(stmt)?;
         }
-        self.state.end_scope_partial(
-            // in case we're in an initializer, don't pop `self`
-            span.clone(),
-            if info.kind == FnKind::Initializer {
-                1
-            } else {
-                0
-            },
-        );
         if info.kind != FnKind::Initializer {
             self.state.builder.op(Opcode::PushNone, span.clone());
         }

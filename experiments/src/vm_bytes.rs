@@ -1,11 +1,12 @@
+#![allow(clippy::identity_op)]
+
 use ves_backend::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
     objects::{
         ves_str::view::VesStrView,
-        ves_struct::{VesHashMap, VesInstance, VesStruct, ViewKey},
+        ves_struct::{VesInstance, VesStruct},
     },
-    value::TypeId,
     ves_object::VesObject,
     Value,
 };

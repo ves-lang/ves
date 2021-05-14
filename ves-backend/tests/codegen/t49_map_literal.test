@@ -25,4 +25,5 @@ let v = { a: 0, b: 0, ...obj, [f()]: 0 }
 |0018| MapInsert        // insert into map
 |0019| SetGlobal(2)     // set v
 |0020| Pop              // pop map
-|0021| Return
+|0021| PushNone
+|0022| Return

@@ -11,4 +11,5 @@ a += 5
 |0005| Add
 |0006| SetGlobal(0)
 |0007| Pop
-|0008| Return
+|0008| PushNone
+|0009| Return

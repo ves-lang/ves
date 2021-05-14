@@ -210,15 +210,15 @@ impl Value {
         None
     }
 
-    pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
+    pub fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
         crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_mut_unchecked())
     }
 
-    pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
+    pub fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
         crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_mut_unchecked())
     }
 
-    pub unsafe fn as_struct_descriptor_mut_unchecked(
+    pub fn as_struct_descriptor_mut_unchecked(
         &mut self,
     ) -> &mut super::ves_struct::StructDescriptor {
         crate::unwrap_unchecked!(

@@ -52,4 +52,5 @@ print(v)
 |0033| Pop              // pop [[VALUE]]
 |0034| GetGlobal(1)     // get v
 |0035| Print            // print(v)
-|0036| Return
+|0036| PushNone
+|0037| Return

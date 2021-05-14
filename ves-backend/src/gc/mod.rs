@@ -393,7 +393,7 @@ pub(crate) mod tests {
     ) -> VesStruct {
         let mut fields = Vec::new_in(handle.proxy());
 
-        for i in 0..rng.gen_range(5..10) {
+        for _ in 0..rng.gen_range(5..10) {
             let s = handle
                 .alloc(random_string(rng, 15), roots!(stack, structs))
                 .unwrap();

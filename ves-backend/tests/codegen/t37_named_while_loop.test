@@ -90,4 +90,5 @@ mut a = 10
 // @first.exit:
 |0058| Pop              // pop (a > 0)
 // @first.end:
-|0059| Return
+|0059| PushNone
+|0060| Return

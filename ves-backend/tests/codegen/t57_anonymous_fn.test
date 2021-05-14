@@ -13,25 +13,20 @@ print((fn()=>1)() + (fn()=>1)() == (fn()=>2)());
 |0008| Negate
 |0009| IsCmpEqual
 |0010| Print
-|0011| Return
+|0011| PushNone
+|0012| Return
 >>>>>> [fn@1:8]
-|0000| Pop              // pop receiver 
-|0001| PushInt32(1)   
-|0002| Return           // return 1
-|0003| Pop
-|0004| PushNone
-|0005| Return
+|0000| PushInt32(1)   
+|0001| Return           // return 1
+|0002| PushNone
+|0003| Return
 >>>>>> [fn@1:22]
-|0000| Pop              // pop receiver
-|0001| PushInt32(1)
-|0002| Return           // return 1
-|0003| Pop
-|0004| PushNone
-|0005| Return
+|0000| PushInt32(1)
+|0001| Return           // return 1
+|0002| PushNone
+|0003| Return
 >>>>>> [fn@1:37]
-|0000| Pop              // pop receiver
-|0001| PushInt32(2)
-|0002| Return           // return 2
-|0003| Pop
-|0004| PushNone
-|0005| Return
+|0000| PushInt32(2)
+|0001| Return           // return 2
+|0002| PushNone
+|0003| Return

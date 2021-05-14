@@ -22,4 +22,5 @@ loop {
 |0011| Pop              // [unreachable] pop none
 |0012| Pop              // [unreachable] pop b
 |0013| Jump(3)          // [unreachable] <loop'0: end>
-|0014| Return
+|0014| PushNone
+|0015| Return

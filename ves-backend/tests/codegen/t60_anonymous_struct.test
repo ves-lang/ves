@@ -8,7 +8,8 @@
 
 |0000| CreateStruct(T, 1+0)
 |0001| Pop
-|0002| Return
+|0002| PushNone
+|0003| Return
 >>>>>> T.init
 |0000| GetCapture(0)
 |0001| PushInt32(0)

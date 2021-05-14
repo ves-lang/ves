@@ -10,7 +10,8 @@
     clippy::new_without_default,
     clippy::comparison_chain,
     clippy::needless_range_loop,
-    clippy::wrong_self_convention
+    clippy::wrong_self_convention,
+    clippy::single_component_path_imports
 )]
 extern crate static_assertions as sa;
 

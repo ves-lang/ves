@@ -50,4 +50,5 @@ for item in iterable {
 |0037| Pop              // pop <condition> result
 |0038| PopN(2)          // pop <item>, [[ITER]]
 // @loop.end:
-|0039| Return
+|0039| PushNone
+|0040| Return

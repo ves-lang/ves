@@ -9,4 +9,5 @@
 |0002| PopN(2)
 |0003| PushInt32(2)
 |0004| Pop
-|0005| Return
+|0005| PushNone
+|0006| Return

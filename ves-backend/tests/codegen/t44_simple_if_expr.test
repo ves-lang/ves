@@ -26,4 +26,5 @@ v = if v == none {
 // @if.end:
 |0016| SetGlobal(0)     // v = [[VALUE]]
 |0017| Pop              // pop [[VALUE]]
-|0018| Return
+|0018| PushNone
+|0019| Return

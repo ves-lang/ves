@@ -19,4 +19,5 @@ false || true && false || true
 |0011| PushTrue         // push true
 // @end1
 |0012| Pop              // pop true
-|0013| Return
+|0013| PushNone
+|0014| Return

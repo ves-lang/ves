@@ -8,4 +8,5 @@
 |0003| GetItem
 |0004| Pop
 |0005| Pop
-|0006| Return
+|0006| PushNone
+|0007| Return

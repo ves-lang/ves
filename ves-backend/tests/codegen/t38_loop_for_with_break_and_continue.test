@@ -44,4 +44,5 @@ for i = a; i < 10; ++i {
 |0027| Pop              // Pop the condition value
 // @loop.end:
 |0028| Pop              // pop i
-|0029| Return
+|0029| PushNone
+|0030| Return

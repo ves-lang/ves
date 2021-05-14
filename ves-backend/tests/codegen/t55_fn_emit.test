@@ -56,17 +56,16 @@ test3(1, 2, 3);
 |0040| PushInt32(3)
 |0041| Call(3)          // test3(1, 2, 3)
 |0042| Pop
-|0043| Return
+|0043| PushNone
+|0044| Return
 >>>>>> test0
-|0000| Pop
-|0001| PushNone
-|0002| Return
+|0000| PushNone
+|0001| Return
 >>>>>> test1
 |0000| GetLocal(1)
 |0001| Print            // print(a)
-|0002| PopN(2)          // pop none, receiver
-|0003| PushNone
-|0004| Return
+|0002| PushNone
+|0003| Return
 >>>>>> test2
 |0000| PushNone
 |0001| GetLocal(2)
@@ -86,9 +85,8 @@ test3(1, 2, 3);
 |0013| GetLocal(1)
 |0014| GetLocal(2)
 |0015| PrintN(2)      // print(a, b)
-|0016| PopN(3)        // pop b, a, receiver
-|0017| PushNone
-|0018| Return
+|0016| PushNone
+|0017| Return
 >>>>>> test3
 |0000| PushNone
 |0001| GetLocal(2)
@@ -109,6 +107,5 @@ test3(1, 2, 3);
 |0014| GetLocal(2)
 |0015| GetLocal(3)
 |0016| PrintN(3)
-|0017| PopN(4)
-|0018| PushNone
-|0019| Return
+|0017| PushNone
+|0018| Return

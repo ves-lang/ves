@@ -8,4 +8,5 @@ let a = 0
 |0002| Pop              // pop (a = 0)
 |0003| PushInt32(0)   // let a = 0 (local)
 |0004| Pop              // pop a
-|0005| Return
+|0005| PushNone
+|0006| Return

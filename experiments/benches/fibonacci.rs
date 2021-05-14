@@ -1,3 +1,5 @@
+#![allow(clippy::identity_op)]
+
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 use experiments::{vm_bytes, vm_enum, vm_enum_inline_caching, vm_enum_instruction_inline_caching};

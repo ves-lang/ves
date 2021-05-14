@@ -6,4 +6,5 @@
 |0001| GetLocal(0)    // a
 |0002| Pop            // pop GetLocal(a)
 |0003| Pop            // pop a
-|0004| Return
+|0004| PushNone
+|0005| Return

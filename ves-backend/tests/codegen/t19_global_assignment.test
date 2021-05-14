@@ -9,4 +9,5 @@ a = 5
 |0003| PushInt32(5)
 |0004| SetGlobal(0)
 |0005| Pop
-|0006| Return
+|0006| PushNone
+|0007| Return

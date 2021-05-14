@@ -28,4 +28,5 @@ print(a)
 // end:
 |0014| GetGlobal(0)       // get a
 |0015| Print              // print a
-|0016| Return
+|0016| PushNone
+|0017| Return

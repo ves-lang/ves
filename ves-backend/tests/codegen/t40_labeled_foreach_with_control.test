@@ -64,4 +64,5 @@
 |0043| Pop              // pop result of condition
 |0044| PopN(3)          // pop i, first.[[END]], first.[[STEP]]
 // @second.end:
-|0045| Return
+|0045| PushNone
+|0046| Return

@@ -18,4 +18,5 @@
 |0013| GetItem
 |0014| Pop
 |0015| Pop
-|0016| Return
+|0016| PushNone
+|0017| Return

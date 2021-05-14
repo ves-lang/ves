@@ -11,4 +11,5 @@ print(
 |0002| GetConst(88888888888888888888888)
 |0003| Negate
 |0004| PrintN(3)
-|0005| Return
+|0005| PushNone
+|0006| Return

@@ -29,4 +29,5 @@ while ok(thing) = value {
 // @while.end:
 |0016| Pop              // pop <condition> result
 |0017| Pop              // pop thing
-|0018| Return
+|0018| PushNone
+|0019| Return

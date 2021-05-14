@@ -29,4 +29,5 @@ for i = 0; i < 10; ++i {
 |0017| Pop                // pop result of condition
 |0018| Pop                // pop i
 // @loop.end:
-|0019| Return
+|0019| PushNone
+|0020| Return

@@ -8,4 +8,5 @@
 |0001| PushInt32(0)
 |0002| HasProperty
 |0003| Pop
-|0004| Return
+|0004| PushNone
+|0005| Return

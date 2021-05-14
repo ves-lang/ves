@@ -36,4 +36,5 @@ true is Bool;
 |0025| GetGlobal(3)
 |0026| CompareType
 |0027| Pop
-|0028| Return
+|0028| PushNone
+|0029| Return

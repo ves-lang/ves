@@ -12,4 +12,5 @@ loop { break; }
 |0003| Pop        // pop none
 |0004| Jump(6)    // break -> halt the program
 |0005| Jump(4)    // [unreachable] continue the loop
-|0006| Return
+|0006| PushNone
+|0007| Return

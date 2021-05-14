@@ -4,4 +4,5 @@ loop { continue; }
 
 |0000| Jump(0)    // continue (jump) to the start of the loop
 |0001| Jump(0)    // [unreachable] jump to the start of the loop
-|0002| Return
+|0002| PushNone
+|0003| Return

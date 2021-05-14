@@ -9,4 +9,5 @@ print(1, 2, 3)
 |0003| PushInt32(2)
 |0004| PushInt32(3)
 |0005| PrintN(3)
-|0006| Return
+|0006| PushNone
+|0007| Return

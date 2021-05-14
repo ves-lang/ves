@@ -3,4 +3,5 @@ loop {}
 %output
 
 |0000| Jump(0)
-|0001| Return
+|0001| PushNone
+|0002| Return

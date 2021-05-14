@@ -3,9 +3,8 @@ use ves_backend::{
     nanbox::NanBox,
     objects::{
         ves_str::view::VesStrView,
-        ves_struct::{VesHashMap, VesInstance, VesStruct, ViewKey},
+        ves_struct::{VesInstance, VesStruct},
     },
-    value::TypeId,
     Value, VesObject,
 };
 

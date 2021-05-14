@@ -9,7 +9,7 @@ use crate::{
         peel::Peeled,
         ves_fn::{ArgCountDiff, Args, VesClosure},
         ves_str::view::VesStrView,
-        ves_struct::{VesInstance, VesStruct, ViewKey},
+        ves_struct::{VesStruct, ViewKey},
     },
     NanBox, Value, VesObject,
 };
@@ -102,7 +102,7 @@ pub trait VmInterface {
 }
 
 pub struct Vm<T: VesGc, W = std::io::Stdout> {
-    ctx: SharedPtr<Context<T>>,
+    _ctx: SharedPtr<Context<T>>,
     gc: GcHandle<T>,
     symbols: SymbolTable<T>,
     globals: VmGlobals,
@@ -162,7 +162,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             gc: ctx.gc.clone(),
             globals: ctx.globals.clone(),
             symbols: ctx.symbols.clone(),
-            ctx,
+            _ctx: ctx,
             stack: Vec::with_capacity(DEFAULT_STACK_SIZE),
             call_stack: Vec::with_capacity(0),
             ip: 0,
@@ -269,11 +269,14 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     let frame = self.pop_frame();
                     self.ip = frame.return_address;
 
+                    let result = self.pop();
+                    drop(self.stack.drain(frame.stack_index..));
+                    self.push(result);
+
                     let current_call_stack_size = self.call_stack.len();
-                    let should_return = (early_return
-                        && current_call_stack_size == initial_call_stack_size)
-                        || current_call_stack_size == 0;
-                    if should_return {
+                    let should_return_early =
+                        early_return && current_call_stack_size == initial_call_stack_size;
+                    if current_call_stack_size == 0 || should_return_early {
                         break;
                     }
                 }
@@ -721,7 +724,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     let arity = r#fn.get().arity;
                     match arity.diff(args) {
                         // TODO: once Array is implemented, use it here
-                        ArgCountDiff::Extra(n) => todo!("push into rest array"),
+                        ArgCountDiff::Extra(_n) => todo!("push into rest array"),
                         ArgCountDiff::MissingPositional(_) => {
                             return Err(self.error(format!(
                                 "{} expected at least {} args, got {}",
@@ -745,7 +748,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     let arity = r#fn.get().arity;
                     match arity.diff(args) {
                         // TODO: once Array is implemented, use it here
-                        ArgCountDiff::Extra(n) => todo!("push into rest array"),
+                        ArgCountDiff::Extra(_n) => todo!("push into rest array"),
                         ArgCountDiff::MissingPositional(_) => {
                             return Err(self.error(format!(
                                 "{} expected at least {} args, got {}",

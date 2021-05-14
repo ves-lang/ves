@@ -12,4 +12,5 @@ defer file.close()
 |0006| Data(0)
 |0007| Data(0)
 |0008| Defer            // defer file.close()
-|0009| Return
+|0009| PushNone
+|0010| Return

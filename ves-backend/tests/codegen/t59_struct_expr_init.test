@@ -22,7 +22,8 @@ struct T3(a = 0) {
 |0009| CreateStruct(T3, 0+1)
 |0010| SetGlobal(3)
 |0011| Pop
-|0012| Return
+|0012| PushNone
+|0013| Return
 >>>>>> T2.init
 |0000| PushNone         // [[VALUE]] = none
 |0001| GetLocal(0)      // get self

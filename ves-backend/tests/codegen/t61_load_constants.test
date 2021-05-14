@@ -28,8 +28,8 @@ print(fn(){})
 |0015| Print
 |0016| GetConst(<fn [fn@9:7]>)
 |0017| Print
-|0018| Return
+|0018| PushNone
+|0019| Return
 >>>>>> [fn@9:7]
-|0000| Pop
-|0001| PushNone
-|0002| Return
+|0000| PushNone
+|0001| Return
