@@ -185,23 +185,15 @@ pub enum TokenKind<'a> {
     /// No value (same as nil/null)
     #[token("none")]
     None,
-    /// Represents the concept of any value other than `none`
-    ///
-    /// Not an actual value, only used in `is some` checks
-    #[token("some")]
-    Some,
     /// Boolean 'true'
     #[token("true")]
     True,
     /// Boolean 'false'
     #[token("false")]
     False,
-    /// Result 'ok' variant
-    #[token("ok")]
-    Ok,
-    /// Result 'err' variant
-    #[token("err")]
-    Err,
+    /// Error creation
+    #[token("error")]
+    Error,
     /// Immutable variable
     #[token("let")]
     Let,
@@ -278,7 +270,7 @@ pub enum TokenKind<'a> {
     #[regex("[ \n\r\t]+", logos::skip)]
     Whitespace,
     #[error]
-    Error,
+    Invalid,
     EOF,
 }
 
@@ -726,7 +718,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(TokenKind::Error, "/*"),
+                token!(TokenKind::Invalid, "/*"),
                 token!(Identifier, "ident")
             ]
         );
@@ -750,7 +742,7 @@ mod tests {
         assert_eq!(
             test_tokenize(SOURCE),
             vec![
-                token!(Error, "ß"), token!(Error, "$"), token!(Error, "÷"), token!(Error, "×")
+                token!(Invalid, "ß"), token!(Invalid, "$"), token!(Invalid, "÷"), token!(Invalid, "×")
             ]
         );
     }

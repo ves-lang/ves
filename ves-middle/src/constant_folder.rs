@@ -152,7 +152,7 @@ impl<'a> ConstantFolder<'a> {
                 ref mut body,
                 ..
             }) => {
-                self.fold_expr(&mut condition.value);
+                self.fold_expr(condition);
                 self.fold_stmt(body);
                 if let Some(false) = self.is_truthy_condition(condition) {
                     stmt.kind = StmtKind::_Empty;
@@ -283,7 +283,7 @@ impl<'a> ConstantFolder<'a> {
                                 Some(LitValue::from(!lit.value.is_truthy()))
                             );
                         }
-                        UnOpKind::Try | UnOpKind::WrapOk | UnOpKind::WrapErr => (),
+                        UnOpKind::Try | UnOpKind::Error => (),
                     }
                 }
             }
@@ -379,8 +379,7 @@ impl<'a> ConstantFolder<'a> {
     }
 
     fn fold_if_expr(&mut self, r#if: &mut If<'a>, span: ves_parser::Span) -> Option<ExprKind<'a>> {
-        // TODO: propagate the value into the pattern binding
-        self.fold_expr(&mut r#if.condition.value);
+        self.fold_expr(&mut r#if.condition);
         self.fold_do_block(&mut r#if.then);
 
         if let Some(r#else) = r#if.otherwise.as_mut() {
@@ -429,8 +428,8 @@ impl<'a> ConstantFolder<'a> {
         }
     }
 
-    fn is_truthy_condition(&mut self, cond: &Condition<'a>) -> Option<bool> {
-        match &cond.value.kind {
+    fn is_truthy_condition(&mut self, cond: &Expr<'a>) -> Option<bool> {
+        match &cond.kind {
             ExprKind::Lit(lit) => Some(match &lit.value {
                 LitValue::Float(f) => *f != 0.0,
                 LitValue::Integer(n) => *n != 0,

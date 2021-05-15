@@ -306,7 +306,7 @@ impl<'a> Resolver<'a> {
             }) => {
                 self.push();
 
-                self.resolve_condition(condition, registry, ex);
+                self.resolve_expr(condition, true, registry, ex);
 
                 self.declare_loop_label(label, ex);
 
@@ -444,7 +444,7 @@ impl<'a> Resolver<'a> {
     fn resolve_if<T>(&mut self, r#if: &mut If<'a>, registry: &ModuleRegistry<T>, ex: &mut ErrCtx) {
         self.push();
 
-        self.resolve_condition(&mut r#if.condition, registry, ex);
+        self.resolve_expr(&mut r#if.condition, true, registry, ex);
         self.resolve_do_block(&mut r#if.then, registry, ex);
         if let Some(ref mut r#else) = r#if.otherwise {
             match r#else {
@@ -705,22 +705,6 @@ impl<'a> Resolver<'a> {
             }
             ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, true, registry, ex),
             ExprKind::Lit(_) => {}
-        }
-    }
-
-    fn resolve_condition<T>(
-        &mut self,
-        condition: &mut Condition<'a>,
-        registry: &ModuleRegistry<T>,
-        ex: &mut ErrCtx,
-    ) {
-        self.resolve_expr(&mut condition.value, true, registry, ex);
-        match &condition.pattern {
-            ConditionPattern::IsErr(v) | ConditionPattern::IsOk(v) => {
-                self.declare(v, Rc::new(Cell::new(0)), NameKind::Let, ex);
-                self.assign(v, ex);
-            }
-            _ => (),
         }
     }
 

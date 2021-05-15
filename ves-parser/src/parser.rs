@@ -528,7 +528,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
 
     fn while_loop_stmt(&mut self, label: Token<'a>) -> ParseResult<ast::Stmt<'a>> {
         let span_start = self.previous.span.start;
-        let condition = self.condition()?;
+        let condition = self.expr(true)?;
         self.consume(&TokenKind::LeftBrace, "Expected loop body")?;
         let previous_label = std::mem::replace(&mut self.current_label, label);
         let body = self.block_stmt()?;
@@ -1050,7 +1050,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     }
 
     fn if_(&mut self) -> ParseResult<ast::If<'a>> {
-        let condition = self.condition()?;
+        let condition = self.expr(true)?;
         let then = self.do_block()?;
         let mut otherwise = None;
         if self.match_(&TokenKind::Else) {
@@ -1065,32 +1065,6 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             then,
             otherwise,
         })
-    }
-
-    fn condition(&mut self) -> ParseResult<ast::Condition<'a>> {
-        if self.match_any(&[TokenKind::Ok, TokenKind::Err]) {
-            let which = self.previous.clone();
-            self.consume(&TokenKind::LeftParen, "Expected '('")?;
-            let ident = self.consume(&TokenKind::Identifier, "Expected identifier")?;
-            self.consume(&TokenKind::RightParen, "Expected ')'")?;
-            self.consume(&TokenKind::Equal, "Expected assignment")?;
-            let value = self.expr(true)?;
-            Ok(ast::Condition {
-                value,
-                pattern: match which.kind {
-                    TokenKind::Ok => ast::ConditionPattern::IsOk(ident),
-                    TokenKind::Err => ast::ConditionPattern::IsErr(ident),
-                    _ => unreachable!(),
-                },
-            })
-            // destructuring
-        } else {
-            let value = self.expr(true)?;
-            Ok(ast::Condition {
-                value,
-                pattern: ast::ConditionPattern::Value,
-            })
-        }
     }
 
     fn do_block_expr(&mut self) -> ParseResult<ast::Expr<'a>> {
@@ -1336,8 +1310,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             TokenKind::Bang,
             TokenKind::Minus,
             TokenKind::Try,
-            TokenKind::Ok,
-            TokenKind::Err,
+            TokenKind::Error,
             TokenKind::Increment,
             TokenKind::Decrement,
         ]) {
@@ -1349,10 +1322,8 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 TokenKind::Minus => unary!(Negate, self.unary()?, op),
                 // try <expr>
                 TokenKind::Try => unary!(Try, self.unary()?, op),
-                // ok <expr>
-                TokenKind::Ok => unary!(WrapOk, self.unary()?, op),
                 // err <expr>
-                TokenKind::Err => unary!(WrapErr, self.unary()?, op),
+                TokenKind::Error => unary!(Error, self.unary()?, op),
                 // ++<expr> or --<expr>
                 TokenKind::Increment | TokenKind::Decrement => {
                     let kind = self.previous.kind.clone();
@@ -1489,7 +1460,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
             return Ok(literal!(self, ast::LitValue::Bool(false)));
         }
         // 'self', some, identifier
-        if self.match_any(&[TokenKind::Self_, TokenKind::Some, TokenKind::Identifier]) {
+        if self.match_any(&[TokenKind::Self_, TokenKind::Identifier]) {
             return Ok(ast::Expr {
                 span: self.previous.span.clone(),
                 kind: ast::ExprKind::Variable(self.previous.clone()),
@@ -1888,7 +1859,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
     fn advance(&mut self) -> Token<'a> {
         std::mem::swap(&mut self.previous, &mut self.current);
         self.current = self.lexer.next_token().unwrap_or_else(|| self.eof.clone());
-        if self.previous.kind == TokenKind::Error {
+        if self.previous.kind == TokenKind::Invalid {
             self.ex.record(VesError::lex(
                 format!("Unexpected character sequence `{}`", self.previous.lexeme),
                 self.previous.span.clone(),
@@ -1951,36 +1922,33 @@ fn struct_field_init_stmt<'a>(name: &Token<'a>, value: &ast::Expr<'a>) -> ast::S
         kind: ast::StmtKind::ExprStmt(box ast::Expr {
             span: span.clone(),
             kind: ast::ExprKind::If(box ast::If {
-                condition: ast::Condition {
-                    value: ast::Expr {
-                        span: span.clone(),
-                        kind: ast::ExprKind::Binary(
-                            ast::BinOpKind::Equal,
-                            box ast::Expr {
-                                span: span.clone(),
-                                kind: ast::ExprKind::GetProp(box ast::GetProp {
-                                    node: ast::Expr {
-                                        span: span.clone(),
-                                        kind: ast::ExprKind::Variable(Token::new(
-                                            "self",
-                                            span.clone(),
-                                            TokenKind::Self_,
-                                        )),
-                                    },
-                                    field: name.clone(),
-                                    is_optional: false,
-                                }),
-                            },
-                            box ast::Expr {
-                                span: span.clone(),
-                                kind: ast::ExprKind::Lit(box ast::Lit {
-                                    token: Token::new("none", span.clone(), TokenKind::None),
-                                    value: ast::LitValue::None,
-                                }),
-                            },
-                        ),
-                    },
-                    pattern: ast::ConditionPattern::Value,
+                condition: ast::Expr {
+                    span: span.clone(),
+                    kind: ast::ExprKind::Binary(
+                        ast::BinOpKind::Equal,
+                        box ast::Expr {
+                            span: span.clone(),
+                            kind: ast::ExprKind::GetProp(box ast::GetProp {
+                                node: ast::Expr {
+                                    span: span.clone(),
+                                    kind: ast::ExprKind::Variable(Token::new(
+                                        "self",
+                                        span.clone(),
+                                        TokenKind::Self_,
+                                    )),
+                                },
+                                field: name.clone(),
+                                is_optional: false,
+                            }),
+                        },
+                        box ast::Expr {
+                            span: span.clone(),
+                            kind: ast::ExprKind::Lit(box ast::Lit {
+                                token: Token::new("none", span.clone(), TokenKind::None),
+                                value: ast::LitValue::None,
+                            }),
+                        },
+                    ),
                 },
                 then: ast::DoBlock {
                     statements: vec![ast::Stmt {

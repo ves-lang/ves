@@ -580,34 +580,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state.add_control_label(&info.label, start, end);
         self.state.builder.label(start);
         self.state.begin_scope();
-        let mut used_pattern = false;
-        match &info.condition.pattern {
-            ConditionPattern::Value => {
-                self.emit_expr(&info.condition.value, true)?;
-            }
-            ConditionPattern::IsOk(ref binding) => {
-                used_pattern = true;
-                let slot = self.state.add_local(binding.lexeme.clone());
-                self.state
-                    .builder
-                    .op(Opcode::PushNone, binding.span.clone());
-                self.emit_expr(&info.condition.value, true)?;
-                self.state
-                    .builder
-                    .op(Opcode::UnwrapOk(slot), binding.span.clone());
-            }
-            ConditionPattern::IsErr(ref binding) => {
-                used_pattern = true;
-                let slot = self.state.add_local(binding.lexeme.clone());
-                self.state
-                    .builder
-                    .op(Opcode::PushNone, binding.span.clone());
-                self.emit_expr(&info.condition.value, true)?;
-                self.state
-                    .builder
-                    .op(Opcode::UnwrapErr(slot), binding.span.clone());
-            }
-        }
+        self.emit_expr(&info.condition, true)?;
         self.state
             .builder
             .op(Opcode::JumpIfFalse(exit), span.clone());
@@ -616,10 +589,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state.end_scope(span.clone());
         self.state.builder.op(Opcode::Jump(start), span);
         self.state.builder.label(exit);
-        self.state.op_pop(1, info.condition.value.span.clone());
-        if used_pattern {
-            self.state.op_pop(1, info.condition.value.span.clone());
-        }
+        self.state.op_pop(1, info.condition.span.clone());
         self.state.builder.label(end);
         self.state.end_loop();
         Ok(())
@@ -1025,8 +995,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 UnOpKind::Not => Opcode::Not,
                 UnOpKind::Negate => Opcode::Negate,
                 UnOpKind::Try => Opcode::Try,
-                UnOpKind::WrapOk => Opcode::WrapOk,
-                UnOpKind::WrapErr => Opcode::WrapErr,
+                UnOpKind::Error => Opcode::CreateError,
             },
             span,
         );
@@ -1254,26 +1223,23 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         // format:
         // if <param> == none { <param> = <value>; }
         let r#if = If {
-            condition: Condition {
-                value: Expr {
-                    // <param> == none
-                    kind: ExprKind::Binary(
-                        BinOpKind::Equal,
-                        box Expr {
-                            kind: ExprKind::Variable(name.clone()),
-                            span: span.clone(),
-                        },
-                        box Expr {
-                            kind: ExprKind::Lit(box Lit {
-                                value: LitValue::None,
-                                token: Token::new("none", span.clone(), TokenKind::None),
-                            }),
-                            span: span.clone(),
-                        },
-                    ),
-                    span: span.clone(),
-                },
-                pattern: ConditionPattern::Value,
+            condition: Expr {
+                // <param> == none
+                kind: ExprKind::Binary(
+                    BinOpKind::Equal,
+                    box Expr {
+                        kind: ExprKind::Variable(name.clone()),
+                        span: span.clone(),
+                    },
+                    box Expr {
+                        kind: ExprKind::Lit(box Lit {
+                            value: LitValue::None,
+                            token: Token::new("none", span.clone(), TokenKind::None),
+                        }),
+                        span: span.clone(),
+                    },
+                ),
+                span: span.clone(),
             },
             then: DoBlock {
                 statements: vec![Stmt {
@@ -1344,34 +1310,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         while let Some(branch) = current_branch {
             let other = self.state.reserve_label();
             self.state.begin_scope();
-            let mut used_pattern = false;
-            match branch.condition.pattern {
-                ConditionPattern::Value => {
-                    self.emit_expr(&branch.condition.value, true)?;
-                }
-                ConditionPattern::IsOk(ref binding) => {
-                    used_pattern = true;
-                    let slot = self.state.add_local(binding.lexeme.clone());
-                    self.state
-                        .builder
-                        .op(Opcode::PushNone, binding.span.clone());
-                    self.emit_expr(&branch.condition.value, true)?;
-                    self.state
-                        .builder
-                        .op(Opcode::UnwrapOk(slot), binding.span.clone());
-                }
-                ConditionPattern::IsErr(ref binding) => {
-                    used_pattern = true;
-                    let slot = self.state.add_local(binding.lexeme.clone());
-                    self.state
-                        .builder
-                        .op(Opcode::PushNone, binding.span.clone());
-                    self.emit_expr(&branch.condition.value, true)?;
-                    self.state
-                        .builder
-                        .op(Opcode::UnwrapErr(slot), binding.span.clone());
-                }
-            }
+            self.emit_expr(&branch.condition, true)?;
             self.state
                 .builder
                 .op(Opcode::JumpIfFalse(other), span.clone());
@@ -1390,9 +1329,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             self.state.builder.op(Opcode::Jump(end), span.clone());
             self.state.builder.label(other);
             self.state.op_pop(1, span.clone());
-            if used_pattern {
-                self.state.op_pop(1, span.clone());
-            }
             current_branch = match branch.otherwise {
                 Some(Else::Block(ref block)) => {
                     self.state.begin_scope();

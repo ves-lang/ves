@@ -103,8 +103,7 @@ where
             | Opcode::CreateEmptyMap
             | Opcode::Defer
             | Opcode::Spread
-            | Opcode::WrapOk
-            | Opcode::WrapErr
+            | Opcode::CreateError
             | Opcode::Try
             | Opcode::HasProperty => {
                 format!(
@@ -191,8 +190,6 @@ where
             | Opcode::SetLocal(operand)
             | Opcode::GetGlobal(operand)
             | Opcode::SetGlobal(operand)
-            | Opcode::UnwrapOk(operand)
-            | Opcode::UnwrapErr(operand)
             | Opcode::GetCapture(operand)
             | Opcode::SetCapture(operand) => {
                 format!(

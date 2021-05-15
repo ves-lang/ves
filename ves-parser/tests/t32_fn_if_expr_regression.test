@@ -21,15 +21,13 @@ StmtKind::Var
             body=
               StmtKind::Return
                 return_value: If
-                  condition: Condition
-                    value: ExprKind::Binary
-                      op: LessThan
-                      left: ExprKind::Variable
-                        name: "n"
-                      right: Lit
-                        token: "2"
-                        value: LitValue::Integer(2)
-                    pattern: ConditionPattern::Value
+                  condition: ExprKind::Binary
+                    op: LessThan
+                    left: ExprKind::Variable
+                      name: "n"
+                    right: Lit
+                      token: "2"
+                      value: LitValue::Integer(2)
                   then: DoBlock
                     statements=
                     value: ExprKind::Variable

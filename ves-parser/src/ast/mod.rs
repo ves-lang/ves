@@ -19,7 +19,7 @@ pub fn is_reserved_identifier(token: &Token<'_>) -> bool {
     if token.kind == TokenKind::Identifier {
         matches!(&token.lexeme[..], "num" | "str" | "bool" | "map" | "array")
     } else {
-        token.kind == TokenKind::Self_ || token.kind == TokenKind::Some
+        token.kind == TokenKind::Self_
     }
 }
 
@@ -226,10 +226,8 @@ pub enum UnOpKind {
     Negate,
     /// The `try` operator for error propagation.
     Try,
-    /// The `ok` operator for marking values as `Ok`.
-    WrapOk,
-    /// The `err` operator for marking values as `Err`.
-    WrapErr,
+    /// The `error` operator for marking values as errors.
+    Error,
 }
 
 /// Represents the value of a literal.
@@ -476,27 +474,6 @@ pub struct StructInfo<'a> {
     pub initializer: Option<Initializer<'a>>,
 }
 
-/// A possible condition pattern.
-#[derive(Debug, Clone, PartialEq, AstToStr)]
-pub enum ConditionPattern<'a> {
-    /// The value of the condition itself.
-    Value,
-    /// Whether the condition is `ok` plus a binding for the inner value.
-    IsOk(#[rename = "binding"] Token<'a>),
-    /// Whether the condition is `err` plus a binding for the inner value.
-    IsErr(#[rename = "binding"] Token<'a>),
-}
-
-/// A condition of an if statement, while loop, or for loop.
-#[derive(Debug, Clone, PartialEq, AstToStr)]
-pub struct Condition<'a> {
-    /// The value of the condition.
-    pub value: Expr<'a>,
-    /// The pattern of the condition. If the pattern is [`ConditionPattern::Value`], a simple
-    /// truthiness check is performed.
-    pub pattern: ConditionPattern<'a>,
-}
-
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub enum Else<'a> {
     If(#[forward] Ptr<If<'a>>),
@@ -507,7 +484,7 @@ pub enum Else<'a> {
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct If<'a> {
     /// The if condition.
-    pub condition: Condition<'a>,
+    pub condition: Expr<'a>,
     /// The code to execute if the condition is true.
     pub then: DoBlock<'a>,
     /// The code to execute if the condition is false.
@@ -703,7 +680,7 @@ pub struct ForEach<'a> {
 #[derive(Debug, Clone, PartialEq, AstToStr)]
 pub struct While<'a> {
     /// The condition of the loop.
-    pub condition: Condition<'a>,
+    pub condition: Expr<'a>,
     /// The loop body.
     pub body: Stmt<'a>,
     /// The loop label for this loop.

@@ -61,18 +61,16 @@ StmtKind::ExprStmt
         body=
           StmtKind::ExprStmt
             expr: If
-              condition: Condition
-                value: ExprKind::Binary
-                  op: Equal
-                  left: GetProp
-                    node: ExprKind::Variable
-                      name: "self"
-                    field: "b"
-                    is_optional: false
-                  right: Lit
-                    token: "none"
-                    value: LitValue::None
-                pattern: ConditionPattern::Value
+              condition: ExprKind::Binary
+                op: Equal
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "b"
+                  is_optional: false
+                right: Lit
+                  token: "none"
+                  value: LitValue::None
               then: DoBlock
                 statements=
                   StmtKind::ExprStmt
@@ -149,18 +147,16 @@ StmtKind::ExprStmt
         body=
           StmtKind::ExprStmt
             expr: If
-              condition: Condition
-                value: ExprKind::Binary
-                  op: Equal
-                  left: GetProp
-                    node: ExprKind::Variable
-                      name: "self"
-                    field: "b"
-                    is_optional: false
-                  right: Lit
-                    token: "none"
-                    value: LitValue::None
-                pattern: ConditionPattern::Value
+              condition: ExprKind::Binary
+                op: Equal
+                left: GetProp
+                  node: ExprKind::Variable
+                    name: "self"
+                  field: "b"
+                  is_optional: false
+                right: Lit
+                  token: "none"
+                  value: LitValue::None
               then: DoBlock
                 statements=
                   StmtKind::ExprStmt

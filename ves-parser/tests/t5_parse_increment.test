@@ -3,9 +3,8 @@ a++;
 ++a[0];
 a[0]++;
 
-ok val;
-err err val;
-try err ++val;
+error error val;
+try error ++val;
 
 %output
 
@@ -43,21 +42,16 @@ StmtKind::ExprStmt
       kind: Increment
 StmtKind::ExprStmt
   expr: ExprKind::Unary
-    op: WrapOk
-    operand: ExprKind::Variable
-      name: "val"
-StmtKind::ExprStmt
-  expr: ExprKind::Unary
-    op: WrapErr
+    op: Error
     operand: ExprKind::Unary
-      op: WrapErr
+      op: Error
       operand: ExprKind::Variable
         name: "val"
 StmtKind::ExprStmt
   expr: ExprKind::Unary
     op: Try
     operand: ExprKind::Unary
-      op: WrapErr
+      op: Error
       operand: ExprKind::PrefixIncDec
         inner: IncDec
           expr: ExprKind::Variable

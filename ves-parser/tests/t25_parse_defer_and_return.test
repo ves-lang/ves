@@ -11,14 +11,12 @@ StmtKind::Return
   return_value: None
 StmtKind::ExprStmt
   expr: If
-    condition: Condition
-      value: Call
-        callee: ExprKind::Variable
-          name: "cond"
-        args=
-        tco: false
-        rest: false
-      pattern: ConditionPattern::Value
+    condition: Call
+      callee: ExprKind::Variable
+        name: "cond"
+      args=
+      tco: false
+      rest: false
     then: DoBlock
       statements=
         StmtKind::Return

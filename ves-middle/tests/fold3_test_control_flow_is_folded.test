@@ -22,11 +22,9 @@ for e in [1, e, 3] {
 %output
 
 While
-  condition: Condition
-    value: Lit
-      token: "<folded>"
-      value: LitValue::Bool(true)
-    pattern: ConditionPattern::Value
+  condition: Lit
+    token: "<folded>"
+    value: LitValue::Bool(true)
   body: StmtKind::Block
     statements=
   label: "<@label: 0..5>"

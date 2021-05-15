@@ -268,10 +268,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::CompareType => self.compare_type()?,
                 Opcode::HasProperty => self.has_property()?,
                 Opcode::Try => unimplemented!(),
-                Opcode::WrapOk => unimplemented!(),
-                Opcode::WrapErr => unimplemented!(),
-                Opcode::UnwrapOk(_) => unimplemented!(),
-                Opcode::UnwrapErr(_) => unimplemented!(),
+                Opcode::CreateError => unimplemented!(),
                 Opcode::Spread => unimplemented!(),
                 Opcode::Call(args) => {
                     self.call(args as usize)?;

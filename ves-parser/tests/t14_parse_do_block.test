@@ -27,14 +27,12 @@ StmtKind::ExprStmt
   expr: DoBlock
     statements=
     value: If
-      condition: Condition
-        value: Call
-          callee: ExprKind::Variable
-            name: "cond"
-          args=
-          tco: false
-          rest: false
-        pattern: ConditionPattern::Value
+      condition: Call
+        callee: ExprKind::Variable
+          name: "cond"
+        args=
+        tco: false
+        rest: false
       then: DoBlock
         statements=
         value: Lit
