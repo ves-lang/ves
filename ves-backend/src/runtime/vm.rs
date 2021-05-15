@@ -242,7 +242,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::GetCapture(idx) => self.get_capture(idx),
                 Opcode::SetCapture(idx) => self.set_capture(idx),
                 Opcode::SetGlobal(idx) => self.set_global(idx),
-                Opcode::GetMagicProp(_) => unimplemented!(),
+                Opcode::InvokeMagicMethod(idx) => self.invoke_magic_method(idx)?,
                 Opcode::GetProp(n) => self.get_prop(n)?,
                 Opcode::TryGetProp(n) => unimplemented!(),
                 Opcode::SetProp(n) => self.set_prop(n)?,
@@ -393,7 +393,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         } else {
                             Ok(i.methods_mut()
                                 .get_slot_value_mut(name)
-                                .and_then(|v| v.method.as_ref().copied()))
+                                .and_then(|v| v.method.as_ref().copied())
+                                .and_then(|v| if v.is_magic_method() { Some(v) } else { None }))
                         }
                     }
                     rest => Err(self.error(format!(
@@ -848,7 +849,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         _ => (),
                     };
                     // set receiver
-                    self.set_local_at(stack_index, f.receiver().into());
+                    self.set_local_at(stack_index - self.frame().stack_index, f.receiver().into());
                     self.push_frame(CallFrame::new(r#fn, captures, stack_index, self.ip))?;
                     self.ip = 0;
                     Ok(false)
@@ -971,6 +972,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             };
                             self.push_frame(call_frame)?;
                             self.ip = 0;
+                        } else {
+                            let result = self.pop();
+                            self.stack.drain(stack_index - 1..);
+                            self.push(result);
                         }
                     }
                     Ok(false)
@@ -1137,6 +1142,80 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let value = self.pop();
         self.globals.set(offset as _, value.unbox());
         self.push(value);
+    }
+
+    fn invoke_magic_method(&mut self, name_index: u32) -> Result<(), VesError> {
+        let ptr = self.read_ic_ptr();
+        let slot = self.read_ic_slot();
+        let name = self.const_at(name_index as usize);
+        let obj = self.pop();
+
+        if !obj.is_ptr() {
+            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+        }
+
+        let instance = obj;
+        let mut instance = unsafe { instance.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *instance {
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+
+            // Fast path (inline cache hit)
+            if struct_ptr == ptr {
+                let method = NanBox::from(
+                    instance
+                        .methods_mut()
+                        .get_by_slot_index_unchecked(slot as usize)
+                        .method,
+                );
+                self.push_many([method, obj]);
+                // Can't be a native call since we're within a ves instance.
+                return self.call(0).map(|_| ());
+            }
+
+            // Slow path (inline cache miss)
+            let name = name.unbox().as_ptr().unwrap();
+            let name = VesStrView::new(name);
+            let method = match instance.methods().get_slot_index(&name) {
+                Some(slot) => {
+                    let method = instance
+                        .methods_mut()
+                        .get_by_slot_index_unchecked(slot)
+                        .method;
+
+                    if !method
+                        .as_ref()
+                        .map(|x| x.is_magic_method())
+                        .unwrap_or(false)
+                    {
+                        return Err({
+                            self.error(format!(
+                                "An instance of type `{}` doesn't have a magic method called `@{}`",
+                                instance.ty().name(),
+                                name.str()
+                            ))
+                        });
+                    }
+                    self.update_inst_ic_cache(struct_ptr, slot as u32);
+                    NanBox::new(method)
+                }
+                None => {
+                    return Err(self.error(format!(
+                        "{} has no property or method `{}`.",
+                        obj.unbox(),
+                        name.str()
+                    )));
+                }
+            };
+
+            self.push_many([method, obj]);
+            return self.call(0).map(|_| ());
+        }
+
+        self.error(format!(
+            "Object `{:?}` does not support field accesses",
+            obj
+        ));
+        Ok(())
     }
 
     fn get_prop(&mut self, name_index: u32) -> Result<(), VesError> {

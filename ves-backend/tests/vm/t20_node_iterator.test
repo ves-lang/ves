@@ -1,0 +1,30 @@
+struct Node(val, prev=none, next=none);
+
+struct NodeIterator(node) {
+    @iter(self) => self
+
+    @done(self) => self.node is none
+
+    @next(self) {
+        return if !self.done() {
+            let node = self.node
+            self.node = self.node.next
+            node
+        }
+    }
+}
+
+let it = NodeIterator(Node(0, none, Node(1, none, Node(2))));
+print(it.next().val, it.done());
+print(it.next().val, it.done());
+print(it.next().val, it.done());
+print(it.next(), it.done());
+
+// TODO: test more methods here
+
+%output
+
+0, false
+1, false
+2, true
+none, true

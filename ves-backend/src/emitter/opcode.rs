@@ -23,8 +23,8 @@ pub enum Opcode {
     GetGlobal(/* global slot */ u32),
     /// Set a global value
     SetGlobal(/* global slot */ u32),
-    /// Get a property but check that it's a special method impl (such as `@iter` or `@done`).
-    GetMagicProp(/* name constant index */ u32),
+    /// Get a property check that it's a special method impl (such as `@iter` or `@done`), and immediately invoke it.
+    InvokeMagicMethod(/* name constant index */ u32),
     /// Get a property
     ///
     /// Top of the stack should be: [object]

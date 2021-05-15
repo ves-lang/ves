@@ -124,6 +124,16 @@ impl VesObject {
         }
     }
 
+    pub fn is_magic_method(&self) -> bool {
+        match self {
+            VesObject::Fn(r#fn) => r#fn.is_magic_method,
+            VesObject::FnNative(r#fn) => r#fn.is_magic(),
+            VesObject::FnBound(bound) => bound.inner().is_magic_method(),
+            VesObject::Closure(r#fn) => r#fn.fn_ptr().get().is_magic_method,
+            _ => false,
+        }
+    }
+
     /// Safety: The caller *must* ensure that `self` is the right variant
     pub fn as_str_unchecked(&self) -> &VesStr {
         crate::unwrap_unchecked!(self, Str)

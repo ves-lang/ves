@@ -3,10 +3,10 @@ struct Node(val, prev=none, next=none);
 struct NodeIterator(node) {
     @iter(self) => self
 
-    @done(self) => !(self.node is none)
+    @done(self) => self.node is none
 
     @next(self) {
-        return if !(self.node is none) {
+        return if !self.done() {
             let node = self.node
             self.node = self.node.next
             node
@@ -162,8 +162,27 @@ for i in 0..5 {
 
 print(list)
 
+for node in list {
+    print(f"val: {node.val}")
+}
+
+let it = list.iter();
+for node = it.next(); !it.done(); node = it.next() {
+    print(f"val: {node.val}")
+}
+
 // TODO: test more methods here
 
 %output
 
 LinkedList [ 0 -> 1 -> 2 -> 3 -> 4 ]
+val: 0
+val: 1
+val: 2
+val: 3
+val: 4
+val: 0
+val: 1
+val: 2
+val: 3
+val: 4

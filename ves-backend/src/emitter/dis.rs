@@ -120,7 +120,7 @@ where
             | Opcode::SetProp(operand)
             | Opcode::GetProp(operand)
             | Opcode::TryGetProp(operand)
-            | Opcode::GetMagicProp(operand) => {
+            | Opcode::InvokeMagicMethod(operand) => {
                 format!(
                     "{}| {:<indent$} %const = {}",
                     line_fmt(ip, chunk, db),

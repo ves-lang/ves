@@ -674,7 +674,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .builder
                     .constant(self.ctx.alloc_or_intern("iter").into_ves(), span.clone())?;
                 self.state.builder.get_magic(iter, span.clone());
-                self.state.builder.op(Opcode::Call(0), span.clone());
 
                 // now emit `<item>`
                 self.state.add_local(info.variable.lexeme.clone());
@@ -687,7 +686,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .builder
                     .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
                 self.state.builder.get_magic(next, span.clone());
-                self.state.builder.op(Opcode::Call(0), span.clone());
             }
         }
         self.state.begin_loop();
@@ -729,7 +727,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .builder
                     .constant(self.ctx.alloc_or_intern("done").into_ves(), span.clone())?;
                 self.state.builder.get_magic(done, span.clone());
-                self.state.builder.op(Opcode::Call(0), span.clone());
                 self.state.builder.op(Opcode::Not, span.clone());
                 self.state
                     .builder
@@ -771,7 +768,6 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                     .builder
                     .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
                 self.state.builder.get_magic(next, span.clone());
-                self.state.builder.op(Opcode::Call(0), span.clone());
                 let item_local = self
                     .state
                     .resolve_local(info.variable.lexeme.as_ref())
