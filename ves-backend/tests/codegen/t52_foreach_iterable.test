@@ -1,50 +1,92 @@
-mut iterable;
-for item in iterable {
-    print(item)
+mut list;
+
+print("=== FOR-EACH === ");
+for node in list {
+    print(f"val: {node.val}")
+}
+
+print("=== DESUGARED ===");
+{
+    let it = list.iter();
+    while !it.done() {
+        let node = it.next();
+        print(f"val: {node.val}");
+    }
 }
 
 %output
 
-// @loop.pre_start:
-|0000| PushNone         // 
-|0001| SetGlobal(0)     // mut iterable
-|0002| Pop              // 
-|0003| GetGlobal(0)     // get iterable
-|0004| InvokeMagicMethod(0)  // [[ITER]] = iterable.iter()
-|0005| Data(0)
-|0006| Data(0)
+|0000| PushNone
+|0001| SetGlobal(0)
+|0002| Pop
+|0003| GetConst(=== FOR-EACH === )
+|0004| Print
+|0005| GetGlobal(0)
+|0006| InvokeMagicMethod(iter)
 |0007| Data(0)
-|0008| GetLocal(0)      // get [[ITER]]
-|0009| InvokeMagicMethod(1)  // <item> = [[ITER]].next()
-|0010| Data(0)
-|0011| Data(0)
+|0008| Data(0)
+|0009| Data(0)
+|0010| GetLocal(0)
+|0011| InvokeMagicMethod(done)
 |0012| Data(0)
-// @loop.start:
-|0013| GetLocal(0)      // get [[ITER]]
-|0014| InvokeMagicMethod(2)  //call [[ITER]].done
-|0015| Data(0)
-|0016| Data(0)
-|0017| Data(0)
-|0018| Not              // ![[ITER]].done()
-|0019| JumpIfFalse(33)  // jump_if_false @loop.exit
-|0020| Pop              // pop <condition> result
-|0021| Jump(30)         // jump @loop.body
-// @loop.latch:
-|0022| GetLocal(0)      // get [[ITER]]
-|0023| InvokeMagicMethod(1)       // gcall [[ITER]].next
-|0024| Data(0)
-|0025| Data(0)
+|0013| Data(0)
+|0014| Data(0)
+|0015| Not
+|0016| JumpIfFalse(33)
+|0017| Pop
+|0018| GetLocal(0)
+|0019| InvokeMagicMethod(next)
+|0020| Data(0)
+|0021| Data(0)
+|0022| Data(0)
+|0023| GetConst(val: )
+|0024| GetLocal(1)
+|0025| GetProp(val)
 |0026| Data(0)
-|0027| SetLocal(1)      // <item> = [[ITER]].next()
-|0028| Pop              // pop (call [[ITER]].next)
-|0029| Jump(13)          // jump @loop.start
-// @loop.body:
-|0030| GetLocal(1)      // get <item>
-|0031| Print            // print(item)
-|0032| Jump(22)         // jump @loop.latch
-// @loop.exit:
-|0033| Pop              // pop <condition> result
-|0034| PopN(2)          // pop <item>, [[ITER]]
-// @loop.end:
-|0035| PushNone
-|0036| Return
+|0027| Data(0)
+|0028| Data(0)
+|0029| Interpolate(2)
+|0030| Print
+|0031| Pop
+|0032| Jump(10)
+|0033| Pop
+|0034| GetConst(=== DESUGARED ===)
+|0035| Print
+|0036| GetGlobal(0)
+|0037| GetProp(iter)
+|0038| Data(0)
+|0039| Data(0)
+|0040| Data(0)
+|0041| PushNone
+|0042| Call(0)
+|0043| GetLocal(1)
+|0044| GetProp(done)
+|0045| Data(0)
+|0046| Data(0)
+|0047| Data(0)
+|0048| PushNone
+|0049| Call(0)
+|0050| Not
+|0051| JumpIfFalse(70)
+|0052| Pop
+|0053| GetLocal(1)
+|0054| GetProp(next)
+|0055| Data(0)
+|0056| Data(0)
+|0057| Data(0)
+|0058| PushNone
+|0059| Call(0)
+|0060| GetConst(val: )
+|0061| GetLocal(2)
+|0062| GetProp(val)
+|0063| Data(0)
+|0064| Data(0)
+|0065| Data(0)
+|0066| Interpolate(2)
+|0067| Print
+|0068| Pop
+|0069| Jump(43)
+|0070| Pop
+|0071| Pop
+|0072| PushNone
+|0073| Return

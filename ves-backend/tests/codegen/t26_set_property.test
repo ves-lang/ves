@@ -5,7 +5,7 @@
 |0000| PushInt32(0)
 |0001| GetLocal(0)
 |0002| PushInt32(5)
-|0003| SetProp(0)
+|0003| SetProp(b)
 |0004| Data(0)
 |0005| Data(0)
 |0006| Data(0)

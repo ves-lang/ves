@@ -627,166 +627,171 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
 
     /// Emits the bytecode for a For-Each loop.
     ///
-    /// For-Each loops are desugared into regular For loops, so the layout is the same.
-    ///
     /// The format is: `for ITEM in ITERATOR`, where ITEM is an identifier and ITERATOR
     /// is either a range (`START..END`/`START..=END`) or an expression whose value
     /// is conformant with the iterator protocol.
+    ///
+    /// For-Each loops are desugared into While loops in the following way:
+    /// ```x86asm
+    /// pre_start:
+    ///     [[ITER]] = <iterable>.iter()
+    /// start:
+    ///     not [[ITER]].done() ; <condition>
+    ///     jump_if_false @exit
+    ///     pop condition result
+    ///     <item> = [[ITER]].next()
+    ///     <body>
+    ///     jump @start
+    /// exit:
+    ///     pop condition result
+    /// end:
+    /// ```
     ///
     /// The iterator protocol has 3 parts: `@iter`, `@next`, `@done`.
     /// - `@iter` is should return a value which has the `@next` and `@done` methods
     /// - `@next` is should return the next value, or none if there are no more values
     /// - `@done` is should return `true` if there are no more values, and `false` otherwise
     fn emit_foreach_loop(&mut self, info: &'b ForEach<'a>, span: Span) -> Result<()> {
+        match info.iterator {
+            IteratorKind::Range(ref range) => self.emit_range_based_foreach(info, range, span),
+            IteratorKind::Expr(ref iterable) => self.emit_iterable_foreach(iterable, info, span),
+        }
+    }
+
+    fn emit_range_based_foreach(
+        &mut self,
+        info: &'b ForEach<'a>,
+        range: &'b Range<'a>,
+        span: Span,
+    ) -> Result<()> {
         self.state.begin_scope();
         let mut comparison_op = Opcode::IsCmpLessThan;
-        match info.iterator {
-            IteratorKind::Range(Range {
-                ref start,
-                ref end,
-                ref step,
-                inclusive,
-            }) => {
-                if inclusive {
-                    comparison_op = Opcode::IsCmpLessEqual
-                };
-                // emit item initializer (e.g. the `i` from `for i in 0..10, 2 { ... }`)
-                // this is equivalent to `for i = 0, ...`
-                self.state.add_local(info.variable.lexeme.clone());
-                self.emit_expr(start, true)?;
+        if range.inclusive {
+            comparison_op = Opcode::IsCmpLessEqual
+        };
 
-                // the [[END]] and [[STEP]] initializers are given names which
-                // are not valid identifiers, so there is no way to access them
-                // from within the loop body
+        // emit item initializer, [[END]] initializer, and [[STEP]] initializer
+        let start_local = self.state.add_local(info.variable.lexeme.clone());
+        self.emit_expr(&range.start, true)?;
+        let end_local = self.state.add_local("[[END]]");
+        self.emit_expr(&range.end, true)?;
+        let step_local = self.state.add_local("[[STEP]]");
+        self.emit_expr(&range.step, true)?;
 
-                // emit [[END]] initializer (the `10` from `for i in 0..10, 2 { ... }`)
-                self.state.add_local("[[END]]");
-                self.emit_expr(end, true)?;
-                // emit [[STEP]] initializer (the `2` from `for i in 0..10, 2 { ... }`)
-                self.state.add_local("[[STEP]]");
-                self.emit_expr(step, true)?;
-            }
-            IteratorKind::Expr(ref iterable) => {
-                let iter_local = self.state.add_local("[[ITER]]");
-                self.emit_expr(iterable, true)?;
-                let iter = self
-                    .state
-                    .builder
-                    .constant(self.ctx.alloc_or_intern("iter").into_ves(), span.clone())?;
-                self.state.builder.get_magic(iter, span.clone());
-
-                // now emit `<item>`
-                self.state.add_local(info.variable.lexeme.clone());
-                // and initialize it with `[[ITER]].next()`
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(iter_local), span.clone());
-                let next = self
-                    .state
-                    .builder
-                    .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
-                self.state.builder.get_magic(next, span.clone());
-            }
-        }
         self.state.begin_loop();
+
         let [start, latch, body, exit, end] = self.state.reserve_labels();
         self.state.add_control_label(&info.label, latch, end);
+
+        // emit `info.variable < [[END]]` or `info.variable <= [[END]]`
         self.state.builder.label(start);
-        match info.iterator {
-            IteratorKind::Range(..) => {
-                // emit `info.variable < [[END]]` or `info.variable <= [[END]]`
-                // these locals are guaranteed to exist, because we create them above
-                let start_local = self
-                    .state
-                    .resolve_local(info.variable.lexeme.as_ref())
-                    .unwrap();
-                let end_local = self.state.resolve_local("[[END]]").unwrap();
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(start_local), span.clone());
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(end_local), span.clone());
-                self.state.builder.op(Opcode::Compare, span.clone());
-                self.state.builder.op(Opcode::Negate, span.clone());
-                self.state.builder.op(comparison_op, span.clone());
-                self.state
-                    .builder
-                    .op(Opcode::JumpIfFalse(exit), span.clone());
-                self.state.builder.op(Opcode::Pop, span.clone());
-                self.state.builder.op(Opcode::Jump(body), span.clone());
-            }
-            IteratorKind::Expr(..) => {
-                // emit `![[ITER]].done()`
-                let iter_local = self.state.resolve_local("[[ITER]]").unwrap();
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(iter_local), span.clone());
-                let done = self
-                    .state
-                    .builder
-                    .constant(self.ctx.alloc_or_intern("done").into_ves(), span.clone())?;
-                self.state.builder.get_magic(done, span.clone());
-                self.state.builder.op(Opcode::Not, span.clone());
-                self.state
-                    .builder
-                    .op(Opcode::JumpIfFalse(exit), span.clone());
-                self.state.builder.op(Opcode::Pop, span.clone());
-                self.state.builder.op(Opcode::Jump(body), span.clone());
-            }
-        }
+        self.state
+            .builder
+            .op(Opcode::GetLocal(start_local), span.clone());
+        self.state
+            .builder
+            .op(Opcode::GetLocal(end_local), span.clone());
+        self.state.builder.op(Opcode::Compare, span.clone());
+        self.state.builder.op(Opcode::Negate, span.clone());
+        self.state.builder.op(comparison_op, span.clone());
+        self.state
+            .builder
+            .op(Opcode::JumpIfFalse(exit), span.clone());
+        self.state.builder.op(Opcode::Pop, span.clone());
+        self.state.builder.op(Opcode::Jump(body), span.clone());
+
+        // emit `info.variable += [[STEP]]`
         self.state.builder.label(latch);
-        match info.iterator {
-            IteratorKind::Range(..) => {
-                // emit `info.variable += [[STEP]]`
-                let start_local = self
-                    .state
-                    .resolve_local(info.variable.lexeme.as_ref())
-                    .unwrap();
-                let step_local = self.state.resolve_local("[[STEP]]").unwrap();
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(start_local), span.clone());
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(step_local), span.clone());
-                self.state.builder.op(Opcode::Add, span.clone());
-                self.state
-                    .builder
-                    .op(Opcode::SetLocal(start_local), span.clone());
-                self.state.op_pop(1, span.clone());
-                self.state.builder.op(Opcode::Jump(start), span.clone());
-            }
-            IteratorKind::Expr(..) => {
-                // emit `<item> = [[ITER]].next()`
-                let iter_local = self.state.resolve_local("[[ITER]]").unwrap();
-                self.state
-                    .builder
-                    .op(Opcode::GetLocal(iter_local), span.clone());
-                let next = self
-                    .state
-                    .builder
-                    .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
-                self.state.builder.get_magic(next, span.clone());
-                let item_local = self
-                    .state
-                    .resolve_local(info.variable.lexeme.as_ref())
-                    .unwrap();
-                self.state
-                    .builder
-                    .op(Opcode::SetLocal(item_local), span.clone());
-                self.state.op_pop(1, span.clone());
-                self.state.builder.op(Opcode::Jump(start), span.clone());
-            }
-        }
+        self.state
+            .builder
+            .op(Opcode::GetLocal(start_local), span.clone());
+        self.state
+            .builder
+            .op(Opcode::GetLocal(step_local), span.clone());
+        self.state.builder.op(Opcode::Add, span.clone());
+        self.state
+            .builder
+            .op(Opcode::SetLocal(start_local), span.clone());
+        self.state.op_pop(1, span.clone());
+        self.state.builder.op(Opcode::Jump(start), span.clone());
+
+        // emit body
         self.state.builder.label(body);
         self.emit_stmt(&info.body)?;
         self.state.builder.op(Opcode::Jump(latch), span.clone());
+
+        // emit end
         self.state.builder.label(exit);
         self.state.op_pop(1, span.clone());
         self.state.builder.label(end);
         self.state.end_loop();
         self.state.end_scope(span);
+
+        Ok(())
+    }
+
+    fn emit_iterable_foreach(
+        &mut self,
+        iterable: &'b Expr<'a>,
+        info: &'b ForEach<'a>,
+        span: Span,
+    ) -> Result<()> {
+        // emit [[ITER]] = <iterable>.iter()
+        let iter_local = self.state.add_local("[[ITER]]");
+        self.emit_expr(iterable, true)?;
+        let iter = self
+            .state
+            .builder
+            .constant(self.ctx.alloc_or_intern("iter").into_ves(), span.clone())?;
+        self.state.builder.invoke_magic(iter, span.clone());
+
+        self.state.begin_loop();
+        let [start, exit, end] = self.state.reserve_labels();
+        self.state.add_control_label(&info.label, start, end);
+
+        // emit condition
+        self.state.builder.label(start);
+        self.state
+            .builder
+            .op(Opcode::GetLocal(iter_local), span.clone());
+        let done = self
+            .state
+            .builder
+            .constant(self.ctx.alloc_or_intern("done").into_ves(), span.clone())?;
+        self.state.builder.invoke_magic(done, span.clone());
+        self.state.builder.op(Opcode::Not, span.clone());
+        self.state
+            .builder
+            .op(Opcode::JumpIfFalse(exit), span.clone());
+        self.state.op_pop(1, span.clone());
+
+        // emit body
+        if let StmtKind::Block(ref body) = info.body.kind {
+            self.state.begin_scope();
+            self.state.add_local(info.variable.lexeme.clone());
+            self.state
+                .builder
+                .op(Opcode::GetLocal(iter_local), span.clone());
+            let next = self
+                .state
+                .builder
+                .constant(self.ctx.alloc_or_intern("next").into_ves(), span.clone())?;
+            self.state.builder.invoke_magic(next, span.clone());
+
+            for stmt in body {
+                self.emit_stmt(stmt)?;
+            }
+            self.state.end_scope(span.clone());
+            self.state.builder.op(Opcode::Jump(start), span.clone());
+        } else {
+            unreachable!("Loop body is always a block");
+        }
+
+        // emit end
+        self.state.builder.label(exit);
+        self.state.op_pop(1, span);
+        self.state.builder.label(end);
+        self.state.end_loop();
 
         Ok(())
     }
@@ -1706,6 +1711,10 @@ mod suite {
         fn format_op(op: &Opcode, c: &[Value]) -> String {
             match op {
                 Opcode::GetConst(i) => format!("GetConst({})", c[*i as usize]),
+                Opcode::InvokeMagicMethod(i) => format!("InvokeMagicMethod({})", c[*i as usize]),
+                Opcode::GetProp(i) => format!("GetProp({})", c[*i as usize]),
+                Opcode::TryGetProp(i) => format!("TryGetProp({})", c[*i as usize]),
+                Opcode::SetProp(i) => format!("SetProp({})", c[*i as usize]),
                 Opcode::CreateClosure(i) => format!("CreateClosure({})", {
                     match c[*i as usize] {
                         Value::Ref(v) => match &*v {

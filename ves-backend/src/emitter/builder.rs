@@ -78,7 +78,7 @@ impl BytecodeBuilder {
         self.with_ic(Opcode::SetProp, idx, span);
     }
 
-    pub fn get_magic(&mut self, idx: u32, span: Span) {
+    pub fn invoke_magic(&mut self, idx: u32, span: Span) {
         self.with_ic(Opcode::InvokeMagicMethod, idx, span);
     }
 

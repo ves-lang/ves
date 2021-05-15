@@ -166,9 +166,12 @@ for node in list {
     print(f"val: {node.val}")
 }
 
-let it = list.iter();
-for node = it.next(); !it.done(); node = it.next() {
-    print(f"val: {node.val}")
+{
+    let it = list.iter();
+    while !it.done() {
+        let node = it.next();
+        print(f"val: {node.val}");
+    }
 }
 
 // TODO: test more methods here

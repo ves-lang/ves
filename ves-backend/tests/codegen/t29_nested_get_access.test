@@ -2,15 +2,15 @@
 
 %output
 
-|0000| PushInt32(0)  // mut a = 0
-|0001| GetLocal(0)     // get a
-|0002| PushInt32(0)  // push 0
-|0003| GetItem         // a[0]
-|0004| GetProp(0)      // .b
+|0000| PushInt32(0)
+|0001| GetLocal(0)
+|0002| PushInt32(0)
+|0003| GetItem
+|0004| GetProp(b)
 |0005| Data(0)
 |0006| Data(0)
 |0007| Data(0)
-|0008| GetProp(1)
+|0008| GetProp(c)
 |0009| Data(0)
 |0010| Data(0)
 |0011| Data(0)

@@ -4,7 +4,7 @@
 
 |0000| PushInt32(0)
 |0001| GetLocal(0)
-|0002| TryGetProp(0)
+|0002| TryGetProp(b)
 |0003| Data(0)
 |0004| Data(0)
 |0005| Data(0)

@@ -18,7 +18,7 @@ use super::{call_frame::CallFrame, symbols::SymbolTable, Context, VmGlobals};
 
 pub const DEFAULT_STACK_SIZE: usize = 256;
 pub const DEFAULT_MAX_CALL_STACK_SIZE: usize = 1024;
-const DEBUG_STACK_PRINT_SIZE: usize = 20;
+const DEBUG_STACK_PRINT_SIZE: usize = 15;
 
 macro_rules! num_bin_op {
     ($self:ident, $left:ident, $right:ident, $int:expr, $float:expr, lhs => $lhs_method:ident, rhs => $rhs_method:ident) => {
