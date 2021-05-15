@@ -244,7 +244,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 Opcode::SetGlobal(idx) => self.set_global(idx),
                 Opcode::InvokeMagicMethod(idx) => self.invoke_magic_method(idx)?,
                 Opcode::GetProp(n) => self.get_prop(n)?,
-                Opcode::TryGetProp(n) => unimplemented!(),
+                Opcode::TryGetProp(n) => self.try_get_prop(n)?,
                 Opcode::SetProp(n) => self.set_prop(n)?,
                 Opcode::GetItem => unimplemented!(),
                 Opcode::SetItem => unimplemented!(),
@@ -412,7 +412,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     }
 
     /// Safety: The caller must ensure that `instance` and `receiver` refer to the same object.
-    pub fn bind_method(
+    pub fn get_bound_method(
         &mut self,
         instance: &mut VesInstance,
         name: &VesStrView,
@@ -1227,12 +1227,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         if !obj.is_ptr() {
             return Err(self.error(format!("{:?} is not an object", obj.unbox())));
         }
-        let instance = obj;
-        let mut instance = unsafe { instance.unbox_pointer() }.0;
+        let mut instance = unsafe { obj.unbox_pointer() }.0;
         if let VesObject::Instance(instance) = &mut *instance {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
-            // TODO: this will panic if you try to get a method
             // Fast path (inline cache hit)
             if struct_ptr == ptr {
                 self.push(NanBox::new(
@@ -1253,11 +1251,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 }
                 None => {
                     // Double miss, the user might be trying to get a method by value
-                    match self.bind_method(instance, &name, obj.unbox()) {
+                    match self.get_bound_method(instance, &name, obj.unbox()) {
                         Some(method) => NanBox::from(method),
                         None => {
                             return Err(self.error(format!(
-                                "{} has no property or method `{}`.",
+                                "{} has no property `{}`.",
                                 obj.unbox(),
                                 name.str()
                             )));
@@ -1275,6 +1273,58 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             obj
         ));
         Ok(())
+    }
+
+    fn try_get_prop(&mut self, name_index: u32) -> Result<(), VesError> {
+        let ptr = self.read_ic_ptr();
+        let slot = self.read_ic_slot();
+        let name = self.const_at(name_index as usize);
+
+        let obj = self.pop();
+        if !obj.is_ptr() {
+            self.push(NanBox::none());
+            return Ok(());
+        }
+        let mut instance = unsafe { obj.unbox_pointer() }.0;
+        if let VesObject::Instance(instance) = &mut *instance {
+            let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
+
+            // Fast path (inline cache hit)
+            if struct_ptr == ptr {
+                self.push(NanBox::new(
+                    *instance
+                        .fields_mut()
+                        .get_by_slot_index_unchecked(slot as usize),
+                ));
+                return Ok(());
+            }
+
+            // Slow path (inline cache miss)
+            let name = name.unbox().as_ptr().unwrap();
+            let name = VesStrView::new(name);
+            let value = match instance.fields().get_slot_index(&name) {
+                Some(slot) => {
+                    self.update_inst_ic_cache(struct_ptr, slot as u32);
+                    NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot))
+                }
+                None => {
+                    // Double miss, the user might be trying to get a method by value
+                    match self.get_bound_method(instance, &name, obj.unbox()) {
+                        Some(method) => NanBox::from(method),
+                        None => {
+                            self.push(NanBox::none());
+                            return Ok(());
+                        }
+                    }
+                }
+            };
+
+            self.push(value);
+            Ok(())
+        } else {
+            self.push(NanBox::none());
+            Ok(())
+        }
     }
 
     fn set_prop(&mut self, name_index: u32) -> Result<(), VesError> {

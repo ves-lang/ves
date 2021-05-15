@@ -1,0 +1,21 @@
+{
+    struct T;
+    let t = T();
+    print(t?.a);
+}
+{
+    struct T(a);
+    let t = T(0);
+    print(t?.a);
+}
+{
+    struct T(a = 0);
+    let t = T();
+    print(t?.a);
+}
+
+%output
+
+none
+0
+0
