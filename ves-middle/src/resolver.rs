@@ -68,13 +68,21 @@ impl<'a> Resolver<'a> {
             ..Default::default()
         };
 
-        self.resolve_imports(&ast.imports, registry, &mut ex);
+        let import_globals = self.resolve_imports(&ast.imports, registry, &mut ex);
+        ast.globals
+            .extend(import_globals.into_iter().map(|name| Global {
+                name,
+                kind: VarKind::Let,
+                index: Some(usize::MAX),
+            }));
 
         let mut sorted_globals = ast.globals.clone().into_iter().collect::<Vec<_>>();
         sorted_globals.sort_by_key(|e| e.name.span.start);
 
         for mut global in sorted_globals.into_iter() {
-            self.declare_global(&global.name, NameKind::from(global.kind));
+            if global.index != Some(usize::MAX) {
+                self.declare_global(&global.name, NameKind::from(global.kind));
+            }
 
             ast.globals.remove(&global);
             global.index = Some(registry.get_global_index(&global.name.lexeme[..], self.file_id));
@@ -100,8 +108,9 @@ impl<'a> Resolver<'a> {
         imports: &[Import<'a>],
         registry: &mut ModuleRegistry<T>,
         ex: &mut ErrCtx,
-    ) {
+    ) -> Vec<Token<'a>> {
         let mut unresolved = std::collections::HashSet::new();
+        let mut globals = Vec::new();
         for i in imports {
             match &i.import {
                 ImportStmt::Direct(path) => {
@@ -117,6 +126,7 @@ impl<'a> Resolver<'a> {
                             }
                         },
                     };
+                    globals.push(name.clone());
 
                     match i.resolved_path.as_ref() {
                         Some(path) => {
@@ -142,6 +152,7 @@ impl<'a> Resolver<'a> {
                             name
                         }
                     };
+                    globals.push(name.clone());
 
                     match i.resolved_path.as_ref() {
                         Some(path) => {
@@ -164,6 +175,8 @@ impl<'a> Resolver<'a> {
                 }),
             }
         }
+
+        globals
     }
 
     fn unresolved_module_error(

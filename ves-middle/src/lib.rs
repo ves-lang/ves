@@ -134,7 +134,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
         &mut self,
         name: impl Into<String>,
         source: impl Into<String>,
-    ) -> Result<(), ()> {
+    ) -> Result<FileId, ()> {
         let name = name.into();
         let source = self.store_string(source.into());
         let id = self.db.add_file(name, source);
@@ -145,7 +145,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
     /// Writes any errors or warnings into the internal diagnostic list.
     /// Returns an empty result indicating the success or failure of the operation -- use the `report_*` methods to obtain error reports.
     #[allow(clippy::result_unit_err)]
-    pub fn process_snippet<S: Into<String>>(&mut self, source: S) -> Result<(), ()> {
+    pub fn process_snippet<S: Into<String>>(&mut self, source: S) -> Result<FileId, ()> {
         let source = self.store_string(source.into());
         let id = self.db.add_snippet(source);
         self.resolve_module(id)
@@ -257,7 +257,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
 
     /// Resolves the module with the given id by traversing and loading all its dependencies, saving them
     /// inside the struct. To obtain the resulting ASTs, use the `map_modules` method.
-    fn resolve_module(&mut self, id: FileId) -> Result<(), ()> {
+    fn resolve_module(&mut self, id: FileId) -> Result<FileId, ()> {
         let ast = match self.parse_single(id) {
             Ok(ast) => ast,
             Err(ex) => {
@@ -279,7 +279,7 @@ impl<'path, 'this, M> VesMiddle<'path, 'this, M> {
 
         self.trees.extend(trees);
 
-        Ok(())
+        Ok(id)
     }
 
     /// Reports the errors, warnings, and diagnostics accumulated so far to a [`String`].

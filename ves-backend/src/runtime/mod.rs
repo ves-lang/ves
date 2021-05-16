@@ -124,8 +124,9 @@ pub mod suite {
 
         use crate::{
             emitter::{emit::Emitter, CompilationContext, VTables},
-            gc::{DefaultGc, GcHandle, SharedPtr},
+            gc::{DefaultGc, GcHandle, SharedPtr, VesGc},
             runtime::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
+            Value, VesObject,
         };
 
         pub fn compile_and_run(src: String) -> String {
@@ -141,14 +142,22 @@ pub mod suite {
                 }),
             );
 
-            match mid.process_snippet(src) {
-                Ok(_) => {}
+            mid.registry_mut()
+                .add_native_module(
+                    "vm_tests".into(),
+                    (),
+                    vec!["Pair".to_string()].into_iter().collect(),
+                )
+                .unwrap();
+
+            let file_id = match mid.process_snippet(src) {
+                Ok(id) => id,
                 Err(_) => {
                     return mid.report_to_string();
                 }
-            }
+            };
 
-            let gc = GcHandle::new(DefaultGc::default());
+            let mut gc = GcHandle::new(DefaultGc::default());
             let mut strings = HashMap::new();
             let mut vtables = VTables::init(gc.clone());
             let mut result = mid.map_modules(|ast| {
@@ -168,6 +177,8 @@ pub mod suite {
                 return result.report_to_string();
             }
 
+            let pair_key = result.registry.get_global_index("Pair", file_id);
+
             let mut globals = result
                 .registry
                 .globals()
@@ -177,7 +188,13 @@ pub mod suite {
 
             globals.sort_by_key(|g| g.0);
 
-            let globals = VmGlobals::new(globals.into_iter().map(|(_, name)| name).collect());
+            let mut globals = VmGlobals::new(globals.into_iter().map(|(_, name)| name).collect());
+
+            let pair_type = crate::objects::native::PairType::new(gc.clone());
+            globals.set(
+                pair_key,
+                Value::Ref(gc.alloc_permanent(VesObject::FnNative(Box::new(pair_type)))),
+            );
 
             let mut modules = result.get_output_unchecked();
             assert_eq!(modules.len(), 1); // TODO: multiple modules
@@ -201,7 +218,7 @@ pub mod suite {
 
             match vm.run(entry) {
                 Ok(_) => String::from_utf8(output).unwrap(),
-                Err(e) => result.db.report_one_to_string(&e).unwrap(),
+                Err(e) => result.db.report_one_to_string(&dbg!(e)).unwrap(),
             }
         }
     }

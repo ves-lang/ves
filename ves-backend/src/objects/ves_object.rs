@@ -17,6 +17,7 @@ use crate::{
 };
 
 use super::{
+    native::ObjNative,
     ves_fn::{Args, Arity, ClosureDescriptor, VesClosure, VesFn, VesFnBound},
     ves_int::VesInt,
     ves_struct::StructDescriptor,
@@ -44,6 +45,7 @@ pub enum VesObject {
     Fn(VesFn),
     /// A native function.
     FnNative(Box<dyn FnNative>),
+    ObjNative(Box<dyn ObjNative>),
     /// A bound function.
     FnBound(VesFnBound),
     /// A function with captures
@@ -317,10 +319,11 @@ unsafe impl Trace for VesObject {
             VesObject::Fn(f) => f.trace(tracer),
             VesObject::FnBound(f) => f.trace(tracer),
             VesObject::Closure(c) => c.trace(tracer),
+            VesObject::FnNative(f) => f.trace(tracer),
+            VesObject::ObjNative(o) => o.trace(tracer),
             // not traceable, only used as a constant
             VesObject::StructDescriptor(_) => (),
             VesObject::ClosureDescriptor(_) => (),
-            VesObject::FnNative(_) => (),
         }
     }
 
@@ -333,10 +336,11 @@ unsafe impl Trace for VesObject {
             VesObject::Fn(f) => f.after_forwarding(),
             VesObject::FnBound(f) => f.after_forwarding(),
             VesObject::Closure(c) => c.after_forwarding(),
+            VesObject::FnNative(f) => f.after_forwarding(),
+            VesObject::ObjNative(o) => o.after_forwarding(),
             // not traceable, only used as a constant
             VesObject::StructDescriptor(_) => (),
             VesObject::ClosureDescriptor(_) => (),
-            VesObject::FnNative(_) => (),
         }
     }
 }
@@ -351,6 +355,7 @@ impl Display for VesObject {
             VesObject::Fn(v) => v.fmt(f),
             VesObject::FnBound(v) => v.fmt(f),
             VesObject::FnNative(v) => write!(f, "<fn native at {:p}>", v),
+            VesObject::ObjNative(v) => write!(f, "<obj native at {:p}>", v),
             VesObject::Closure(v) => v.fmt(f),
             VesObject::StructDescriptor(v) => v.fmt(f),
             VesObject::ClosureDescriptor(v) => v.fmt(f),
@@ -412,6 +417,12 @@ impl std::fmt::Debug for VesObject {
                 let debug_trait_builder = &mut Formatter::debug_tuple(f, "FnNative");
                 let _ =
                     DebugTuple::field(debug_trait_builder, &format!("<native fn at {:p}>", *func));
+                DebugTuple::finish(debug_trait_builder)
+            }
+            (&VesObject::ObjNative(ref func),) => {
+                let debug_trait_builder = &mut Formatter::debug_tuple(f, "ObjNative");
+                let _ =
+                    DebugTuple::field(debug_trait_builder, &format!("<native obj at {:p}>", *func));
                 DebugTuple::finish(debug_trait_builder)
             }
         }

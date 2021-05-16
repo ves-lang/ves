@@ -124,6 +124,7 @@ pub trait VmInterface {
         callee: Value,
         args: Vec<Value>,
     ) -> Result<Value, VesError>;
+    fn to_string(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -182,6 +183,10 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
 
     fn create_error(&mut self, msg: String) -> VesError {
         self.error(msg)
+    }
+
+    fn to_string(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError> {
+        self.stringify(value)
     }
 }
 
@@ -802,7 +807,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             return Err(self.error(format!(
                                 "{} expected at least {} args, got {}",
                                 obj, arity.positional, args
-                            )))
+                            )));
                         }
                         ArgCountDiff::MissingDefaults(n) => {
                             for _ in 0..n {
@@ -895,7 +900,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             return Err(self.error(format!(
                                 "{} expected at least {} args, got {}",
                                 obj, arity.positional, args
-                            )))
+                            )));
                         }
                         ArgCountDiff::MissingDefaults(n) => self
                             .pop_n(args)
@@ -1058,9 +1063,13 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     /// ```
     fn stringify(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError> {
         let result = match value {
-            Value::Ref(_) => {
+            Value::Ref(ptr) => {
                 let method = self.symbols.str;
                 let inst = self.inst();
+
+                if let VesObject::ObjNative(obj) = &**ptr {
+                    return Ok(obj.to_string(self)?.into());
+                }
 
                 match self.get_magic_method(NanBox::from(*value), &method, inst) {
                     Ok(Some(obj)) => {
@@ -1074,6 +1083,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                         }
                     }
+
                     _ => value.to_string().into(),
                 }
             }
@@ -1095,6 +1105,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 i.fields().get_slot_index(&name).is_some()
                     || i.methods().get_slot_index(&name).is_some()
             }
+            VesObject::ObjNative(o) => o.has_property(&name),
             VesObject::Fn(_)
             | VesObject::FnBound(_)
             | VesObject::FnNative(_)

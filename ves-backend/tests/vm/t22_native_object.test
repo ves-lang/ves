@@ -1,0 +1,12 @@
+import { Pair } from vm_tests;
+
+let pair = Pair(1, 2);
+
+print(pair);
+
+print(Pair(pair, "test"));
+
+%output
+
+Pair { x: 1, y: 2 }
+Pair { x: Pair { x: 1, y: 2 }, y: test }

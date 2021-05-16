@@ -99,6 +99,7 @@ impl Value {
                 | VesObject::FnBound(_)
                 | VesObject::FnNative(_)
                 | VesObject::Closure(_) => TypeId(6),
+                VesObject::ObjNative(o) => o.type_id(),
                 VesObject::Instance(v) => TypeId(v.ty_ptr().ptr().as_ptr() as usize),
                 VesObject::Struct(_) => TypeId(v.ptr().as_ptr() as usize),
                 VesObject::StructDescriptor(_) => unreachable!(),
