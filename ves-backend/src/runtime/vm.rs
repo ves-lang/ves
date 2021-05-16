@@ -1274,6 +1274,15 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             self.push(value);
             return Ok(());
+        } else if let VesObject::ObjNative(instance) = &mut *instance {
+            let type_ptr = instance.type_id().0 as u64;
+            let slot = if type_ptr != ptr { u32::MAX } else { slot };
+            let name = name.unbox().as_ptr().unwrap();
+            let name = VesStrView::new(name);
+            let (slot, value) = instance.get_property(self, slot, &name)?;
+            self.update_inst_ic_cache(type_ptr, slot as u32);
+            self.push(value);
+            return Ok(());
         }
 
         self.error(format!(

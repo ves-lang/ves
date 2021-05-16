@@ -6,7 +6,10 @@ print(pair);
 
 print(Pair(pair, "test"));
 
+print(pair.x + pair.y);
+
 %output
 
 Pair { x: 1, y: 2 }
 Pair { x: Pair { x: 1, y: 2 }, y: test }
+3

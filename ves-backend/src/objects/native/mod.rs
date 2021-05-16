@@ -29,17 +29,17 @@ pub trait ObjNative: Trace {
     fn get_property(
         &mut self,
         vm: &mut dyn VmInterface,
-        slot: usize,
+        slot: u32,
         name: &VesStrView,
-    ) -> R<(usize, Value)>;
+    ) -> R<(u32, Value)>;
 
     fn set_property(
         &mut self,
         vm: &mut dyn VmInterface,
-        slot: usize,
+        slot: u32,
         name: &VesStrView,
         value: Value,
-    ) -> R<(usize, Value)>;
+    ) -> R<(u32, Value)>;
 
     fn has_property(&self, name: &VesStrView) -> bool;
 }
@@ -71,10 +71,8 @@ ves_native! {
                 }
 
                 self.x = value;
-                Ok(Value::None)
-            } else {
-                Ok(self.x)
             }
+            Ok(self.x)
         }
 
         #[intercept(missing)]
@@ -104,10 +102,15 @@ impl PairData {
             }
 
             self.x = value;
-            Ok(Value::None)
-        } else {
-            Ok(self.x)
         }
+        Ok(self.x)
+    }
+
+    pub fn y(&mut self, _vm: &mut dyn VmInterface, value: Option<Value>) -> R<Value> {
+        if let Some(value) = value {
+            self.y = value;
+        }
+        Ok(self.y)
     }
 
     pub fn rest(
@@ -128,7 +131,7 @@ unsafe impl Trace for PairData {
 }
 
 pub struct PairVTable {
-    fields: VesHashMap<&'static str, usize>,
+    fields: VesHashMap<&'static str, u32>,
 }
 
 unsafe impl Trace for PairVTable {
@@ -229,10 +232,10 @@ impl ObjNative for PairInstance {
     fn get_property(
         &mut self,
         vm: &mut dyn VmInterface,
-        slot: usize,
+        slot: u32,
         name: &VesStrView,
-    ) -> R<(usize, Value)> {
-        let slot = if slot == usize::MAX {
+    ) -> R<(u32, Value)> {
+        let slot = if slot == u32::MAX {
             self.vtable
                 .borrow()
                 .fields
@@ -244,18 +247,19 @@ impl ObjNative for PairInstance {
         };
         match slot {
             0 => PairData::x(&mut self.data, vm, None).map(|x| (0, x)),
-            _ => PairData::rest(&mut self.data, vm, name, None).map(|x| (1, x)),
+            1 => PairData::y(&mut self.data, vm, None).map(|y| (1, y)),
+            rest => PairData::rest(&mut self.data, vm, name, None).map(|x| (rest, x)),
         }
     }
 
     fn set_property(
         &mut self,
         vm: &mut dyn VmInterface,
-        slot: usize,
+        slot: u32,
         name: &VesStrView,
         value: Value,
-    ) -> R<(usize, Value)> {
-        let slot = if slot == usize::MAX {
+    ) -> R<(u32, Value)> {
+        let slot = if slot == u32::MAX {
             self.vtable
                 .borrow()
                 .fields
@@ -267,7 +271,8 @@ impl ObjNative for PairInstance {
         };
         match slot {
             0 => PairData::x(&mut self.data, vm, Some(value)).map(|x| (0, x)),
-            _ => PairData::rest(&mut self.data, vm, name, None).map(|x| (1, x)),
+            1 => PairData::y(&mut self.data, vm, Some(value)).map(|y| (1, y)),
+            rest => PairData::rest(&mut self.data, vm, name, None).map(|x| (rest, x)),
         }
     }
 
