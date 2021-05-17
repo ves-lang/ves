@@ -5,15 +5,12 @@ use std::{
 
 use ahash::RandomState;
 
-use crate::{
-    gc::{GcObj, Trace},
-    objects::peel::Peeled,
-    VesObject,
-};
+use crate::{gc::GcObj, objects::peel::Peeled, VesObject};
 
 use super::VesStr;
+use derive_trace::Trace;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Trace)]
 pub struct VesStrView {
     peeled: Peeled<VesStr>,
 }
@@ -28,12 +25,6 @@ impl VesStrView {
     #[inline]
     pub fn str(&self) -> &Cow<'static, str> {
         self.inner()
-    }
-}
-
-unsafe impl Trace for VesStrView {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.peeled, tracer);
     }
 }
 

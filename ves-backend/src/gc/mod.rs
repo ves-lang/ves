@@ -12,6 +12,8 @@ use self::proxy_allocator::ProxyAllocator;
 
 pub mod naive;
 pub mod proxy_allocator;
+pub mod trace;
+pub use trace::Trace;
 
 pub type SharedPtr<T> = Rc<T>;
 
@@ -146,12 +148,6 @@ pub trait VesGc {
     fn proxy(&self) -> ProxyAllocator;
 }
 
-pub unsafe trait Trace {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj));
-
-    fn after_forwarding(&mut self) {}
-}
-
 #[derive(Debug, Default)]
 pub struct GcHeader {
     marked: bool,
@@ -212,16 +208,6 @@ unsafe impl Trace for GcObj {
     fn after_forwarding(&mut self) {
         let obj = &mut **self;
         obj.after_forwarding();
-    }
-}
-
-unsafe impl<T: Trace> Trace for &mut Vec<T> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        self.iter_mut().for_each(|obj| obj.trace(tracer));
-    }
-
-    fn after_forwarding(&mut self) {
-        self.iter_mut().for_each(|obj| obj.after_forwarding())
     }
 }
 

@@ -6,9 +6,9 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
-use crate::gc::Trace;
+use derive_trace::Trace;
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesStr {
     s: Cow<'static, str>,
     hash: Cell<Option<u64>>,
@@ -61,10 +61,6 @@ impl std::ops::Deref for VesStr {
     fn deref(&self) -> &Self::Target {
         &*self.s
     }
-}
-
-unsafe impl Trace for VesStr {
-    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut crate::gc::GcObj)) {}
 }
 
 impl Display for VesStr {

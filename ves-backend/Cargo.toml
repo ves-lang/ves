@@ -8,6 +8,7 @@ edition = "2018"
 ves_error = { package = "ves-error", path = "../ves-error" }
 ves_parser = { package = "ves-parser", path = "../ves-parser" }
 ves_middle = { package = "ves-middle", path = "../ves-middle" }
+derive_trace = { package = "derive-trace", path = "./derive-trace" }
 
 static_assertions = "1.1.0"
 hashbrown = { git  = "https://github.com/rust-lang/hashbrown", features = ["nightly"] }

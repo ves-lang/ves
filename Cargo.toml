@@ -4,6 +4,7 @@ members = [
     "ves-parser",
     "ves-middle",
     "ves-backend",
+    "ves-backend/derive-trace",
     "ves-testing",
     "ves-testing/ves-testing-macro",
     "experiments"

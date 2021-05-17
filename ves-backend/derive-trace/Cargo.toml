@@ -1,0 +1,16 @@
+[package]
+name = "derive-trace"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "trace_derive"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.64", features = ["full"] }
+quote = "1.0.9"
+proc-macro2 = "1.0"

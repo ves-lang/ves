@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    gc::{proxy_allocator::ProxyAllocator, GcObj, Trace},
+    gc::{proxy_allocator::ProxyAllocator, GcObj},
     VesObject,
 };
 use ahash::RandomState;
@@ -19,6 +19,8 @@ use super::{
     Value,
 };
 
+use derive_trace::Trace;
+
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
@@ -31,6 +33,11 @@ impl ViewKey {
     pub fn str(&self) -> &str {
         let view = unsafe { &*self.view.get() };
         view.str().as_ref()
+    }
+
+    #[inline]
+    pub fn raw_ptr(&self) -> *mut VesStrView {
+        self.view.get()
     }
 }
 
@@ -65,7 +72,7 @@ impl std::hash::Hash for ViewKey {
 
 impl Eq for ViewKey {}
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct StructDescriptor {
     pub name: VesStrView,
     pub fields: Vec<VesStrView, ProxyAllocator>,
@@ -75,16 +82,7 @@ pub struct StructDescriptor {
     pub arity: Arity,
 }
 
-unsafe impl Trace for StructDescriptor {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.name, tracer);
-        for field in &mut self.fields {
-            Trace::trace(field, tracer);
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesStruct {
     name: VesStrView,
     pub arity: Arity,
@@ -131,28 +129,6 @@ impl VesStruct {
     }
 }
 
-unsafe impl Trace for VesHashMap<ViewKey, GcObj> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        for (name, v) in self {
-            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
-            Trace::trace(v, tracer);
-        }
-    }
-}
-
-unsafe impl Trace for VesStruct {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.name, tracer);
-        for (name, _) in &mut self.fields {
-            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
-        }
-        for (name, (_, ptr)) in &mut self.vtable {
-            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
-            Trace::trace(ptr, tracer);
-        }
-    }
-}
-
 impl PropertyLookup for Peeled<VesStruct> {
     #[inline]
     fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
@@ -166,7 +142,7 @@ impl PropertyLookup for Peeled<VesStruct> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
 pub struct MethodLookup(Peeled<VesStruct>);
 impl PropertyLookup for MethodLookup {
     fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
@@ -181,25 +157,13 @@ impl PropertyLookup for MethodLookup {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
 pub struct MethodEntry {
     pub method: Value,
     pub is_bound: bool,
 }
 
-unsafe impl Trace for MethodEntry {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.method, tracer);
-    }
-}
-
-unsafe impl Trace for MethodLookup {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.0, tracer);
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesInstance {
     // NOTE: Methods and fields are separated into two cache lines to optimize for field access speed.
     //       Since a method may need to be bound after retrieval, storing methods and fields together
@@ -267,13 +231,6 @@ impl VesInstance {
     #[inline]
     pub fn methods_mut(&mut self) -> &mut CacheLayer<MethodLookup, MethodEntry, ProxyAllocator> {
         &mut self.methods
-    }
-}
-
-unsafe impl Trace for VesInstance {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.fields, tracer);
-        Trace::trace(&mut self.methods, tracer);
     }
 }
 

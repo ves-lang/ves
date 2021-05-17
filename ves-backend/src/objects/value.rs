@@ -3,14 +3,13 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 use ves_error::{FileId, VesError};
 
-use crate::{
-    gc::{Trace, VesRef},
-    VesObject,
-};
+use crate::{gc::VesRef, VesObject};
 
 use super::{
     ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr, ves_struct::StructDescriptor,
 };
+
+use derive_trace::Trace;
 
 // TODO: user-facing error type
 #[derive(Clone, PartialEq)]
@@ -32,7 +31,7 @@ pub struct TypeId(pub usize);
 
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Trace)]
 pub enum Value {
     /// A 32-bit integer
     Int(i32),
@@ -371,20 +370,6 @@ impl From<i32> for Value {
 impl From<f64> for Value {
     fn from(v: f64) -> Self {
         Self::Float(v)
-    }
-}
-
-unsafe impl Trace for Value {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut VesRef)) {
-        if let Value::Ref(p) = self {
-            p.trace(tracer)
-        }
-    }
-
-    fn after_forwarding(&mut self) {
-        if let Value::Ref(p) = self {
-            p.after_forwarding()
-        }
     }
 }
 

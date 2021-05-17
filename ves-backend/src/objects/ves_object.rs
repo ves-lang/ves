@@ -7,7 +7,7 @@ use std::{
 use ves_error::VesError;
 
 use crate::{
-    gc::{GcObj, Trace},
+    gc::Trace,
     objects::{
         ves_str::VesStr,
         ves_struct::{VesInstance, VesStruct},
@@ -22,6 +22,8 @@ use super::{
     ves_struct::StructDescriptor,
 };
 
+use derive_trace::Trace;
+
 pub trait FnNative: Trace {
     fn call<'a>(&mut self, vm: &'a mut dyn VmInterface, args: Args<'a>) -> Result<Value, VesError>;
     fn arity(&self) -> Arity;
@@ -29,6 +31,7 @@ pub trait FnNative: Trace {
     fn is_magic(&self) -> bool;
 }
 
+#[derive(Trace)]
 pub enum VesObject {
     /// An immutable string.
     Str(VesStr),
@@ -304,40 +307,6 @@ impl<F: FnNative + 'static> From<F> for VesObject {
 impl From<Box<dyn FnNative>> for VesObject {
     fn from(v: Box<dyn FnNative>) -> Self {
         Self::FnNative(v)
-    }
-}
-
-unsafe impl Trace for VesObject {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        match self {
-            VesObject::Str(s) => s.trace(tracer),
-            VesObject::Int(s) => s.trace(tracer),
-            VesObject::Instance(i) => Trace::trace(i, tracer),
-            VesObject::Struct(s) => Trace::trace(s, tracer),
-            VesObject::Fn(f) => f.trace(tracer),
-            VesObject::FnBound(f) => f.trace(tracer),
-            VesObject::Closure(c) => c.trace(tracer),
-            // not traceable, only used as a constant
-            VesObject::StructDescriptor(_) => (),
-            VesObject::ClosureDescriptor(_) => (),
-            VesObject::FnNative(_) => (),
-        }
-    }
-
-    fn after_forwarding(&mut self) {
-        match self {
-            VesObject::Str(s) => s.after_forwarding(),
-            VesObject::Int(i) => i.after_forwarding(),
-            VesObject::Instance(i) => i.after_forwarding(),
-            VesObject::Struct(s) => s.after_forwarding(),
-            VesObject::Fn(f) => f.after_forwarding(),
-            VesObject::FnBound(f) => f.after_forwarding(),
-            VesObject::Closure(c) => c.after_forwarding(),
-            // not traceable, only used as a constant
-            VesObject::StructDescriptor(_) => (),
-            VesObject::ClosureDescriptor(_) => (),
-            VesObject::FnNative(_) => (),
-        }
     }
 }
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, SharedPtr, Trace, VesGc},
+    gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, SharedPtr, VesGc},
     runtime::vm::VmInterface,
     value::RuntimeError,
 };
@@ -22,10 +22,12 @@ use super::{
 
 use super::macros;
 
+use derive_trace::Trace;
+
 pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesIntVTable {
     methods: VesHashMap<ViewKey, (u8, GcObj)>,
 }
@@ -52,16 +54,7 @@ impl VesIntVTable {
     }
 }
 
-unsafe impl Trace for VesIntVTable {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        for (name, v) in &mut self.methods {
-            Trace::trace(unsafe { &mut *name.view.get() }, tracer);
-            Trace::trace(&mut v.1, tracer);
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
 pub struct IntVTableLookup(SharedPtr<RefCell<VesIntVTable>>);
 impl IntVTableLookup {
     pub fn create<T: VesGc>(handle: GcHandle<T>) -> Self {
@@ -96,12 +89,6 @@ impl IntVTableLookup {
     }
 }
 
-unsafe impl Trace for IntVTableLookup {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut *self.table_mut(), tracer);
-    }
-}
-
 impl PropertyLookup for IntVTableLookup {
     fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
         self.table()
@@ -113,7 +100,7 @@ impl PropertyLookup for IntVTableLookup {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesInt {
     pub value: IBig,
     slots: CacheLayer<IntVTableLookup, Value, ProxyAllocator>,
@@ -132,12 +119,6 @@ impl VesInt {
 
     pub fn props_mut(&mut self) -> &mut CacheLayer<IntVTableLookup, Value, ProxyAllocator> {
         &mut self.slots
-    }
-}
-
-unsafe impl Trace for VesInt {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.slots, tracer);
     }
 }
 

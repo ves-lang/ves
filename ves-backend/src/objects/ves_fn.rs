@@ -20,11 +20,14 @@ use crate::{
 
 use super::{peel::Peeled, ves_str::view::VesStrView};
 
-#[derive(Debug)]
+use derive_trace::Trace;
+
+#[derive(Debug, Trace)]
 pub struct VesFnBound {
     r#fn: GcObj,
     receiver: Value,
 }
+
 impl VesFnBound {
     pub fn new(r#fn: GcObj, receiver: Value) -> Self {
         Self { r#fn, receiver }
@@ -40,14 +43,8 @@ impl VesFnBound {
         self.receiver
     }
 }
-unsafe impl Trace for VesFnBound {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        self.r#fn.trace(tracer);
-        self.receiver.trace(tracer);
-    }
-}
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
 pub struct VesClosure {
     r#fn: Peeled<VesFn>,
     pub captures: Vec<Value>,
@@ -73,22 +70,16 @@ impl VesClosure {
     }
 }
 
-unsafe impl Trace for VesClosure {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        Trace::trace(&mut self.r#fn, tracer);
-        for value in self.captures.iter_mut() {
-            value.trace(tracer);
-        }
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ClosureDescriptor {
     pub fn_constant_index: u32,
     pub captures: Vec<CaptureInfo>,
 }
+unsafe impl crate::gc::Trace for ClosureDescriptor {
+    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Trace)]
 pub struct Arity {
     /// The number of positional arguments this function accepts.
     pub positional: u32,
