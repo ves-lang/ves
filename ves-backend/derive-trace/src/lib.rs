@@ -8,13 +8,6 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 use syn::{spanned::Spanned, Ident, ItemEnum, ItemStruct};
 
-/// Automatically implements the [`AstToStr`] trait for the given struct or enum.
-/// Every field of the given item must implement [`AstToStr`] or be annotated with one of the
-/// the attributes.
-///
-/// # Example
-/// ```ignore
-/// ```
 #[proc_macro_derive(Trace)]
 pub fn derive_trace(input: TokenStream) -> TokenStream {
     let item: syn::Item =
