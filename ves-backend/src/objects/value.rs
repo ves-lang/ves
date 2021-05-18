@@ -9,6 +9,7 @@ use super::{
     ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr, ves_struct::StructDescriptor,
 };
 
+use derive_enum_methods::*;
 use derive_trace::Trace;
 
 // TODO: user-facing error type
@@ -31,7 +32,7 @@ pub struct TypeId(pub usize);
 
 /// A Ves value allocated on the stack. Note that cloning isn't *always* free since we need to properly handle reference-counted pointers.
 /// However, for the primitive types, the additional cost is only a single if branch.
-#[derive(Debug, Clone, Copy, Trace)]
+#[derive(Debug, Clone, Copy, Trace, is_enum_variant, as_enum_variant, unchecked_enum_variant)]
 pub enum Value {
     /// A 32-bit integer
     Int(i32),
@@ -116,46 +117,6 @@ impl Value {
         }
     }
 
-    pub fn as_int(&self) -> Option<&i32> {
-        if let Self::Int(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_float(&self) -> Option<&f64> {
-        if let Self::Float(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_bool(&self) -> Option<&bool> {
-        if let Self::Bool(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_ref(&self) -> Option<&VesRef> {
-        if let Self::Ref(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_ref_mut(&mut self) -> Option<&mut VesRef> {
-        if let Self::Ref(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
     pub fn as_str(&self) -> Option<&VesStr> {
         if let Self::Ref(v) = self {
             if let VesObject::Str(v) = &**v {
@@ -219,41 +180,21 @@ impl Value {
         None
     }
 
-    pub fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
-        crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_mut_unchecked())
+    pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
+        crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_unchecked_mut())
     }
 
-    pub fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
-        crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_mut_unchecked())
+    pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
+        crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_unchecked_mut())
     }
 
-    pub fn as_struct_descriptor_mut_unchecked(
+    pub unsafe fn as_struct_descriptor_mut_unchecked(
         &mut self,
     ) -> &mut super::ves_struct::StructDescriptor {
         crate::unwrap_unchecked!(
             VesObject::StructDescriptor,
-            &mut **self.as_ref_mut_unchecked()
+            &mut **self.as_ref_unchecked_mut()
         )
-    }
-
-    pub fn as_int_unchecked(&self) -> &i32 {
-        crate::unwrap_unchecked!(self, Int)
-    }
-
-    pub fn as_float_unchecked(&self) -> &f64 {
-        crate::unwrap_unchecked!(self, Float)
-    }
-
-    pub fn as_bool_unchecked(&self) -> &bool {
-        crate::unwrap_unchecked!(self, Bool)
-    }
-
-    pub fn as_ref_unchecked(&self) -> &VesRef {
-        crate::unwrap_unchecked!(self, Ref)
-    }
-
-    pub fn as_ref_mut_unchecked(&mut self) -> &mut VesRef {
-        crate::unwrap_unchecked!(self, Ref)
     }
 }
 

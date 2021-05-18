@@ -1049,7 +1049,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             .builder
             .op(Opcode::CreateStruct(struct_desc_index), span.clone());
 
-        let descriptor = descriptor.as_struct_descriptor_mut_unchecked();
+        let descriptor = unsafe { descriptor.as_struct_descriptor_mut_unchecked() };
         // (magic) methods
         for method in info.methods.iter() {
             let fn_index = self.emit_fn_expr(method, span.clone(), true, false)?;

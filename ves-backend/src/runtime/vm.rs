@@ -419,7 +419,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             .methods_mut()
             .get_slot_value_mut(name)
             .map(|v| {
-                let method = v.method.as_ref_unchecked();
+                let method = unsafe { v.method.as_ref_unchecked() };
                 // lazily bind method
                 if v.is_bound {
                     Some(*method)
@@ -937,21 +937,23 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     let mut instance = self.alloc(VesInstance::new(*obj, self.gc.proxy()).into());
                     // initialize fields
                     for (i, value) in self.stack.drain(self.stack.len() - argc..).enumerate() {
-                        (*instance
-                            .as_instance_mut_unchecked()
-                            .fields_mut()
-                            .get_by_slot_index_unchecked_mut(i)) = value.unbox();
+                        *unsafe {
+                            instance
+                                .as_instance_unchecked_mut()
+                                .fields_mut()
+                                .get_by_slot_index_unchecked_mut(i)
+                        } = value.unbox();
                     }
                     self.pop(); // pop struct
                     self.push(instance);
                     {
                         // call initializer, if present
-                        let instance = instance.as_instance_mut_unchecked();
+                        let instance = unsafe { instance.as_instance_unchecked_mut() };
                         if let Some(init) = instance
                             .methods_mut()
                             .get_slot_value_mut(&self.symbols.init)
                         {
-                            let init = init.method.as_ref_mut_unchecked();
+                            let init = unsafe { init.method.as_ref_unchecked_mut() };
                             let stack_index = self.stack.len() - 1;
                             let return_address = self.ip;
                             let call_frame = match &mut **init {
@@ -1021,11 +1023,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let descriptor = self.const_at(descriptor_index as usize);
         if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
             let r#fn = self.const_at(descriptor.fn_constant_index as usize);
-            let mut closure = self.alloc(VesClosure::new(*r#fn.unbox().as_ref_unchecked()).into());
+            let mut closure =
+                self.alloc(VesClosure::new(unsafe { *r#fn.unbox().as_ref_unchecked() }).into());
             // because a closure may refer to itself as a capture,
             // it must be on the stack *before* we start adding captures
             self.push(closure);
-            let closure = closure.as_closure_unchecked_mut();
+            let closure = unsafe { closure.as_closure_unchecked_mut() };
 
             for capture in descriptor.captures.iter() {
                 match *capture {

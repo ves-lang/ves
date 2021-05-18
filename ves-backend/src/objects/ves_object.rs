@@ -22,6 +22,7 @@ use super::{
     ves_struct::StructDescriptor,
 };
 
+use derive_enum_methods::*;
 use derive_trace::Trace;
 
 pub trait FnNative: Trace {
@@ -31,7 +32,7 @@ pub trait FnNative: Trace {
     fn is_magic(&self) -> bool;
 }
 
-#[derive(Trace)]
+#[derive(Trace, is_enum_variant, as_enum_variant, unchecked_enum_variant)]
 pub enum VesObject {
     /// An immutable string.
     Str(VesStr),
@@ -56,77 +57,6 @@ pub enum VesObject {
 }
 
 impl VesObject {
-    pub fn as_str(&self) -> Option<&VesStr> {
-        if let Self::Str(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_fn(&self) -> Option<&VesFn> {
-        if let Self::Fn(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_int(&self) -> Option<&VesInt> {
-        if let Self::Int(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-    pub fn as_int_mut(&mut self) -> Option<&mut VesInt> {
-        if let Self::Int(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_instance(&self) -> Option<&VesInstance> {
-        if let Self::Instance(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_struct(&self) -> Option<&VesStruct> {
-        if let Self::Struct(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_fn_native(&self) -> Option<&dyn FnNative> {
-        if let Self::FnNative(v) = self {
-            Some(&**v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_closure(&self) -> Option<&VesClosure> {
-        if let Self::Closure(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
-    pub fn as_closure_descriptor(&self) -> Option<&ClosureDescriptor> {
-        if let Self::ClosureDescriptor(v) = self {
-            Some(v)
-        } else {
-            None
-        }
-    }
-
     pub fn is_magic_method(&self) -> bool {
         match self {
             VesObject::Fn(r#fn) => r#fn.is_magic_method,
@@ -135,56 +65,6 @@ impl VesObject {
             VesObject::Closure(r#fn) => r#fn.fn_ptr().get().is_magic_method,
             _ => false,
         }
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_str_unchecked(&self) -> &VesStr {
-        crate::unwrap_unchecked!(self, Str)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_fn_unchecked(&self) -> &VesFn {
-        crate::unwrap_unchecked!(self, Fn)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_int_unchecked(&self) -> &VesInt {
-        crate::unwrap_unchecked!(self, Int)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_instance_unchecked(&self) -> &VesInstance {
-        crate::unwrap_unchecked!(self, Instance)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_instance_mut_unchecked(&mut self) -> &mut VesInstance {
-        crate::unwrap_unchecked!(self, Instance)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_struct_unchecked(&self) -> &VesStruct {
-        crate::unwrap_unchecked!(self, Struct)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_fn_native_unchecked(&self) -> &dyn FnNative {
-        &**crate::unwrap_unchecked!(self, FnNative)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_closure_unchecked(&self) -> &VesClosure {
-        crate::unwrap_unchecked!(self, Closure)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_closure_unchecked_mut(&mut self) -> &mut VesClosure {
-        crate::unwrap_unchecked!(self, Closure)
-    }
-
-    /// Safety: The caller *must* ensure that `self` is the right variant
-    pub fn as_closure_descriptor_unchecked(&self) -> &ClosureDescriptor {
-        crate::unwrap_unchecked!(self, ClosureDescriptor)
     }
 
     pub fn as_struct_mut_unwrapped(&mut self) -> &mut VesStruct {
@@ -209,26 +89,6 @@ impl VesObject {
         } else {
             panic!("Couldn't unwrap {:?} as VesObject::Str", self)
         }
-    }
-
-    /// Returns `true` if the ves_object is [`Fn`].
-    pub fn is_fn(&self) -> bool {
-        matches!(self, Self::Fn(..))
-    }
-
-    /// Returns `true` if the ves_object is [`StructDescriptor`].
-    pub fn is_struct_descriptor(&self) -> bool {
-        matches!(self, Self::StructDescriptor(..))
-    }
-
-    /// Returns `true` if the ves_object is [`ClosureDescriptor`].
-    pub fn is_closure_descriptor(&self) -> bool {
-        matches!(self, Self::ClosureDescriptor(..))
-    }
-
-    /// Returns `true` if the ves_object is [`Closure`].
-    pub fn is_closure(&self) -> bool {
-        matches!(self, Self::Closure(..))
     }
 }
 

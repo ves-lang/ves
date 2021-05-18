@@ -29,14 +29,14 @@ macro_rules! int_arithm_method {
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, CMP ?) => {{
         $handle.alloc_permanent(wrap_native(
             move |_vm: &mut dyn VmInterface, (this, other): (GcObj, Value)| {
-                let this = this.as_int_unchecked();
+                let this = unsafe { this.as_int_unchecked() };
 
                 let result = match other {
                     Value::Int(i) => {
                         this.value.cmp(&IBig::from(i))
                      },
                     Value::Ref(obj) if obj.as_int().is_some() => {
-                        this.value.cmp(&obj.as_int_unchecked().value)
+                        this.value.cmp(unsafe { &obj.as_int_unchecked().value })
                     }
                     _ => {
                         return Ok(Value::None);
@@ -59,7 +59,7 @@ macro_rules! int_arithm_method {
         let proxy = $proxy.clone();
         $handle.alloc_permanent(wrap_native(
             move |vm: &mut dyn VmInterface, (left, right): (GcObj, Value)| {
-                let left = left.as_int_unchecked();
+                let left = unsafe { left.as_int_unchecked() };
 
                 let result = match right {
                     Value::Int(i) => {
@@ -67,8 +67,10 @@ macro_rules! int_arithm_method {
                         left.value.clone() $op IBig::from(i)
                      },
                     Value::Ref(obj) if obj.as_int().is_some() => {
-                        $crate::objects::macros::__zero_division_check!($op &obj.as_int_unchecked().value);
-                        left.value.clone() $op &obj.as_int_unchecked().value
+                        unsafe {
+                            $crate::objects::macros::__zero_division_check!($op &obj.as_int_unchecked().value);
+                            left.value.clone() $op &obj.as_int_unchecked().value
+                        }
                     }
                     rest => {
                         return Err(RuntimeError::new(format!(
@@ -90,13 +92,13 @@ macro_rules! int_arithm_method {
         let proxy = $proxy.clone();
         $handle.alloc_permanent(wrap_native(
             move |vm: &mut dyn VmInterface, (right, left): (GcObj, Value)| {
-                let right = right.as_int_unchecked();
+                let right = unsafe { right.as_int_unchecked() };
                 $crate::objects::macros::__zero_division_check!($op &right.value);
 
                 let result = match left {
                     Value::Int(i) => IBig::from(i) $op right.value.clone(),
                     Value::Ref(obj) if obj.as_int().is_some() => {
-                        obj.as_int_unchecked().value.clone() $op &right.value
+                        unsafe { obj.as_int_unchecked().value.clone() $op &right.value }
                     }
                     rest => {
                         return Err(RuntimeError::new(format!(
