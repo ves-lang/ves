@@ -6,7 +6,7 @@ use crate::{
     emitter::{emit::CaptureInfo, opcode::Opcode},
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
     objects::{
-        peel::Peeled,
+        handle::Handle,
         ves_fn::{ArgCountDiff, Args, VesClosure, VesFnBound},
         ves_str::view::VesStrView,
         ves_struct::{VesInstance, VesStruct, ViewKey},
@@ -207,7 +207,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     // TODO: encapsulate modules and run one module at a time
     pub fn run(&mut self, r#fn: GcObj) -> Result<(), VesError> {
-        self.push_frame(CallFrame::main(Peeled::new(
+        self.push_frame(CallFrame::main(Handle::new(
             r#fn,
             VesObject::as_fn_mut_unwrapped,
         )))
@@ -792,7 +792,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             // in case of bound methods, it should set the stack slot at which the callee resides to the receiver
             match &mut **obj {
                 VesObject::Fn(_) => {
-                    let r#fn = Peeled::new(*obj, VesObject::as_fn_mut_unwrapped);
+                    let r#fn = Handle::new(*obj, VesObject::as_fn_mut_unwrapped);
                     let captures = std::ptr::null_mut();
                     let arity = r#fn.get().arity;
                     match arity.diff(args) {
@@ -819,7 +819,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     let (arity, r#fn, captures) = match &mut *f.inner() {
                         VesObject::Fn(contained) => (
                             contained.arity,
-                            Peeled::new(f.inner(), VesObject::as_fn_mut_unwrapped),
+                            Handle::new(f.inner(), VesObject::as_fn_mut_unwrapped),
                             std::ptr::null_mut(),
                         ),
                         VesObject::Closure(contained) => (
@@ -958,7 +958,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             let return_address = self.ip;
                             let call_frame = match &mut **init {
                                 VesObject::Fn(_) => {
-                                    let r#fn = Peeled::new(*init, VesObject::as_fn_mut_unwrapped);
+                                    let r#fn = Handle::new(*init, VesObject::as_fn_mut_unwrapped);
                                     let captures = std::ptr::null_mut();
                                     CallFrame::new(r#fn, captures, stack_index, return_address)
                                 }

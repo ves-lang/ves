@@ -1,8 +1,8 @@
 mod macros;
 
 pub mod cache_layer;
+pub(crate) mod handle;
 pub mod nanbox;
-pub(crate) mod peel;
 pub mod value;
 pub mod ves_fn;
 pub mod ves_int;

@@ -13,7 +13,7 @@ use hashbrown::HashMap;
 
 use super::{
     cache_layer::{CacheLayer, PropertyLookup},
-    peel::Peeled,
+    handle::Handle,
     ves_fn::Arity,
     ves_str::view::VesStrView,
     Value,
@@ -129,7 +129,7 @@ impl VesStruct {
     }
 }
 
-impl PropertyLookup for Peeled<VesStruct> {
+impl PropertyLookup for Handle<VesStruct> {
     #[inline]
     fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
         self.get()
@@ -143,7 +143,7 @@ impl PropertyLookup for Peeled<VesStruct> {
 }
 
 #[derive(Debug, Clone, Trace)]
-pub struct MethodLookup(Peeled<VesStruct>);
+pub struct MethodLookup(Handle<VesStruct>);
 impl PropertyLookup for MethodLookup {
     fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
         self.0
@@ -169,7 +169,7 @@ pub struct VesInstance {
     //       Since a method may need to be bound after retrieval, storing methods and fields together
     //       would introduce the check overhead to field access, which is not desirable as raw field accesses
     //       are much more common than raw method accesses.
-    fields: CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator>,
+    fields: CacheLayer<Handle<VesStruct>, Value, ProxyAllocator>,
     methods: CacheLayer<MethodLookup, MethodEntry, ProxyAllocator>,
 }
 
@@ -190,8 +190,8 @@ impl VesInstance {
             methods[*i as usize].method = Value::Ref(*obj);
         }
 
-        let lookup = Peeled::new(ty, VesObject::as_struct_mut_unwrapped);
-        let method_lookup = MethodLookup(Peeled::new(ty, VesObject::as_struct_mut_unwrapped));
+        let lookup = Handle::new(ty, VesObject::as_struct_mut_unwrapped);
+        let method_lookup = MethodLookup(Handle::new(ty, VesObject::as_struct_mut_unwrapped));
         Self {
             fields: CacheLayer::new(lookup, fields),
             methods: CacheLayer::new(method_lookup, methods),
@@ -200,7 +200,7 @@ impl VesInstance {
 
     #[inline]
     pub fn ty_ptr(&self) -> &GcObj {
-        self.fields.lookup().peeled_ptr()
+        self.fields.lookup().handle_ptr()
     }
 
     #[inline]
@@ -214,12 +214,12 @@ impl VesInstance {
     }
 
     #[inline]
-    pub fn fields(&self) -> &CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator> {
+    pub fn fields(&self) -> &CacheLayer<Handle<VesStruct>, Value, ProxyAllocator> {
         &self.fields
     }
 
     #[inline]
-    pub fn fields_mut(&mut self) -> &mut CacheLayer<Peeled<VesStruct>, Value, ProxyAllocator> {
+    pub fn fields_mut(&mut self) -> &mut CacheLayer<Handle<VesStruct>, Value, ProxyAllocator> {
         &mut self.fields
     }
 

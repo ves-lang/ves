@@ -180,14 +180,20 @@ impl Value {
         None
     }
 
+    /// # Safety
+    /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is an instance.
     pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
         crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_unchecked_mut())
     }
 
+    /// # Safety
+    /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is a struct.
     pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
         crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_unchecked_mut())
     }
 
+    /// # Safety
+    /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is a struct descriptor.
     pub unsafe fn as_struct_descriptor_mut_unchecked(
         &mut self,
     ) -> &mut super::ves_struct::StructDescriptor {

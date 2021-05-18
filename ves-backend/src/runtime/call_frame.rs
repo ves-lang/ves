@@ -5,14 +5,14 @@ use ves_error::{FileId, Span};
 use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace},
-    objects::{peel::Peeled, ves_fn::VesFn},
+    objects::{handle::Handle, ves_fn::VesFn},
     Value,
 };
 
 use super::inline_cache::InlineCache;
 
 pub struct CallFrame {
-    r#fn: Peeled<VesFn>,
+    r#fn: Handle<VesFn>,
     chunk: NonNull<Chunk>,
     code: NonNull<Opcode>,
     code_len: usize,
@@ -26,7 +26,7 @@ pub struct CallFrame {
 
 impl CallFrame {
     pub fn new(
-        mut r#fn: Peeled<VesFn>,
+        mut r#fn: Handle<VesFn>,
         captures: *mut Vec<Value>,
         stack_index: usize,
         return_address: usize,
@@ -49,7 +49,7 @@ impl CallFrame {
         }
     }
 
-    pub fn main(r#fn: Peeled<VesFn>) -> Self {
+    pub fn main(r#fn: Handle<VesFn>) -> Self {
         Self::new(r#fn, std::ptr::null_mut(), 0, 0)
     }
 

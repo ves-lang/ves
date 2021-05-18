@@ -18,7 +18,7 @@ use crate::{
     Value, VesObject,
 };
 
-use super::{peel::Peeled, ves_str::view::VesStrView};
+use super::{handle::Handle, ves_str::view::VesStrView};
 
 use derive_trace::Trace;
 
@@ -46,18 +46,18 @@ impl VesFnBound {
 
 #[derive(Debug, Trace)]
 pub struct VesClosure {
-    r#fn: Peeled<VesFn>,
+    r#fn: Handle<VesFn>,
     pub captures: Vec<Value>,
 }
 impl VesClosure {
     pub fn new(r#fn: GcObj) -> Self {
         Self {
-            r#fn: Peeled::new(r#fn, VesObject::as_fn_mut_unwrapped),
+            r#fn: Handle::new(r#fn, VesObject::as_fn_mut_unwrapped),
             captures: vec![],
         }
     }
 
-    pub fn fn_ptr(&self) -> Peeled<VesFn> {
+    pub fn fn_ptr(&self) -> Handle<VesFn> {
         self.r#fn
     }
 

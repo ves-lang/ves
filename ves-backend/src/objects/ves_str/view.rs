@@ -5,20 +5,20 @@ use std::{
 
 use ahash::RandomState;
 
-use crate::{gc::GcObj, objects::peel::Peeled, VesObject};
+use crate::{gc::GcObj, objects::handle::Handle, VesObject};
 
 use super::VesStr;
 use derive_trace::Trace;
 
 #[derive(Debug, Clone, Copy, Trace)]
 pub struct VesStrView {
-    peeled: Peeled<VesStr>,
+    handle: Handle<VesStr>,
 }
 
 impl VesStrView {
     pub fn new(ptr: GcObj) -> Self {
         Self {
-            peeled: Peeled::new(ptr, VesObject::as_str_mut_unwrapped),
+            handle: Handle::new(ptr, VesObject::as_str_mut_unwrapped),
         }
     }
 
@@ -41,7 +41,7 @@ impl std::ops::Deref for VesStrView {
     type Target = VesStr;
 
     fn deref(&self) -> &Self::Target {
-        self.peeled.get()
+        self.handle.get()
     }
 }
 
