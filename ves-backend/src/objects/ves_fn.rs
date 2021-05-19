@@ -15,7 +15,7 @@ use crate::{
     runtime::vm::VmInterface,
     value::{FromVes, IntoVes, RuntimeError},
     ves_object::FnNative,
-    Value, VesObject,
+    NanBox, Value, VesObject,
 };
 
 use super::{handle::Handle, ves_str::view::VesStrView};
@@ -25,11 +25,11 @@ use derive_trace::Trace;
 #[derive(Debug, Trace)]
 pub struct VesFnBound {
     r#fn: GcObj,
-    receiver: Value,
+    receiver: NanBox,
 }
 
 impl VesFnBound {
-    pub fn new(r#fn: GcObj, receiver: Value) -> Self {
+    pub fn new(r#fn: GcObj, receiver: NanBox) -> Self {
         Self { r#fn, receiver }
     }
 
@@ -39,7 +39,7 @@ impl VesFnBound {
     }
 
     #[inline]
-    pub fn receiver(&self) -> Value {
+    pub fn receiver(&self) -> NanBox {
         self.receiver
     }
 }
@@ -47,7 +47,7 @@ impl VesFnBound {
 #[derive(Debug, Trace)]
 pub struct VesClosure {
     r#fn: Handle<VesFn>,
-    pub captures: Vec<Value>,
+    pub captures: Vec<NanBox>,
 }
 impl VesClosure {
     pub fn new(r#fn: GcObj) -> Self {
@@ -188,7 +188,13 @@ impl Display for VesFnBound {
                     format!("{}", self.r#fn)
                 }
             },
-            self.receiver.as_instance().unwrap().ty().name(),
+            self.receiver
+                .as_ptr()
+                .unwrap()
+                .as_instance()
+                .unwrap()
+                .ty()
+                .name(),
         )
     }
 }

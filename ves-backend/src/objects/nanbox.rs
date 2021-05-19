@@ -283,6 +283,11 @@ impl NanBox {
         self.0 & 1 == 1
     }
 
+    #[inline]
+    pub fn as_ptr(&self) -> Option<VesRef> {
+        self.unbox().as_ptr()
+    }
+
     /// Unboxes the boxed value into a raw f64.
     ///
     /// # Safety

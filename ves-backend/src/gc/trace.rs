@@ -23,6 +23,16 @@ pub unsafe trait Trace {
     fn after_forwarding(&mut self) {}
 }
 
+unsafe impl Trace for NanBox {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
+        tracer.trace_nanbox(self)
+    }
+
+    fn after_forwarding(&mut self) {
+        self.unbox().after_forwarding()
+    }
+}
+
 unsafe impl<T: Trace, A: std::alloc::Allocator> Trace for Vec<T, A> {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.iter_mut().for_each(|obj| obj.trace(tracer));

@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcObj},
-    VesObject,
+    NanBox, VesObject,
 };
 use ahash::RandomState;
 use hashbrown::HashMap;
@@ -169,7 +169,7 @@ pub struct VesInstance {
     //       Since a method may need to be bound after retrieval, storing methods and fields together
     //       would introduce the check overhead to field access, which is not desirable as raw field accesses
     //       are much more common than raw method accesses.
-    fields: CacheLayer<Handle<VesStruct>, Value, ProxyAllocator>,
+    fields: CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator>,
     methods: CacheLayer<MethodLookup, MethodEntry, ProxyAllocator>,
 }
 
@@ -177,7 +177,7 @@ impl VesInstance {
     pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
         let ty_instance = ty.as_struct().unwrap();
 
-        let fields = from_elem_in(Value::None, ty_instance.fields.len(), proxy.clone());
+        let fields = from_elem_in(NanBox::none(), ty_instance.fields.len(), proxy.clone());
         let mut methods = from_elem_in(
             MethodEntry {
                 is_bound: false,
@@ -214,12 +214,12 @@ impl VesInstance {
     }
 
     #[inline]
-    pub fn fields(&self) -> &CacheLayer<Handle<VesStruct>, Value, ProxyAllocator> {
+    pub fn fields(&self) -> &CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator> {
         &self.fields
     }
 
     #[inline]
-    pub fn fields_mut(&mut self) -> &mut CacheLayer<Handle<VesStruct>, Value, ProxyAllocator> {
+    pub fn fields_mut(&mut self) -> &mut CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator> {
         &mut self.fields
     }
 
@@ -268,7 +268,7 @@ impl Display for VesInstance {
         for (i0, value) in self.fields().slots().iter().enumerate() {
             for (key, i1) in self.ty().fields.iter() {
                 if *i1 as usize == i0 {
-                    s.field(key.str(), &DebugAsDisplay(&value));
+                    s.field(key.str(), &DebugAsDisplay(&value.unbox()));
                 }
             }
         }

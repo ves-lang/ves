@@ -413,7 +413,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         &mut self,
         instance: &mut VesInstance,
         name: &VesStrView,
-        receiver: Value,
+        receiver: NanBox,
     ) -> Option<GcObj> {
         instance
             .methods_mut()
@@ -847,7 +847,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         _ => (),
                     };
                     // set receiver
-                    self.set_local_at(stack_index - self.frame().stack_index, f.receiver().into());
+                    self.set_local_at(stack_index - self.frame().stack_index, f.receiver());
                     self.push_frame(CallFrame::new(r#fn, captures, stack_index, self.ip))?;
                     self.ip = 0;
                     Ok(false)
@@ -943,7 +943,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                                 .as_instance_unchecked_mut()
                                 .fields_mut()
                                 .get_by_slot_index_unchecked_mut(i)
-                        } = value.unbox();
+                        } = value;
                     }
                     self.pop(); // pop struct
                     self.push(instance);
@@ -1034,7 +1034,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             for capture in descriptor.captures.iter() {
                 match *capture {
                     CaptureInfo::Local(index) => {
-                        closure.captures.push(self.local_at(index as usize).unbox())
+                        closure.captures.push(*self.local_at(index as usize))
                     }
                     CaptureInfo::Capture(index) => {
                         closure.captures.push(*self.capture_at(index as usize))
@@ -1234,11 +1234,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Fast path (inline cache hit)
             if struct_ptr == ptr {
-                self.push(NanBox::new(
+                self.push(
                     *instance
                         .fields_mut()
                         .get_by_slot_index_unchecked(slot as usize),
-                ));
+                );
                 return Ok(());
             }
 
@@ -1248,11 +1248,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             let value = match instance.fields().get_slot_index(&name) {
                 Some(slot) => {
                     self.update_inst_ic_cache(struct_ptr, slot as u32);
-                    NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot))
+                    *instance.fields_mut().get_by_slot_index_unchecked(slot)
                 }
                 None => {
                     // Double miss, the user might be trying to get a method by value
-                    match self.get_bound_method(instance, &name, obj.unbox()) {
+                    match self.get_bound_method(instance, &name, obj) {
                         Some(method) => NanBox::from(method),
                         None => {
                             return Err(self.error(format!(
@@ -1292,11 +1292,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Fast path (inline cache hit)
             if struct_ptr == ptr {
-                self.push(NanBox::new(
+                self.push(
                     *instance
                         .fields_mut()
                         .get_by_slot_index_unchecked(slot as usize),
-                ));
+                );
                 return Ok(());
             }
 
@@ -1306,11 +1306,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             let value = match instance.fields().get_slot_index(&name) {
                 Some(slot) => {
                     self.update_inst_ic_cache(struct_ptr, slot as u32);
-                    NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot))
+                    *instance.fields_mut().get_by_slot_index_unchecked(slot)
                 }
                 None => {
                     // Double miss, the user might be trying to get a method by value
-                    match self.get_bound_method(instance, &name, obj.unbox()) {
+                    match self.get_bound_method(instance, &name, obj) {
                         Some(method) => NanBox::from(method),
                         None => {
                             self.push(NanBox::none());
@@ -1346,7 +1346,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             if struct_ptr == ptr {
                 *instance
                     .fields_mut()
-                    .get_by_slot_index_unchecked_mut(slot as usize) = value.unbox();
+                    .get_by_slot_index_unchecked_mut(slot as usize) = value;
                 self.pop_n(2);
                 self.push(value);
                 return Ok(());
@@ -1364,7 +1364,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 }
             } as usize;
 
-            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = value.unbox();
+            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = value;
             self.pop_n(2);
             self.push(value);
             self.update_inst_ic_cache(struct_ptr, slot as u32);
@@ -1412,7 +1412,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     fn set_capture(&mut self, index: u32) {
         let operand = *self.peek();
-        self.set_capture_at(index as usize, operand.unbox());
+        self.set_capture_at(index as usize, operand);
     }
 
     #[cfg(not(feature = "fast"))]
@@ -1449,7 +1449,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         self.local_at(offset)
     }
 
-    fn capture_at(&self, offset: usize) -> &Value {
+    fn capture_at(&self, offset: usize) -> &NanBox {
         let frame = self.frame_unchecked();
         let captures = frame.captures();
         #[cfg(not(feature = "fast"))]
@@ -1464,7 +1464,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         &captures[offset]
     }
 
-    fn set_capture_at(&mut self, offset: usize, value: Value) -> &Value {
+    fn set_capture_at(&mut self, offset: usize, value: NanBox) -> &NanBox {
         let frame = self.frame_unchecked();
         let captures = frame.captures();
         #[cfg(not(feature = "fast"))]

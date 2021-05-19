@@ -6,7 +6,7 @@ use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace, Tracer},
     objects::{handle::Handle, ves_fn::VesFn},
-    Value,
+    NanBox, Value,
 };
 
 use super::inline_cache::InlineCache;
@@ -18,7 +18,7 @@ pub struct CallFrame {
     code_len: usize,
     cache: NonNull<InlineCache>,
     defer_stack: Vec<GcObj>,
-    captures: *mut Vec<Value>,
+    captures: *mut Vec<NanBox>,
 
     pub(crate) stack_index: usize,
     pub(crate) return_address: usize,
@@ -27,7 +27,7 @@ pub struct CallFrame {
 impl CallFrame {
     pub fn new(
         mut r#fn: Handle<VesFn>,
-        captures: *mut Vec<Value>,
+        captures: *mut Vec<NanBox>,
         stack_index: usize,
         return_address: usize,
     ) -> Self {
@@ -75,14 +75,14 @@ impl CallFrame {
         self.r#fn.get()
     }
 
-    pub fn captures(&self) -> &Vec<Value> {
+    pub fn captures(&self) -> &Vec<NanBox> {
         if cfg!(debug_assertions) && self.captures.is_null() {
             panic!("Current CallFrame has no captures");
         }
         unsafe { &*self.captures }
     }
 
-    pub fn captures_mut(&mut self) -> &mut Vec<Value> {
+    pub fn captures_mut(&mut self) -> &mut Vec<NanBox> {
         if cfg!(debug_assertions) && self.captures.is_null() {
             panic!("Current CallFrame has no captures");
         }
