@@ -102,7 +102,7 @@ struct LinkedList(head = none, tail = none, _len = 0) {
                 return n
             }
         }
-        none
+        return none
     }
 
     remove(self, x) {
@@ -120,9 +120,7 @@ struct LinkedList(head = none, tail = none, _len = 0) {
         }
     }
 
-    contains(self, x) {
-        self.find(x) != none
-    }
+    contains(self, x) => self.find(x) != none
 
     equals(self, list) {
         mut other_node = if list is LinkedList { list.head } else { list }
@@ -131,10 +129,31 @@ struct LinkedList(head = none, tail = none, _len = 0) {
         while node && other_node {
             if node.val != other_node.val { return false }
             node = node.next
-            other_node = node.next
+            other_node = other_node.next
         }
 
-        !(node || other_node)
+        return !(node || other_node)
+    }
+
+    has_loop(self) {
+        if self.head is none { return false }
+
+        mut tortoise = self.head
+        mut hare = self.head && self.head.next
+        while hare && tortoise && hare != tortoise {
+            tortoise = tortoise.next
+            hare = hare.next?.next || hare.next
+        }
+
+        return hare && tortoise && hare != tortoise
+    }
+
+    @cmp(self, other) {
+        return if self.equals(other) {
+            0
+        } else { 
+            -1
+        }
     }
 
     @iter(self) => NodeIterator(self.head)
@@ -174,6 +193,39 @@ for node in list {
     }
 }
 
+// Comparison
+fn test_equality(list) {
+    let list2 = LinkedList()
+    for i in 0..4 {
+        list2.push_back(i)
+    }
+
+    print(list.equals(list2))
+    print(list == list2)
+
+    list2.push_back(4)
+    print(list.equals(list2))
+    print(list == list2)
+}
+test_equality(list)
+
+
+// Loops
+fn test_has_loop() {
+    print(!LinkedList().has_loop())
+
+    let list = LinkedList()
+    for i in 0..5 {
+        list.push_back(i)
+    }
+    print(!list.has_loop())
+
+    list.append_back(list)
+    print(list.has_loop())
+}
+test_has_loop()
+
+
 // TODO: test more methods here
 
 %output
@@ -189,3 +241,10 @@ val: 1
 val: 2
 val: 3
 val: 4
+false
+false
+true
+true
+true
+true
+false

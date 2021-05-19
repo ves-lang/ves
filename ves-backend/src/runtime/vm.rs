@@ -612,7 +612,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             return Ok(());
         }
 
-        todo!()
+        self.push(!operand.unbox().is_truthy());
+        Ok(())
     }
 
     fn compare(&mut self) -> Result<(), VesError> {
