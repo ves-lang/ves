@@ -3,7 +3,7 @@ use std::cell::UnsafeCell;
 use ves_middle::registry::ModuleRegistry;
 
 use crate::{
-    gc::{GcHandle, GcObj, SharedPtr, Trace, VesGc},
+    gc::{GcHandle, SharedPtr, Trace, Tracer, VesGc},
     Value,
 };
 
@@ -68,7 +68,7 @@ impl VmGlobals {
 }
 
 unsafe impl Trace for VmGlobals {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         for global in self.vec_mut().iter_mut().filter_map(|g| g.as_mut()) {
             Trace::trace(global, tracer);
         }

@@ -11,7 +11,7 @@ use ves_error::FileId;
 
 use crate::{
     emitter::{builder::Chunk, emit::CaptureInfo},
-    gc::{GcObj, Trace},
+    gc::{GcObj, Trace, Tracer},
     runtime::vm::VmInterface,
     value::{FromVes, IntoVes, RuntimeError},
     ves_object::FnNative,
@@ -76,7 +76,7 @@ pub struct ClosureDescriptor {
     pub captures: Vec<CaptureInfo>,
 }
 unsafe impl crate::gc::Trace for ClosureDescriptor {
-    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+    fn trace(&mut self, _tracer: &mut dyn Tracer) {}
 }
 
 #[derive(Debug, Clone, Copy, Trace)]
@@ -158,7 +158,7 @@ impl VesFn {
 }
 
 unsafe impl Trace for VesFn {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.name.trace(tracer);
     }
 }
@@ -427,7 +427,7 @@ where
     C: Callable<'v, A>,
     A: TryFrom<Args<'v>, Error = RuntimeError>,
 {
-    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+    fn trace(&mut self, _tracer: &mut dyn Tracer) {}
 }
 
 impl<A, C> crate::ves_object::FnNative for CallableWrapper<C, A>

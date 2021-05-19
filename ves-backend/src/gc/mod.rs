@@ -13,7 +13,7 @@ use self::proxy_allocator::ProxyAllocator;
 pub mod naive;
 pub mod proxy_allocator;
 pub mod trace;
-pub use trace::Trace;
+pub use trace::{Trace, Tracer};
 
 pub type SharedPtr<T> = Rc<T>;
 
@@ -201,8 +201,8 @@ impl GcObj {
 
 unsafe impl Trace for GcObj {
     #[inline]
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        tracer(self)
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
+        tracer.trace_ptr(self)
     }
 
     fn after_forwarding(&mut self) {

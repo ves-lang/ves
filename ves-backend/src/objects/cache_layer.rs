@@ -1,6 +1,6 @@
 use std::alloc::Allocator;
 
-use crate::gc::Trace;
+use crate::gc::{Trace, Tracer};
 
 use super::ves_str::view::VesStrView;
 
@@ -89,7 +89,7 @@ impl<L: PropertyLookup, V, A: Allocator> CacheLayer<L, V, A> {
 }
 
 unsafe impl<L: PropertyLookup + Trace, V: Trace, A: Allocator> Trace for CacheLayer<L, V, A> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut crate::gc::GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         Trace::trace(&mut self.lookup, tracer);
         for slot in &mut self.slots {
             Trace::trace(slot, tracer);

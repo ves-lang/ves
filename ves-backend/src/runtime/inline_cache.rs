@@ -1,6 +1,6 @@
 //! Inspired by https://github.com/Laythe-lang/Laythe/blob/master/laythe_vm/src/cache.rs.
 
-use crate::gc::{GcObj, Trace};
+use crate::gc::{GcObj, Trace, Tracer};
 
 /// The cache entry for a field index ("slot") of a property on a struct.
 #[derive(Debug, Clone)]
@@ -55,9 +55,9 @@ impl InlineCache {
 // XXX: should this be traced? Hypothetically, if we never dereference any pointer in the cache
 // before comparing it with the given pointer, it is safe to have invalid pointers in the cache.
 unsafe impl Trace for InlineCache {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.cache.iter_mut().for_each(|entry| match entry {
-            Some(prop) => tracer(&mut prop.ty),
+            Some(prop) => tracer.trace_ptr(&mut prop.ty),
             None => (),
         })
     }

@@ -5,18 +5,26 @@ use std::{
     rc::Rc,
 };
 
-use crate::objects::ves_struct::{VesHashMap, ViewKey};
+use crate::{
+    objects::ves_struct::{VesHashMap, ViewKey},
+    NanBox,
+};
 
 use super::GcObj;
 
+pub trait Tracer {
+    fn trace_ptr(&mut self, ptr: &mut GcObj);
+    fn trace_nanbox(&mut self, nanbox: &mut NanBox);
+}
+
 pub unsafe trait Trace {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj));
+    fn trace(&mut self, tracer: &mut dyn Tracer);
 
     fn after_forwarding(&mut self) {}
 }
 
 unsafe impl<T: Trace, A: std::alloc::Allocator> Trace for Vec<T, A> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.iter_mut().for_each(|obj| obj.trace(tracer));
     }
 
@@ -26,13 +34,13 @@ unsafe impl<T: Trace, A: std::alloc::Allocator> Trace for Vec<T, A> {
 }
 
 unsafe impl<K, V: Trace> Trace for HashMap<K, V> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.values_mut().for_each(|v| Trace::trace(v, tracer))
     }
 }
 
 unsafe impl<V: Trace> Trace for VesHashMap<ViewKey, V> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         for (name, v) in self {
             Trace::trace(unsafe { &mut *name.raw_ptr() }, tracer);
             Trace::trace(v, tracer);
@@ -41,7 +49,7 @@ unsafe impl<V: Trace> Trace for VesHashMap<ViewKey, V> {
 }
 
 unsafe impl<A: Trace, B: Trace> Trace for (A, B) {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         Trace::trace(&mut self.0, tracer);
         Trace::trace(&mut self.1, tracer);
     }
@@ -51,23 +59,23 @@ unsafe impl<T: Trace> Trace for Box<T>
 where
     T: ?Sized,
 {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         Trace::trace(&mut **self, tracer)
     }
 }
 
 unsafe impl<T: Trace> Trace for Rc<RefCell<T>> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         Trace::trace(&mut *RefCell::borrow_mut(self), tracer)
     }
 }
 
 unsafe impl<T> Trace for PhantomData<T> {
-    fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+    fn trace(&mut self, _tracer: &mut dyn Tracer) {}
 }
 
 unsafe impl<T: Trace> Trace for Option<T> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         if let Some(obj) = self {
             Trace::trace(obj, tracer);
         }
@@ -83,7 +91,7 @@ unsafe impl<T: Trace> Trace for Option<T> {
 macro_rules! impl_empty_trace {
     ($T:ty) => {
         unsafe impl Trace for $T {
-            fn trace(&mut self, _tracer: &mut dyn FnMut(&mut GcObj)) {}
+            fn trace(&mut self, _tracer: &mut dyn Tracer) {}
         }
     };
     ($($T:ty),*) => {

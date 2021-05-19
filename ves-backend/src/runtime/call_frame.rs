@@ -4,7 +4,7 @@ use ves_error::{FileId, Span};
 
 use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
-    gc::{GcObj, Trace},
+    gc::{GcObj, Trace, Tracer},
     objects::{handle::Handle, ves_fn::VesFn},
     Value,
 };
@@ -129,7 +129,7 @@ impl CallFrame {
 }
 
 unsafe impl Trace for CallFrame {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
         Trace::trace(&mut self.r#fn, tracer);
         for func in &mut self.defer_stack {
             Trace::trace(func, tracer);

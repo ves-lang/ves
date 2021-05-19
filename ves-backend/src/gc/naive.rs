@@ -1,14 +1,33 @@
 use std::{collections::LinkedList, ptr::NonNull};
 
-use crate::Value;
+use crate::{NanBox, Value};
 
 use super::{
     proxy_allocator::ProxyAllocator, GcBox, GcHeader, GcObj, GcRcObj, Roots, SharedPtr, Trace,
-    VesGc,
+    Tracer, VesGc,
 };
 
 pub const DEFAULT_INITIAL_THRESHOLD: usize = std::mem::size_of::<GcBox>() * 1000; // 1000 objects
 pub const DEFAULT_HEAP_GROWTH_FACTOR: f64 = 1.4;
+
+struct NaiveTracer<'a> {
+    worklist: &'a mut Vec<NonNull<GcBox>>,
+}
+
+impl<'a> Tracer for NaiveTracer<'a> {
+    fn trace_ptr(&mut self, ptr: &mut GcObj) {
+        NaiveMarkAndSweep::tracer(self.worklist, unsafe { ptr.ptr.as_mut() });
+    }
+
+    fn trace_nanbox(&mut self, nanbox: &mut NanBox) {
+        if !nanbox.is_ptr() {
+            return;
+        }
+        NaiveMarkAndSweep::tracer(self.worklist, unsafe {
+            nanbox.unbox_pointer().0.ptr.as_mut()
+        });
+    }
+}
 
 /// A naive mark-and-sweep linked-list based garbage collector.
 #[derive(Debug)]
@@ -83,13 +102,15 @@ impl NaiveMarkAndSweep {
         }
 
         for data in roots.data {
-            data.trace(&mut |obj| Self::tracer(&mut worklist, unsafe { obj.ptr.as_mut() }))
+            data.trace(&mut NaiveTracer {
+                worklist: &mut worklist,
+            })
         }
 
         // QQQ: Should we trace the permanent space? If we don't, storing a non-permanent pointer in a permanent object would be fatal.
         worklist.extend(self.permanent_space.iter().copied());
 
-        // NOTE: this may segfault
+        // NOTE: this may s1egfault
         self.shared_space
             .iter_mut()
             .map(|rc| unsafe { (rc.obj.ptr.clone()).as_mut() })
@@ -102,8 +123,7 @@ impl NaiveMarkAndSweep {
     fn trace_list(worklist: &mut Vec<NonNull<GcBox>>) {
         while !worklist.is_empty() {
             let obj = unsafe { worklist.pop().unwrap().as_mut() };
-            obj.data
-                .trace(&mut |child| Self::tracer(worklist, unsafe { child.ptr.as_mut() }));
+            obj.data.trace(&mut NaiveTracer { worklist });
         }
     }
 

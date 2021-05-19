@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::{
-    gc::{GcObj, Trace},
+    gc::{GcObj, Trace, Tracer},
     VesObject,
 };
 
@@ -60,8 +60,8 @@ impl<T> Handle<T> {
 }
 
 unsafe impl<T> Trace for Handle<T> {
-    fn trace(&mut self, tracer: &mut dyn FnMut(&mut GcObj)) {
-        tracer(&mut self._obj)
+    fn trace(&mut self, tracer: &mut dyn Tracer) {
+        tracer.trace_ptr(&mut self._obj)
     }
 
     fn after_forwarding(&mut self) {

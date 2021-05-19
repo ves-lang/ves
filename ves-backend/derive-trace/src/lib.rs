@@ -56,7 +56,7 @@ fn generate_struct_impl(
         .collect::<Vec<_>>();
     Ok(quote! {
         unsafe impl #generics #crate_path::Trace for #name #generic_arguments {
-            fn trace(&mut self, tracer: &mut dyn FnMut(&mut #crate_path::GcObj)) {
+            fn trace(&mut self, tracer: &mut dyn #crate_path::Tracer) {
                 #( #crate_path::Trace::trace(&mut self.#fields, tracer); )*
             }
 
@@ -122,7 +122,7 @@ fn generate_enum_impl(e: ItemEnum, crate_path: &TokenStream2) -> Result<TokenStr
     let generic_arguments = get_generic_arguments(&generics);
     Ok(quote! {
         unsafe impl #generics #crate_path::Trace for #enum_name #generic_arguments {
-            fn trace(&mut self, tracer: &mut dyn FnMut(&mut #crate_path::GcObj)) {
+            fn trace(&mut self, tracer: &mut dyn #crate_path::Tracer) {
                 match self {
                 #( #trace_matches )*
                 }
