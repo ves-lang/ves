@@ -4,7 +4,7 @@ use ves_middle::registry::ModuleRegistry;
 
 use crate::{
     gc::{GcHandle, SharedPtr, Trace, Tracer, VesGc},
-    Value,
+    NanBox,
 };
 
 use self::symbols::SymbolTable;
@@ -14,7 +14,7 @@ pub mod inline_cache;
 pub mod symbols;
 pub mod vm;
 
-type Globals = (UnsafeCell<Vec<Option<Value>>>, Vec<String>);
+type Globals = (UnsafeCell<Vec<Option<NanBox>>>, Vec<String>);
 
 #[derive(Clone)]
 pub struct VmGlobals {
@@ -24,19 +24,16 @@ pub struct VmGlobals {
 impl VmGlobals {
     pub fn new(names: Vec<String>) -> Self {
         let actual_globals = SharedPtr::new((UnsafeCell::new(vec![None; names.len()]), names));
-        Self {
-            actual_globals,
-            // ptr,
-        }
+        Self { actual_globals }
     }
 
     #[inline]
-    fn vec(&self) -> &Vec<Option<Value>> {
+    fn vec(&self) -> &Vec<Option<NanBox>> {
         unsafe { &*self.actual_globals.0.get() }
     }
 
     #[inline]
-    fn vec_mut(&mut self) -> &mut Vec<Option<Value>> {
+    fn vec_mut(&mut self) -> &mut Vec<Option<NanBox>> {
         unsafe { &mut *self.actual_globals.0.get() }
     }
 
@@ -49,12 +46,12 @@ impl VmGlobals {
     }
 
     #[inline]
-    pub fn get(&self, n: usize) -> Option<Value> {
+    pub fn get(&self, n: usize) -> Option<NanBox> {
         self.vec().get(n).and_then(|x| *x)
     }
 
     #[inline]
-    pub fn set(&mut self, n: usize, v: Value) -> Option<()> {
+    pub fn set(&mut self, n: usize, v: NanBox) -> Option<()> {
         self.vec_mut()[n] = Some(v);
         Some(())
     }
@@ -62,7 +59,7 @@ impl VmGlobals {
     /// # Safety
     /// The index must be within the length of the global array.
     #[inline]
-    pub unsafe fn get_unchecked(&self, n: usize) -> Option<Value> {
+    pub unsafe fn get_unchecked(&self, n: usize) -> Option<NanBox> {
         *self.vec().get_unchecked(n)
     }
 }
@@ -72,12 +69,6 @@ unsafe impl Trace for VmGlobals {
         for global in self.vec_mut().iter_mut().filter_map(|g| g.as_mut()) {
             Trace::trace(global, tracer);
         }
-    }
-}
-
-impl Drop for VmGlobals {
-    fn drop(&mut self) {
-        // std::mem::drop(unsafe { SharedPtr::from_raw(self.ptr.as_ptr()) });
     }
 }
 

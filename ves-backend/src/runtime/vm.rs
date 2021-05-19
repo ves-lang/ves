@@ -1132,7 +1132,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn get_global(&mut self, offset: u32) -> Result<(), VesError> {
         match self.globals.get(offset as _) {
             Some(val) => {
-                self.push(NanBox::new(val));
+                self.push(val);
                 Ok(())
             }
             None => Err(self.error("Attempted to access a not yet defined global")),
@@ -1141,7 +1141,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
     fn set_global(&mut self, offset: u32) {
         let value = self.pop();
-        self.globals.set(offset as _, value.unbox());
+        self.globals.set(offset as _, value);
         self.push(value);
     }
 
