@@ -247,7 +247,7 @@ impl<T: VesGc> VmEnum<T> {
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         match &mut *obj {
             VesObject::Instance(obj) => {
-                *obj.fields_mut().get_slot_value_mut(&name).unwrap() = self.pop().unbox()
+                *obj.fields_mut().get_slot_value_mut(&name).unwrap() = self.pop();
             }
             _ => {
                 self.error("Only struct instances support field assignment".to_string());
@@ -269,7 +269,7 @@ impl<T: VesGc> VmEnum<T> {
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
             VesObject::Instance(instance) => match instance.fields().get_slot_value(&name) {
-                Some(r#ref) => self.push(NanBox::new(*r#ref)),
+                Some(r#ref) => self.push(*r#ref),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },
             _ => self.error("Only struct instances support field access".to_string()),

@@ -253,7 +253,7 @@ impl<T: VesGc> VmEnum<T> {
         if let VesObject::Instance(instance) = &mut *obj {
             // Fast path
             if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty_ptr()) {
-                *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
+                *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop();
                 return;
             }
 
@@ -267,7 +267,7 @@ impl<T: VesGc> VmEnum<T> {
                 }
             } as usize;
 
-            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
+            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop();
             self.ic
                 .update_property_cache(self.ip - 1, slot, *instance.ty_ptr());
             return;
@@ -288,9 +288,7 @@ impl<T: VesGc> VmEnum<T> {
         if let VesObject::Instance(instance) = &*obj {
             // Fast path
             if let Some(slot) = self.ic.get_property_cache(self.ip - 1, instance.ty_ptr()) {
-                self.push(NanBox::new(
-                    *instance.fields().get_by_slot_index_unchecked(slot),
-                ));
+                self.push(*instance.fields().get_by_slot_index_unchecked(slot));
                 return;
             }
 
@@ -304,7 +302,7 @@ impl<T: VesGc> VmEnum<T> {
                 }
             } as usize;
 
-            let value = NanBox::new(*instance.fields().get_by_slot_index_unchecked(slot));
+            let value = *instance.fields().get_by_slot_index_unchecked(slot);
             self.ic
                 .update_property_cache(self.ip - 1, slot, *instance.ty_ptr());
             self.push(value);

@@ -316,7 +316,7 @@ impl<T: VesGc> VmEnum<T> {
             if struct_ptr == ptr {
                 *instance
                     .fields_mut()
-                    .get_by_slot_index_unchecked_mut(slot as usize) = self.pop().unbox();
+                    .get_by_slot_index_unchecked_mut(slot as usize) = self.pop();
                 return;
             }
 
@@ -330,7 +330,7 @@ impl<T: VesGc> VmEnum<T> {
                 }
             } as usize;
 
-            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop().unbox();
+            *instance.fields_mut().get_by_slot_index_unchecked_mut(slot) = self.pop();
             self.update_inst_ic_cache(struct_ptr, slot as u32);
             return;
         }
@@ -351,11 +351,11 @@ impl<T: VesGc> VmEnum<T> {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             if struct_ptr == ptr {
-                self.push(NanBox::new(
+                self.push(
                     *instance
                         .fields_mut()
                         .get_by_slot_index_unchecked(slot as usize),
-                ));
+                );
                 return;
             }
 
@@ -369,7 +369,7 @@ impl<T: VesGc> VmEnum<T> {
                 }
             } as usize;
 
-            let value = NanBox::new(*instance.fields_mut().get_by_slot_index_unchecked(slot));
+            let value = *instance.fields_mut().get_by_slot_index_unchecked(slot);
             self.update_inst_ic_cache(struct_ptr, slot as u32);
             self.push(value);
             return;
