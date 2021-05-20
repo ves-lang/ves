@@ -20,6 +20,12 @@ print(2 % 200n);
 
 print((1n + 1n) * 2n - 5n);
 
+print(2n ** 2);
+print(2 ** 2n);
+print(2n ** 2n);
+
+print(1n + ((2n * (10n ** 2n)) / 2n));
+
 // TODO: powers
 // print(2n + ((2n * (20n ** -2n)) / 2n));
 
@@ -41,3 +47,7 @@ print((1n + 1n) * 2n - 5n);
 2
 2
 -1
+4
+4
+4
+101

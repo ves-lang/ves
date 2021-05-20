@@ -569,7 +569,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             rhs => rpow
         );
 
-        todo!()
+        Ok(())
     }
 
     fn neg(&mut self) -> Result<(), VesError> {

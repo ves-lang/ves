@@ -26,6 +26,88 @@ macro_rules! __zero_division_check {
 
 #[macro_export]
 macro_rules! int_arithm_method {
+    ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, POW ?) => {{
+        let lookup = $lookup.clone();
+        let proxy = $proxy.clone();
+        $handle.alloc_permanent(wrap_native(
+            move |vm: &mut dyn VmInterface, (left, right): (GcObj, Value)| {
+                let this = unsafe { left.as_int_unchecked() };
+
+                let result = match right {
+                    Value::Int(i) => {
+                        if i < 0 {
+                            return Err(RuntimeError::new(format!(
+                                "The exponent must be a non-negative integer, but got `{}`",
+                                i
+                            )));
+                        }
+                        // TODO: resolve: this won't work on 32-bit platforms -- should we issue an error?
+                        this.value.pow(i as usize)
+                     },
+                    Value::Ref(obj) if obj.as_int().is_some() => {
+                        let right = unsafe { &obj.as_int_unchecked().value };
+                        let right = if right <= &IBig::from(usize::MAX) && right > &IBig::from(0) {
+                            // TODO: audit this
+                            right.to_f64() as usize
+                        } else {
+                            return Err(RuntimeError::new(format!(
+                                "The exponent is invalid or too big: `{}`",
+                                right
+                            )));
+                        };
+                        this.value.pow(right)
+                    }
+                    rest => {
+                        return Err(RuntimeError::new(format!(
+                            "Cannot raise a big integer to the power `{}`",
+                            rest
+                        )))
+                    }
+                };
+
+                Ok(Value::Ref(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into())))
+            },
+            $name,
+            true,
+            $crate::objects::ves_fn::Arity::new(1, 0, false)
+        ))
+    }};
+    ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, RPOW ?) => {{
+        let lookup = $lookup.clone();
+        let proxy = $proxy.clone();
+        $handle.alloc_permanent(wrap_native(
+            move |vm: &mut dyn VmInterface, (right, left): (GcObj, Value)| {
+                let right = &unsafe { right.as_int_unchecked() }.value;
+                let right = if right <= &IBig::from(usize::MAX) && right > &IBig::from(0) {
+                    // TODO: audit this
+                    right.to_f64() as usize
+                } else {
+                    return Err(RuntimeError::new(format!(
+                        "The exponent is invalid or too big: `{}`",
+                        right
+                    )));
+                };
+
+                let result = match left {
+                    Value::Int(i) => IBig::from(i).pow(right),
+                    Value::Ref(obj) if obj.as_int().is_some() => {
+                        unsafe { obj.as_int_unchecked().value.pow(right) }
+                    }
+                    rest => {
+                        return Err(RuntimeError::new(format!(
+                            "Cannot raise a big integer to the power `{}`",
+                            rest
+                        )))
+                    }
+                };
+
+                Ok(Value::Ref(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into())))
+            },
+            $name,
+            true,
+            $crate::objects::ves_fn::Arity::new(1, 0, false)
+        ))
+    }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, CMP ?) => {{
         $handle.alloc_permanent(wrap_native(
             move |_vm: &mut dyn VmInterface, (this, other): (GcObj, Value)| {
