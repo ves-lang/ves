@@ -31,16 +31,12 @@ f"1 + 1 is {1 + 1}"
 // map
 { key0: value0, key1: value1 }
 { [expression()]: value }
-// TODO: this is not enforced
-// duplicate (constant) keys are a compile-time error
-// { "key": value, "key": value }
 
 // array
 [0, 1, 2, expr(), "asdf"]
 
-// result
-ok "success"
-err "failure"
+// error values
+error "failure"
 ```
 
 ### Variables
@@ -54,9 +50,8 @@ mut x = 10;
 x = "test"; // valid
 
 // valid identifiers are ASCII with underscores, with digits anywhere but the first character
-// TODO: unicode identifiers
 valid_identifier0
-0invalid_identifier
+// 0invalid_identifier
 
 // variable shadowing
 let x = 10;
@@ -81,14 +76,16 @@ let x = 10;
 1 < 1
 1 > 1
 "test" in thing // property existence check
-"test" is Type // with built-ins 'Map', 'Array', 'Int', 'Float', 'String', 'Bool', 'None'
-("grouping")
+"test" is Type // type comparison
+// indexing
 index[10]
 index["test"]
 index[dynamic]
+// calls
 call()
+// property access
 dot.access
-optional?.access // returns `none` if anything in the chain is equal to `none`
+optional?.a?.b?.access // returns `none` if anything in the chain is equal to `none`
 ...spread
 ```
 
@@ -120,59 +117,32 @@ print name(); // expression
 let f = fn() => 0
 print f(); // 0
 
-// closure semantics:
-fn make_closure(mut value) {
-    // closures capture *values*
-    return {
-        get: fn() => value,
-        set: fn(v) => value = v
+// closures
+fn make_counter(start, step) {
+    return fn() {
+        start = start + step;
+        return start - step;
     }
 }
-let closure = make_closure(100);
-print closure.get(); // 100
-closure.set(150);
-print closure.get(); // still 100
-
-// you can wrap your value in a map to imitate capture by variable semantics:
-fn wrap(value) {
-    return { "value": value }
-}
-fn make_closure2(value) {
-    let wrapper = wrap(value)
-    return {
-        // these closures will capture `wrapper`, 
-        // which is a reference to the map containing `value`
-        // meaning it can be modified as such:
-        get: fn() => wrapper.value
-        set: fn(v) => wrapper.value = v
-    }
-}
-let closure = make_closure2(100);
-print closure.get(); // 100
-closure.set(150);
-print closure.get(); // 150
+let c = make_counter(5, 10);
+print(c()); // 5
+print(c()); // 15
+print(c()); // 25
 ```
 
 ### Structs
 ```rust
+// structs are 
 struct Type(field, defaulted = none) {
     init { /* initializer */ }
-    // instance methods
-    // declared with `self` as first parameter
     method(self) { print self.field }
     shorthand(self) => self.field
-    // static fields
-    field = none
-    // static methods (= without `self`)
-    static_method() { print Type.field }
 }
 let v = Type("test")
 v.method() // "test"
 v.field = 50
 print v.shorthand() // 50
 print Type.field // none
-Type.field = 10
-Type.static_method() // 10
 
 // struct fields cannot be added or removed
 // v.nonexistent = "test"; // error
@@ -185,24 +155,21 @@ struct List(head, tail) {
     @iter(self) => ListIterator(self.head)
 }
 struct Vec3(x, y, z) {
-    // overloading arithmetic operators example
+    // overloading arithmetic operators
     @add(self, other) => (
         self.x += other.x,
         self.y += other.y,
         self.z += other.z,
         self
     )
-    @sub(self, other) => (
-        self.x -= other.x,
-        self.y -= other.y,
-        self.z -= other.z,
-        self
-    )
-    @eq(self, other) => (
-        self.x == other.x &&
-        self.y == other.y &&
-        self.z == other.z
-    )
+    // three-way comparison
+    @cmp(self, other) {
+        if (self.x == other.x && self.y == other.y && self.z == other.z) {
+            0
+        } else {
+            -1
+        }
+    } 
 }
 let v = Vec3(1, 1, 1) + Vec3(2, 2, 0);
 print(v == Vec3(3, 3, 1)); // true
@@ -220,7 +187,7 @@ let v = if condition {
     if condition2 {
         expression()
     }
-    // none // this is implicit
+    none // this is implicit
 }
 
 // infinite loop
