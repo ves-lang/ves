@@ -144,7 +144,6 @@ pub struct Vm<T: VesGc, W = std::io::Stdout> {
 impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
     fn alloc(&mut self, obj: VesObject) -> GcObj {
         // TODO: don't panic on allocation failure
-        // TODO: intern strings
         self.gc
             .alloc(
                 obj,
@@ -1058,7 +1057,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     /// a.push(b);
     /// b[0] = a;
     ///
-    /// print a;  // This line can will cause a stack overflow, but should instead print something like `[[[...]]]`.
+    /// print a;  // This line will cause a stack overflow, but should instead print something like `[[[...]]]`.
     /// ```
     fn stringify(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError> {
         let result = match value {
