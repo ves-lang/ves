@@ -16,7 +16,7 @@ impl __IsZero for i32 {
 
 macro_rules! __zero_division_check {
     (/ $right:expr) => {
-        if crate::objects::macros::__IsZero::__is_zero($right) {
+        if $crate::values::native::macros::__IsZero::__is_zero($right) {
             return Err(RuntimeError::new("Division by zero"));
         }
     };
@@ -65,11 +65,11 @@ macro_rules! int_arithm_method {
                     }
                 };
 
-                Ok(Value::Ref(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into())))
+                Ok(Value::Ref(vm.alloc(BigInt::new(result, lookup.clone(), proxy.clone()).into())))
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(1, 0, false)
+            $crate::values::functions::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, RPOW ?) => {{
@@ -101,11 +101,11 @@ macro_rules! int_arithm_method {
                     }
                 };
 
-                Ok(Value::Ref(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into())))
+                Ok(Value::Ref(vm.alloc(BigInt::new(result, lookup.clone(), proxy.clone()).into())))
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(1, 0, false)
+            $crate::values::functions::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, CMP ?) => {{
@@ -133,7 +133,7 @@ macro_rules! int_arithm_method {
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(1, 0, false)
+            $crate::values::functions::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, LHS $op:tt) => {{
@@ -145,12 +145,12 @@ macro_rules! int_arithm_method {
 
                 let result = match right {
                     Value::Int(i) => {
-                        $crate::objects::macros::__zero_division_check!($op i);
+                        $crate::values::native::macros::__zero_division_check!($op i);
                         left.value.clone() $op IBig::from(i)
                      },
                     Value::Ref(obj) if obj.as_int().is_some() => {
                         unsafe {
-                            $crate::objects::macros::__zero_division_check!($op &obj.as_int_unchecked().value);
+                            $crate::values::native::macros::__zero_division_check!($op &obj.as_int_unchecked().value);
                             left.value.clone() $op &obj.as_int_unchecked().value
                         }
                     }
@@ -162,11 +162,11 @@ macro_rules! int_arithm_method {
                     }
                 };
 
-                Ok(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into()))
+                Ok(vm.alloc(BigInt::new(result, lookup.clone(), proxy.clone()).into()))
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(1, 0, false)
+            $crate::values::functions::Arity::new(1, 0, false)
         ))
     }};
     ($handle:ident, $lookup:ident, $proxy:ident, $name:tt, RHS $op:tt) => {{
@@ -175,7 +175,7 @@ macro_rules! int_arithm_method {
         $handle.alloc_permanent(wrap_native(
             move |vm: &mut dyn VmInterface, (right, left): (GcObj, Value)| {
                 let right = unsafe { right.as_int_unchecked() };
-                $crate::objects::macros::__zero_division_check!($op &right.value);
+                $crate::values::native::macros::__zero_division_check!($op &right.value);
 
                 let result = match left {
                     Value::Int(i) => IBig::from(i) $op right.value.clone(),
@@ -190,11 +190,11 @@ macro_rules! int_arithm_method {
                     }
                 };
 
-                Ok(vm.alloc(VesInt::new(result, lookup.clone(), proxy.clone()).into()))
+                Ok(vm.alloc(BigInt::new(result, lookup.clone(), proxy.clone()).into()))
             },
             $name,
             true,
-            $crate::objects::ves_fn::Arity::new(1, 0, false)
+            $crate::values::functions::Arity::new(1, 0, false)
         ))
     }};
 }
@@ -208,7 +208,7 @@ macro_rules! define_int_methods {
 
         let mut n = 0;
 
-        $( $crate::objects::macros::define_int_methods!(__internal n, methods, $handle, $lookup, $proxy, $name, $side $op); )*
+        $( $crate::values::native::macros::define_int_methods!(__internal n, methods, $handle, $lookup, $proxy, $name, $side $op); )*
 
         methods
     }};
@@ -217,7 +217,7 @@ macro_rules! define_int_methods {
             ViewKey::from($handle.alloc_permanent($name)),
             (
                 $n,
-                $crate::objects::macros::int_arithm_method!($handle, $lookup, $proxy, $name, $side $op),
+                $crate::values::native::macros::int_arithm_method!($handle, $lookup, $proxy, $name, $side $op),
             ),
         ).is_none(), "Attempted to redefine the method with the name {}", $name);
 

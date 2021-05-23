@@ -12,23 +12,24 @@ use ves_error::FileId;
 use crate::{
     emitter::{builder::Chunk, emit::CaptureInfo},
     gc::{GcObj, Trace, Tracer},
-    runtime::vm::VmInterface,
+    object::FnNative,
     value::{FromVes, IntoVes, RuntimeError},
-    ves_object::FnNative,
-    NanBox, Value, VesObject,
+    vm::vm::VmInterface,
+    NanBox, Object, Value,
 };
 
-use super::{handle::Handle, ves_str::view::VesStrView};
+use super::handle::Handle;
+use super::strings::StrView;
 
 use derive_trace::Trace;
 
 #[derive(Debug, Trace)]
-pub struct VesFnBound {
+pub struct FnBound {
     r#fn: GcObj,
     receiver: NanBox,
 }
 
-impl VesFnBound {
+impl FnBound {
     pub fn new(r#fn: GcObj, receiver: NanBox) -> Self {
         Self { r#fn, receiver }
     }
@@ -45,27 +46,27 @@ impl VesFnBound {
 }
 
 #[derive(Debug, Trace)]
-pub struct VesClosure {
-    r#fn: Handle<VesFn>,
+pub struct FnClosure {
+    r#fn: Handle<Function>,
     pub captures: Vec<NanBox>,
 }
-impl VesClosure {
+impl FnClosure {
     pub fn new(r#fn: GcObj) -> Self {
         Self {
-            r#fn: Handle::new(r#fn, VesObject::as_fn_mut_unwrapped),
+            r#fn: Handle::new(r#fn, Object::as_fn_mut_unwrapped),
             captures: vec![],
         }
     }
 
-    pub fn fn_ptr(&self) -> Handle<VesFn> {
+    pub fn fn_ptr(&self) -> Handle<Function> {
         self.r#fn
     }
 
-    pub fn r#fn(&self) -> &VesFn {
+    pub fn r#fn(&self) -> &Function {
         self.r#fn.get()
     }
 
-    pub fn fn_mut(&mut self) -> &mut VesFn {
+    pub fn fn_mut(&mut self) -> &mut Function {
         self.r#fn.get_mut()
     }
 }
@@ -139,8 +140,8 @@ impl std::fmt::Display for Arity {
 }
 
 #[derive(Debug)]
-pub struct VesFn {
-    pub name: VesStrView,
+pub struct Function {
+    pub name: StrView,
     /// The arity of the function
     pub arity: Arity,
     /// The function's code.
@@ -151,26 +152,26 @@ pub struct VesFn {
     pub is_magic_method: bool,
 }
 
-impl VesFn {
+impl Function {
     pub fn name(&self) -> &str {
         self.name.str().as_ref()
     }
 }
 
-unsafe impl Trace for VesFn {
+unsafe impl Trace for Function {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.name.trace(tracer);
     }
 }
 
-impl Display for VesFn {
+impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
         write!(f, "<fn {}>", self.name.str())
     }
 }
 
-impl Display for VesFnBound {
+impl Display for FnBound {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
@@ -199,7 +200,7 @@ impl Display for VesFnBound {
     }
 }
 
-impl Display for VesClosure {
+impl Display for FnClosure {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.r#fn.get().fmt(f)
     }
@@ -436,14 +437,14 @@ where
     fn trace(&mut self, _tracer: &mut dyn Tracer) {}
 }
 
-impl<A, C> crate::ves_object::FnNative for CallableWrapper<C, A>
+impl<A, C> crate::object::FnNative for CallableWrapper<C, A>
 where
     C: for<'v> Callable<'v, A>,
     A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,
 {
     fn call<'a>(
         &mut self,
-        vm: &'a mut dyn crate::runtime::vm::VmInterface,
+        vm: &'a mut dyn crate::vm::vm::VmInterface,
         args: Args<'a>,
     ) -> Result<Value, ves_error::VesError> {
         self.func
@@ -470,8 +471,8 @@ mod tests {
 
     use crate::{
         gc::{DefaultGc, GcHandle, SharedPtr},
-        runtime::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
         value::Result,
+        vm::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
     };
 
     use super::*;

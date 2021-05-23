@@ -21,17 +21,17 @@ mod macros;
 
 pub mod emitter;
 pub mod gc;
-pub mod objects;
-pub mod runtime;
+pub mod values;
+pub mod vm;
 
 use std::marker::PhantomData;
 
-pub use self::objects::nanbox;
-pub use self::objects::value;
-pub use self::objects::ves_object;
+pub use self::values::nanbox;
+pub use self::values::object;
+pub use self::values::value;
 pub use nanbox::NanBox;
+pub use object::Object;
 pub use value::Value;
-pub use ves_object::VesObject;
 
 pub struct Tagged<'a, T> {
     data: T,

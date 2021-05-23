@@ -1,18 +1,18 @@
 use crate::{
     gc::{GcHandle, VesGc},
-    objects::ves_str::view::VesStrView,
+    values::strings::StrView,
 };
 
 macro_rules! symbol_table {
     ($($symbol:ident),*) => {
         pub struct SymbolTable<T: VesGc> {
-            $( pub $symbol: VesStrView, )*
+            $( pub $symbol: StrView, )*
             _gc: GcHandle<T>
         }
         impl<T: VesGc> SymbolTable<T> {
             pub fn new(mut gc: GcHandle<T>) -> Self {
                 Self {
-                    $( $symbol: VesStrView::new(gc.alloc_permanent(stringify!($symbol))), )*
+                    $( $symbol: StrView::new(gc.alloc_permanent(stringify!($symbol))), )*
                     _gc: gc
                 }
             }

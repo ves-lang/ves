@@ -2,10 +2,10 @@ use std::alloc::Allocator;
 
 use crate::gc::{Trace, Tracer};
 
-use super::ves_str::view::VesStrView;
+use super::strings::StrView;
 
 pub trait PropertyLookup: Clone {
-    fn lookup_slot(&self, name: &VesStrView) -> Option<usize>;
+    fn lookup_slot(&self, name: &StrView) -> Option<usize>;
 }
 
 pub struct CacheLayer<L: PropertyLookup, V, A: Allocator> {
@@ -45,18 +45,18 @@ impl<L: PropertyLookup, V, A: Allocator> CacheLayer<L, V, A> {
     }
 
     #[inline]
-    pub fn get_slot_index(&self, name: &VesStrView) -> Option<usize> {
+    pub fn get_slot_index(&self, name: &StrView) -> Option<usize> {
         self.lookup.lookup_slot(name)
     }
 
     #[inline]
-    pub fn get_slot_value(&self, name: &VesStrView) -> Option<&V> {
+    pub fn get_slot_value(&self, name: &StrView) -> Option<&V> {
         self.get_slot_index(name)
             .map(|slot| &self.slots[slot as usize])
     }
 
     #[inline]
-    pub fn get_slot_value_mut(&mut self, name: &VesStrView) -> Option<&mut V> {
+    pub fn get_slot_value_mut(&mut self, name: &StrView) -> Option<&mut V> {
         let slot = self.get_slot_index(name);
         if let Some(slot) = slot {
             Some(self.slots.get_mut(slot as usize).unwrap())

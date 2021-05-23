@@ -6,16 +6,16 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcObj},
-    NanBox, VesObject,
+    NanBox, Object,
 };
 use ahash::RandomState;
 use hashbrown::HashMap;
 
 use super::{
     cache_layer::{CacheLayer, PropertyLookup},
+    functions::Arity,
     handle::Handle,
-    ves_fn::Arity,
-    ves_str::view::VesStrView,
+    strings::StrView,
     Value,
 };
 
@@ -25,7 +25,7 @@ pub type AHashMap<K, V, A> = HashMap<K, V, RandomState, A>;
 pub type VesHashMap<K, V> = HashMap<K, V, RandomState, ProxyAllocator>;
 
 pub struct ViewKey {
-    pub(super) view: UnsafeCell<VesStrView>,
+    pub(super) view: UnsafeCell<StrView>,
 }
 
 impl ViewKey {
@@ -36,7 +36,7 @@ impl ViewKey {
     }
 
     #[inline]
-    pub fn raw_ptr(&self) -> *mut VesStrView {
+    pub fn raw_ptr(&self) -> *mut StrView {
         self.view.get()
     }
 }
@@ -50,8 +50,8 @@ impl std::fmt::Debug for ViewKey {
 impl From<GcObj> for ViewKey {
     fn from(obj: GcObj) -> Self {
         match &*obj {
-            crate::VesObject::Str(_) => ViewKey {
-                view: UnsafeCell::new(VesStrView::new(obj)),
+            crate::Object::Str(_) => ViewKey {
+                view: UnsafeCell::new(StrView::new(obj)),
             },
             _ => panic!("Expected Str, got {:?}", obj),
         }
@@ -74,8 +74,8 @@ impl Eq for ViewKey {}
 
 #[derive(Debug, Trace)]
 pub struct StructDescriptor {
-    pub name: VesStrView,
-    pub fields: Vec<VesStrView, ProxyAllocator>,
+    pub name: StrView,
+    pub fields: Vec<StrView, ProxyAllocator>,
     // The indices of the methods' constant slots.
     pub methods: Vec<(u32, u32), ProxyAllocator>,
     /// Field arity (rest field is ignored)
@@ -83,19 +83,19 @@ pub struct StructDescriptor {
 }
 
 #[derive(Debug, Trace)]
-pub struct VesStruct {
-    name: VesStrView,
+pub struct Struct {
+    name: StrView,
     pub arity: Arity,
     fields: VesHashMap<ViewKey, u8>,
     vtable: VesHashMap<ViewKey, (u8, GcObj)>,
 }
 
-impl VesStruct {
+impl Struct {
     #[allow(clippy::ptr_arg)]
     pub fn new(
-        name: VesStrView,
+        name: StrView,
         arity: Arity,
-        fields: &Vec<VesStrView, ProxyAllocator>,
+        fields: &Vec<StrView, ProxyAllocator>,
         vtable_size: usize,
     ) -> Self {
         Self {
@@ -129,9 +129,9 @@ impl VesStruct {
     }
 }
 
-impl PropertyLookup for Handle<VesStruct> {
+impl PropertyLookup for Handle<Struct> {
     #[inline]
-    fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
+    fn lookup_slot(&self, name: &StrView) -> Option<usize> {
         self.get()
             .fields
             .get(&ViewKey {
@@ -143,9 +143,9 @@ impl PropertyLookup for Handle<VesStruct> {
 }
 
 #[derive(Debug, Clone, Trace)]
-pub struct MethodLookup(Handle<VesStruct>);
+pub struct MethodLookup(Handle<Struct>);
 impl PropertyLookup for MethodLookup {
-    fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
+    fn lookup_slot(&self, name: &StrView) -> Option<usize> {
         self.0
             .get()
             .vtable
@@ -164,16 +164,16 @@ pub struct MethodEntry {
 }
 
 #[derive(Debug, Trace)]
-pub struct VesInstance {
+pub struct Instance {
     // NOTE: Methods and fields are separated into two cache lines to optimize for field access speed.
     //       Since a method may need to be bound after retrieval, storing methods and fields together
     //       would introduce the check overhead to field access, which is not desirable as raw field accesses
     //       are much more common than raw method accesses.
-    fields: CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator>,
+    fields: CacheLayer<Handle<Struct>, NanBox, ProxyAllocator>,
     methods: CacheLayer<MethodLookup, MethodEntry, ProxyAllocator>,
 }
 
-impl VesInstance {
+impl Instance {
     pub fn new(ty: GcObj, proxy: ProxyAllocator) -> Self {
         let ty_instance = ty.as_struct().unwrap();
 
@@ -190,8 +190,8 @@ impl VesInstance {
             methods[*i as usize].method = Value::Ref(*obj);
         }
 
-        let lookup = Handle::new(ty, VesObject::as_struct_mut_unwrapped);
-        let method_lookup = MethodLookup(Handle::new(ty, VesObject::as_struct_mut_unwrapped));
+        let lookup = Handle::new(ty, Object::as_struct_mut_unwrapped);
+        let method_lookup = MethodLookup(Handle::new(ty, Object::as_struct_mut_unwrapped));
         Self {
             fields: CacheLayer::new(lookup, fields),
             methods: CacheLayer::new(method_lookup, methods),
@@ -204,22 +204,22 @@ impl VesInstance {
     }
 
     #[inline]
-    pub fn ty(&self) -> &VesStruct {
+    pub fn ty(&self) -> &Struct {
         self.fields.lookup().get()
     }
 
     #[inline]
-    pub fn ty_mut(&mut self) -> &mut VesStruct {
+    pub fn ty_mut(&mut self) -> &mut Struct {
         self.fields.lookup_mut().get_mut()
     }
 
     #[inline]
-    pub fn fields(&self) -> &CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator> {
+    pub fn fields(&self) -> &CacheLayer<Handle<Struct>, NanBox, ProxyAllocator> {
         &self.fields
     }
 
     #[inline]
-    pub fn fields_mut(&mut self) -> &mut CacheLayer<Handle<VesStruct>, NanBox, ProxyAllocator> {
+    pub fn fields_mut(&mut self) -> &mut CacheLayer<Handle<Struct>, NanBox, ProxyAllocator> {
         &mut self.fields
     }
 
@@ -234,7 +234,7 @@ impl VesInstance {
     }
 }
 
-impl Display for VesStruct {
+impl Display for Struct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<struct {}>", self.name.str())
     }
@@ -260,7 +260,7 @@ impl<'a, T: Debug + Display> Debug for DebugAsDisplay<'a, T> {
     }
 }
 
-impl Display for VesInstance {
+impl Display for Instance {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         // TODO: better formatting
         let mut s = f.debug_struct(self.ty().name());

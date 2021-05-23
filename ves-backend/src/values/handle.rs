@@ -2,12 +2,12 @@ use std::ptr::NonNull;
 
 use crate::{
     gc::{GcObj, Trace, Tracer},
-    VesObject,
+    Object,
 };
 
 pub struct Handle<T> {
     _obj: GcObj,
-    peel: for<'a> fn(&'a mut VesObject) -> &'a mut T,
+    peel: for<'a> fn(&'a mut Object) -> &'a mut T,
     handle: NonNull<T>,
 }
 
@@ -34,7 +34,7 @@ impl<T> std::fmt::Debug for Handle<T> {
 }
 
 impl<T> Handle<T> {
-    pub fn new(mut obj: GcObj, peel: for<'a> fn(&'a mut VesObject) -> &'a mut T) -> Self {
+    pub fn new(mut obj: GcObj, peel: for<'a> fn(&'a mut Object) -> &'a mut T) -> Self {
         let handle = unsafe { NonNull::new_unchecked(peel(&mut *obj)) };
         Self {
             _obj: obj,

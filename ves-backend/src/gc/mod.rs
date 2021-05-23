@@ -6,7 +6,7 @@ use std::{
     rc::Rc,
 };
 
-use crate::{NanBox, VesObject};
+use crate::{NanBox, Object};
 
 use self::proxy_allocator::ProxyAllocator;
 
@@ -59,7 +59,7 @@ impl<T: VesGc> VesGc for GcHandle<T> {
     #[inline]
     fn alloc<'s, 'data, I>(
         &mut self,
-        v: impl Into<VesObject>,
+        v: impl Into<Object>,
         roots: Roots<'s, 'data, I>,
     ) -> Result<GcObj, std::alloc::AllocError>
     where
@@ -69,7 +69,7 @@ impl<T: VesGc> VesGc for GcHandle<T> {
     }
 
     #[inline]
-    fn alloc_permanent(&mut self, v: impl Into<VesObject>) -> GcObj {
+    fn alloc_permanent(&mut self, v: impl Into<Object>) -> GcObj {
         self.gc_mut().alloc_permanent(v)
     }
 
@@ -128,7 +128,7 @@ impl<'s, 'data> Roots<'s, 'data, std::iter::Empty<&'data mut dyn Trace>> {
 pub trait VesGc {
     fn alloc<'s, 'cs, 'data, I>(
         &mut self,
-        v: impl Into<VesObject>,
+        v: impl Into<Object>,
         roots: Roots<'s, 'data, I>,
     ) -> Result<GcObj, std::alloc::AllocError>
     where
@@ -139,7 +139,7 @@ pub trait VesGc {
         I: Iterator<Item = &'data mut dyn Trace>;
 
     /// Allocate the given object in the permanent space.
-    fn alloc_permanent(&mut self, v: impl Into<VesObject>) -> GcObj;
+    fn alloc_permanent(&mut self, v: impl Into<Object>) -> GcObj;
 
     fn make_shared(&mut self, obj: GcObj) -> GcRcObj;
 
@@ -157,7 +157,7 @@ pub struct GcHeader {
 #[derive(Debug)]
 pub struct GcBox {
     header: GcHeader,
-    data: VesObject,
+    data: Object,
 }
 
 // TODO: figure out a way to make this safer using lifetimes.
@@ -167,7 +167,7 @@ pub struct GcObj {
 }
 
 impl Deref for GcObj {
-    type Target = VesObject;
+    type Target = Object;
 
     fn deref(&self) -> &Self::Target {
         unsafe { &self.ptr.as_ref().data }
@@ -226,7 +226,7 @@ impl Deref for GcRcObj {
 
 impl Display for GcObj {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        use crate::runtime::vm;
+        use crate::vm::vm;
         if vm::pset_check_pointer(&self) {
             write!(f, "...")
         } else {
@@ -242,12 +242,12 @@ impl Display for GcObj {
 pub(crate) mod tests {
     use crate::{
         gc::{Roots, Trace},
-        objects::{
-            ves_fn::Arity,
-            ves_str::view::VesStrView,
-            ves_struct::{VesInstance, VesStruct},
+        values::{
+            functions::Arity,
+            structs::{Instance, Struct},
+            StrView,
         },
-        NanBox, Value, VesObject,
+        NanBox, Object, Value,
     };
 
     use super::{GcHandle, GcObj, VesGc};
@@ -326,7 +326,7 @@ pub(crate) mod tests {
                     },
                     false => {
                         let obj = gen_object(&mut rng, &mut stack, &mut structs, handle.clone());
-                        let was_struct = matches!(obj, VesObject::Struct(_));
+                        let was_struct = matches!(obj, Object::Struct(_));
                         let ptr = handle.alloc(obj, roots!(&mut stack, structs)).unwrap();
                         if was_struct {
                             structs.push(ptr);
@@ -358,7 +358,7 @@ pub(crate) mod tests {
         stack: &mut Vec<NanBox>,
         structs: &mut Vec<GcObj>,
         handle: GcHandle<T>,
-    ) -> VesObject {
+    ) -> Object {
         match rng.gen_range(0..3) {
             0 => random_string(rng, 50).into(),
             1 => gen_struct(rng, stack, structs, handle).into(),
@@ -367,7 +367,7 @@ pub(crate) mod tests {
                 let ty = *structs.choose(rng).unwrap();
                 // println!("{:?} {:?}", ty, structs);
                 // println!("{:?} {:#?}", ty, &*ty);
-                VesInstance::new(ty, handle.proxy()).into()
+                Instance::new(ty, handle.proxy()).into()
             }
             _ => unreachable!(),
         }
@@ -385,7 +385,7 @@ pub(crate) mod tests {
         stack: &mut Vec<NanBox>,
         structs: &mut Vec<GcObj>,
         mut handle: GcHandle<T>,
-    ) -> VesStruct {
+    ) -> Struct {
         let mut fields = Vec::new_in(handle.proxy());
 
         for _ in 0..rng.gen_range(5..10) {
@@ -393,7 +393,7 @@ pub(crate) mod tests {
                 .alloc(random_string(rng, 15), roots!(stack, structs))
                 .unwrap();
             stack.push(NanBox::from(s));
-            fields.push(VesStrView::new(s));
+            fields.push(StrView::new(s));
         }
 
         let name = handle
@@ -404,11 +404,6 @@ pub(crate) mod tests {
             stack.pop();
         }
 
-        VesStruct::new(
-            crate::objects::ves_str::view::VesStrView::new(name),
-            Arity::none(),
-            &fields,
-            0,
-        )
+        Struct::new(crate::values::StrView::new(name), Arity::none(), &fields, 0)
     }
 }

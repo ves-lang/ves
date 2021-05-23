@@ -138,7 +138,7 @@ impl NaiveMarkAndSweep {
 impl VesGc for NaiveMarkAndSweep {
     fn alloc<'s, 'data, I>(
         &mut self,
-        v: impl Into<crate::VesObject>,
+        v: impl Into<crate::Object>,
         roots: super::Roots<'s, 'data, I>,
     ) -> Result<GcObj, std::alloc::AllocError>
     where
@@ -193,7 +193,7 @@ impl VesGc for NaiveMarkAndSweep {
         self.collect();
     }
 
-    fn alloc_permanent(&mut self, v: impl Into<crate::VesObject>) -> GcObj {
+    fn alloc_permanent(&mut self, v: impl Into<crate::Object>) -> GcObj {
         self.permanent_space.push(unsafe {
             NonNull::new_unchecked(Box::leak(Box::new(GcBox {
                 data: v.into(),

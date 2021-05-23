@@ -2,14 +2,14 @@ use std::{borrow::Cow, collections::HashMap, rc::Rc};
 
 use crate::{
     gc::{GcObj, VesGc},
-    objects::{
-        ves_fn::{Arity, ClosureDescriptor, VesFn},
-        ves_int::VesInt,
-        ves_str::view::VesStrView,
-        ves_struct::StructDescriptor,
-    },
     value::IntoVes,
-    Span, Value, VesObject,
+    values::{
+        functions::{Arity, ClosureDescriptor, Function},
+        native::BigInt,
+        structs::StructDescriptor,
+        StrView,
+    },
+    Object, Span, Value,
 };
 
 use super::opcode::Opcode;
@@ -398,14 +398,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         self.state.builder.op(Opcode::PushNone, last_span.clone());
         self.state.builder.op(Opcode::Return, last_span);
 
-        let f = VesFn {
-            name: VesStrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
+        let f = Function {
+            name: StrView::new(self.ctx.alloc_or_intern("<main>")), // TODO: use module name
             arity: Arity::none(),
             chunk: self.state.finish(),
             file_id: self.ast.file_id,
             is_magic_method: false,
         };
-        let ptr = self.ctx.gc.alloc_permanent(VesObject::Fn(f));
+        let ptr = self.ctx.gc.alloc_permanent(Object::Fn(f));
         Ok(ptr)
     }
 
@@ -1027,14 +1027,14 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 .chain(info.fields.default.iter().map(|(name, _, _)| name))
             {
                 let name = self.ctx.alloc_or_intern(field.lexeme.clone());
-                fields.push(VesStrView::new(name))
+                fields.push(StrView::new(name))
             }
 
             fields
         };
 
         let descriptor = StructDescriptor {
-            name: VesStrView::new(struct_name),
+            name: StrView::new(struct_name),
             fields,
             methods: Vec::with_capacity_in(info.methods.len(), self.ctx.gc.proxy()),
             arity: Arity {
@@ -1161,8 +1161,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
             )
             .into()
         });
-        let fn_pointer = self.ctx.alloc_value(VesFn {
-            name: VesStrView::new(name),
+        let fn_pointer = self.ctx.alloc_value(Function {
+            name: StrView::new(name),
             arity: Arity {
                 positional: if matches!(info.kind, FnKind::Method | FnKind::MagicMethod) {
                     // in case of methods, the arity is actually `n - 1`
@@ -1431,7 +1431,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
                 );
             }
             LitValue::BigInteger(i) => {
-                let int = VesInt::new(i.clone(), self.ctx.vtables.int.clone(), self.ctx.gc.proxy());
+                let int = BigInt::new(i.clone(), self.ctx.vtables.int.clone(), self.ctx.gc.proxy());
                 let int = self.ctx.alloc_value(int);
                 let offset = self.state.builder.constant(int, span.clone())?;
                 self.state.builder.op(Opcode::GetConst(offset), span);
@@ -1654,7 +1654,7 @@ mod suite {
                 Opcode::CreateClosure(i) => format!("CreateClosure({})", {
                     match c[*i as usize] {
                         Value::Ref(v) => match &*v {
-                            VesObject::ClosureDescriptor(v) => {
+                            Object::ClosureDescriptor(v) => {
                                 format!("{}, {}", c[v.fn_constant_index as usize], v.captures.len())
                             }
                             _ => unreachable!(),
@@ -1665,7 +1665,7 @@ mod suite {
                 Opcode::CreateStruct(i) => format!("CreateStruct({})", {
                     match c[*i as usize] {
                         Value::Ref(v) => match &*v {
-                            VesObject::StructDescriptor(v) => format!(
+                            Object::StructDescriptor(v) => format!(
                                 "{}, {}+{}",
                                 v.name.str(),
                                 v.arity.positional,
@@ -1680,7 +1680,7 @@ mod suite {
             }
         }
 
-        fn chunk_concat(out: &mut String, r#fn: &VesFn) {
+        fn chunk_concat(out: &mut String, r#fn: &Function) {
             if r#fn.name.str() != "<main>" {
                 *out += &format!("\n>>>>>> {}\n", r#fn.name.str());
             }

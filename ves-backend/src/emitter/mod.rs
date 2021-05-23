@@ -2,8 +2,8 @@ use std::{borrow::Cow, collections::HashMap};
 
 use crate::{
     gc::{GcHandle, GcObj, VesGc},
-    objects::ves_int::IntVTableLookup,
-    Value, VesObject,
+    values::native::int::IntVTableLookup,
+    Object, Value,
 };
 
 pub mod builder;
@@ -55,7 +55,7 @@ impl<'a, 'b, T: VesGc> CompilationContext<'a, 'b, T> {
         }
     }
 
-    pub fn alloc_value(&mut self, v: impl Into<VesObject>) -> Value {
+    pub fn alloc_value(&mut self, v: impl Into<Object>) -> Value {
         Value::Ref(self.gc.alloc_permanent(v))
     }
 }

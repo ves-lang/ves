@@ -5,18 +5,18 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, SharedPtr, VesGc},
-    runtime::vm::VmInterface,
     value::RuntimeError,
+    vm::vm::VmInterface,
 };
 use ahash::RandomState;
 use hashbrown::HashMap;
 use ibig::IBig;
 
-use super::{
+use crate::values::{
     cache_layer::{CacheLayer, PropertyLookup},
-    ves_fn::wrap_native,
-    ves_str::view::VesStrView,
-    ves_struct::ViewKey,
+    functions::wrap_native,
+    strings::StrView,
+    structs::ViewKey,
     Value,
 };
 
@@ -92,7 +92,7 @@ impl IntVTableLookup {
 }
 
 impl PropertyLookup for IntVTableLookup {
-    fn lookup_slot(&self, name: &VesStrView) -> Option<usize> {
+    fn lookup_slot(&self, name: &StrView) -> Option<usize> {
         self.table()
             .methods
             .get(&ViewKey {
@@ -103,12 +103,12 @@ impl PropertyLookup for IntVTableLookup {
 }
 
 #[derive(Debug, Trace)]
-pub struct VesInt {
+pub struct BigInt {
     pub value: IBig,
     slots: CacheLayer<IntVTableLookup, Value, ProxyAllocator>,
 }
 
-impl VesInt {
+impl BigInt {
     pub fn new(int: IBig, lookup: IntVTableLookup, proxy: ProxyAllocator) -> Self {
         let methods = lookup.get_methods(proxy);
         let slots = CacheLayer::new(lookup, methods);
@@ -124,7 +124,7 @@ impl VesInt {
     }
 }
 
-impl std::fmt::Display for VesInt {
+impl std::fmt::Display for BigInt {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.value)
     }

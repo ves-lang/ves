@@ -3,12 +3,12 @@
 use ves_backend::{
     gc::{GcHandle, GcObj, Roots, Trace, VesGc},
     nanbox::NanBox,
-    objects::{
-        ves_fn::Arity,
-        ves_str::view::VesStrView,
-        ves_struct::{VesInstance, VesStruct},
+    object::Object,
+    values::{
+        functions::Arity,
+        strings::StrView,
+        structs::{Instance, Struct},
     },
-    ves_object::VesObject,
     Value,
 };
 
@@ -48,11 +48,11 @@ pub struct VmBytes<T: VesGc> {
 impl<T: VesGc> VmBytes<T> {
     pub fn new(mut gc: GcHandle<T>, constants: Vec<NanBox>, instructions: Vec<u8>) -> Self {
         let mut fields = Vec::new_in(gc.proxy());
-        fields.push(VesStrView::new(gc.alloc_permanent("n")));
-        fields.push(VesStrView::new(gc.alloc_permanent("a")));
-        fields.push(VesStrView::new(gc.alloc_permanent("b")));
-        let name = VesStrView::new(gc.alloc_permanent("Fib"));
-        let ty = VesStruct::new(name, Arity::none(), &fields, 0);
+        fields.push(StrView::new(gc.alloc_permanent("n")));
+        fields.push(StrView::new(gc.alloc_permanent("a")));
+        fields.push(StrView::new(gc.alloc_permanent("b")));
+        let name = StrView::new(gc.alloc_permanent("Fib"));
+        let ty = Struct::new(name, Arity::none(), &fields, 0);
         let ty = gc.alloc_permanent(ty);
 
         Self {
@@ -170,14 +170,14 @@ impl<T: VesGc> VmBytes<T> {
     }
 
     fn alloc_instance(&mut self) {
-        let instance = VesInstance::new(self.ty, self.gc.proxy());
+        let instance = Instance::new(self.ty, self.gc.proxy());
 
         let ptr = self.alloc(instance);
 
         self.push(NanBox::from(ptr));
     }
 
-    fn alloc(&mut self, o: impl Into<VesObject>) -> GcObj {
+    fn alloc(&mut self, o: impl Into<Object>) -> GcObj {
         self.gc
             .alloc(
                 o,
@@ -222,7 +222,7 @@ impl<T: VesGc> VmBytes<T> {
 
         match (left.unbox(), right.unbox()) {
             (Value::Ref(l), Value::Ref(r)) => match (&*l, &*r) {
-                (VesObject::Str(l), VesObject::Str(r)) => {
+                (Object::Str(l), Object::Str(r)) => {
                     let ptr = self.alloc(l.clone_inner().into_owned() + r);
                     self.push(NanBox::from(ptr));
                 }
@@ -300,10 +300,10 @@ impl<T: VesGc> VmBytes<T> {
         }
         let id = self.read_u8() as usize;
         let name = self.constants[id].unbox().as_ptr().unwrap();
-        let name = VesStrView::new(name);
+        let name = StrView::new(name);
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         match &mut *obj {
-            VesObject::Instance(obj) => {
+            Object::Instance(obj) => {
                 *obj.fields_mut().get_slot_value_mut(&name).unwrap() = self.pop()
             }
             _ => {
@@ -321,12 +321,12 @@ impl<T: VesGc> VmBytes<T> {
         let id = self.read_u8() as usize;
         let name = self.constants[id].unbox().as_ptr().unwrap();
         let name = match *name {
-            VesObject::Str(_) => VesStrView::new(name),
+            Object::Str(_) => StrView::new(name),
             _ => unreachable!(),
         };
         let obj = unsafe { obj.unbox_pointer() }.0;
         match &*obj {
-            VesObject::Instance(instance) => match instance.fields().get_slot_value(&name) {
+            Object::Instance(instance) => match instance.fields().get_slot_value(&name) {
                 Some(r#ref) => self.push(*r#ref),
                 None => self.error(format!("Object is missing the field `{}`.", name.str())),
             },

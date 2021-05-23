@@ -5,14 +5,14 @@ use ves_error::{FileId, Span};
 use crate::{
     emitter::{builder::Chunk, opcode::Opcode},
     gc::{GcObj, Trace, Tracer},
-    objects::{handle::Handle, ves_fn::VesFn},
+    values::{functions::Function, handle::Handle},
     NanBox, Value,
 };
 
 use super::inline_cache::InlineCache;
 
 pub struct CallFrame {
-    r#fn: Handle<VesFn>,
+    r#fn: Handle<Function>,
     chunk: NonNull<Chunk>,
     code: NonNull<Opcode>,
     code_len: usize,
@@ -26,7 +26,7 @@ pub struct CallFrame {
 
 impl CallFrame {
     pub fn new(
-        mut r#fn: Handle<VesFn>,
+        mut r#fn: Handle<Function>,
         captures: *mut Vec<NanBox>,
         stack_index: usize,
         return_address: usize,
@@ -49,7 +49,7 @@ impl CallFrame {
         }
     }
 
-    pub fn main(r#fn: Handle<VesFn>) -> Self {
+    pub fn main(r#fn: Handle<Function>) -> Self {
         Self::new(r#fn, std::ptr::null_mut(), 0, 0)
     }
 
@@ -71,7 +71,7 @@ impl CallFrame {
         unsafe { self.chunk.as_ref().spans.get(idx).unwrap().clone() }
     }
 
-    pub fn func(&self) -> &VesFn {
+    pub fn func(&self) -> &Function {
         self.r#fn.get()
     }
 

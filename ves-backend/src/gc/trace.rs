@@ -6,7 +6,7 @@ use std::{
 };
 
 use crate::{
-    objects::ves_struct::{VesHashMap, ViewKey},
+    values::structs::{VesHashMap, ViewKey},
     NanBox,
 };
 

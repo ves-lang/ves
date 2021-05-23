@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use super::opcode::Opcode;
 use super::Result;
-use crate::{runtime::inline_cache::InlineCache, Span, Value};
+use crate::{vm::inline_cache::InlineCache, Span, Value};
 use ves_error::{FileId, VesError};
 /* use ves_backend::{NanBox, Value}; */
 

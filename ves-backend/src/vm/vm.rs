@@ -5,13 +5,13 @@ use ves_error::VesError;
 use crate::{
     emitter::{emit::CaptureInfo, opcode::Opcode},
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
-    objects::{
+    values::{
+        functions::{ArgCountDiff, Args, FnBound, FnClosure},
         handle::Handle,
-        ves_fn::{ArgCountDiff, Args, VesClosure, VesFnBound},
-        ves_str::view::VesStrView,
-        ves_struct::{VesInstance, VesStruct, ViewKey},
+        strings::StrView,
+        structs::{Instance, Struct, ViewKey},
     },
-    NanBox, Value, VesObject,
+    NanBox, Object, Value,
 };
 
 use super::{call_frame::CallFrame, symbols::SymbolTable, Context, VmGlobals};
@@ -117,7 +117,7 @@ pub(crate) fn pset_remove_pointer(ptr: &GcObj) -> bool {
 }
 
 pub trait VmInterface {
-    fn alloc(&mut self, obj: VesObject) -> GcObj;
+    fn alloc(&mut self, obj: Object) -> GcObj;
     fn execute(
         &mut self,
         receiver: Option<Value>,
@@ -142,7 +142,7 @@ pub struct Vm<T: VesGc, W = std::io::Stdout> {
 }
 
 impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
-    fn alloc(&mut self, obj: VesObject) -> GcObj {
+    fn alloc(&mut self, obj: Object) -> GcObj {
         // TODO: don't panic on allocation failure
         self.gc
             .alloc(
@@ -208,7 +208,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     pub fn run(&mut self, r#fn: GcObj) -> Result<(), VesError> {
         self.push_frame(CallFrame::main(Handle::new(
             r#fn,
-            VesObject::as_fn_mut_unwrapped,
+            Object::as_fn_mut_unwrapped,
         )))
         .unwrap();
 
@@ -330,7 +330,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn get_magic_method(
         &mut self,
         value: NanBox,
-        name: &VesStrView,
+        name: &StrView,
         inst: usize,
     ) -> Result<Option<GcObj>, VesError> {
         match value.unbox() {
@@ -342,12 +342,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
                 // TODO: this should probably be behind a trait
                 match &mut *obj {
-                    VesObject::Str(_) if name.str() == "str" => Err({
+                    Object::Str(_) if name.str() == "str" => Err({
                         self.error("str doesn't have a magic method called `@str`".to_string())
                     }),
-                    VesObject::Str(_) => todo!(),
+                    Object::Str(_) => todo!(),
                     // NOTE: this assumes that BigInt has only methods and no fields
-                    VesObject::Int(i) => {
+                    Object::Int(i) => {
                         if let Some(slot) = slot {
                             let method = i.props().get_by_slot_index(slot).expect("Unexpected cache misconfiguration (expected to find a method according to the IC)");
                             Ok(Some(method.as_ptr().unwrap()))
@@ -382,7 +382,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             }
                         }
                     }
-                    VesObject::Instance(i) => {
+                    Object::Instance(i) => {
                         if let Some(slot) = slot {
                             let method = i.methods().get_by_slot_index(slot).expect("Unexpected cache misconfiguration (expected to find a method according to the IC)");
                             Ok(Some(method.method.as_ptr().unwrap()))
@@ -410,8 +410,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     /// Safety: The caller must ensure that `instance` and `receiver` refer to the same object.
     pub fn get_bound_method(
         &mut self,
-        instance: &mut VesInstance,
-        name: &VesStrView,
+        instance: &mut Instance,
+        name: &StrView,
         receiver: NanBox,
     ) -> Option<GcObj> {
         instance
@@ -428,7 +428,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         "{}",
                         &**method
                     );
-                    let method = self.alloc(VesFnBound::new(*method, receiver).into());
+                    let method = self.alloc(FnBound::new(*method, receiver).into());
                     v.method = Value::Ref(method);
                     v.is_bound = true;
                     Some(method)
@@ -441,8 +441,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     /// NOTE: This method expects the operands to be present on the stack.
     fn call_magic_arithmetics_method(
         &mut self,
-        lhs_method: &VesStrView,
-        rhs_method: &VesStrView,
+        lhs_method: &StrView,
+        rhs_method: &StrView,
         left: NanBox,
         right: NanBox,
     ) -> Result<Option<Value>, VesError> {
@@ -755,7 +755,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                 self.push(false);
                 return Ok(());
             }
-            let name = VesStrView::new(*name.as_ref().unwrap());
+            let name = StrView::new(*name.as_ref().unwrap());
             let has = self
                 .has_field_with_ic_bypass(name, &**object.unbox().as_ref().unwrap())
                 .map(|_| true)
@@ -791,8 +791,8 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             // TODO: bound method
             // in case of bound methods, it should set the stack slot at which the callee resides to the receiver
             match &mut **obj {
-                VesObject::Fn(_) => {
-                    let r#fn = Handle::new(*obj, VesObject::as_fn_mut_unwrapped);
+                Object::Fn(_) => {
+                    let r#fn = Handle::new(*obj, Object::as_fn_mut_unwrapped);
                     let captures = std::ptr::null_mut();
                     let arity = r#fn.get().arity;
                     match arity.diff(args) {
@@ -815,14 +815,14 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.ip = 0;
                     Ok(false)
                 }
-                VesObject::FnBound(f) => {
+                Object::FnBound(f) => {
                     let (arity, r#fn, captures) = match &mut *f.inner() {
-                        VesObject::Fn(contained) => (
+                        Object::Fn(contained) => (
                             contained.arity,
-                            Handle::new(f.inner(), VesObject::as_fn_mut_unwrapped),
+                            Handle::new(f.inner(), Object::as_fn_mut_unwrapped),
                             std::ptr::null_mut(),
                         ),
-                        VesObject::Closure(contained) => (
+                        Object::Closure(contained) => (
                             contained.r#fn().arity,
                             contained.fn_ptr(),
                             &mut contained.captures as _,
@@ -851,7 +851,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.ip = 0;
                     Ok(false)
                 }
-                VesObject::Closure(c) => {
+                Object::Closure(c) => {
                     let r#fn = c.fn_ptr();
                     let captures = &mut c.captures as _;
                     let arity = r#fn.get().arity;
@@ -875,7 +875,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.ip = 0;
                     Ok(false)
                 }
-                VesObject::FnNative(f) => {
+                Object::FnNative(f) => {
                     // +1 for implicit receiver
                     let args = args + 1;
                     let arity = f.arity();
@@ -909,7 +909,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.push(result);
                     Ok(true)
                 }
-                VesObject::Struct(s) => {
+                Object::Struct(s) => {
                     let arity = s.arity;
                     let argc = match arity.diff(args) {
                         ArgCountDiff::Extra(_) => {
@@ -934,7 +934,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                         }
                         _ => args,
                     };
-                    let mut instance = self.alloc(VesInstance::new(*obj, self.gc.proxy()).into());
+                    let mut instance = self.alloc(Instance::new(*obj, self.gc.proxy()).into());
                     // initialize fields
                     for (i, value) in self.stack.drain(self.stack.len() - argc..).enumerate() {
                         *unsafe {
@@ -957,12 +957,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                             let stack_index = self.stack.len() - 1;
                             let return_address = self.ip;
                             let call_frame = match &mut **init {
-                                VesObject::Fn(_) => {
-                                    let r#fn = Handle::new(*init, VesObject::as_fn_mut_unwrapped);
+                                Object::Fn(_) => {
+                                    let r#fn = Handle::new(*init, Object::as_fn_mut_unwrapped);
                                     let captures = std::ptr::null_mut();
                                     CallFrame::new(r#fn, captures, stack_index, return_address)
                                 }
-                                VesObject::Closure(ref mut c) => {
+                                Object::Closure(ref mut c) => {
                                     let r#fn = c.fn_ptr();
                                     let captures = &mut c.captures as _;
                                     CallFrame::new(r#fn, captures, stack_index, return_address)
@@ -995,7 +995,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             .as_struct_descriptor()
             .expect("Struct miscompilation: expected to find a descriptor");
 
-        let mut ty = VesStruct::new(
+        let mut ty = Struct::new(
             descriptor.name,
             descriptor.arity,
             &descriptor.fields,
@@ -1024,7 +1024,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         if let Some(descriptor) = descriptor.unbox().as_closure_descriptor() {
             let r#fn = self.const_at(descriptor.fn_constant_index as usize);
             let mut closure =
-                self.alloc(VesClosure::new(unsafe { *r#fn.unbox().as_ref_unchecked() }).into());
+                self.alloc(FnClosure::new(unsafe { *r#fn.unbox().as_ref_unchecked() }).into());
             // because a closure may refer to itself as a capture,
             // it must be on the stack *before* we start adding captures
             self.push(closure);
@@ -1088,28 +1088,28 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     /// Returns `true` if the property with the given name exists on the given object, without using the IC.
     fn has_field_with_ic_bypass(
         &mut self,
-        name: VesStrView,
-        object: &VesObject,
+        name: StrView,
+        object: &Object,
     ) -> Result<bool, VesError> {
         let prop = match object {
-            VesObject::Str(_) => todo!(),
-            VesObject::Int(i) => i.props().get_slot_index(&name).is_some(),
-            VesObject::Instance(i) => {
+            Object::Str(_) => todo!(),
+            Object::Int(i) => i.props().get_slot_index(&name).is_some(),
+            Object::Instance(i) => {
                 i.fields().get_slot_index(&name).is_some()
                     || i.methods().get_slot_index(&name).is_some()
             }
-            VesObject::Fn(_)
-            | VesObject::FnBound(_)
-            | VesObject::FnNative(_)
-            | VesObject::Closure(_)
-            | VesObject::Struct(_) => {
+            Object::Fn(_)
+            | Object::FnBound(_)
+            | Object::FnNative(_)
+            | Object::Closure(_)
+            | Object::Struct(_) => {
                 return Err(self.error(format!(
                     "Cannot access a field on an object of type {}",
                     object
                 )))
             }
-            VesObject::ClosureDescriptor(_) => unreachable!(),
-            VesObject::StructDescriptor(_) => unreachable!(),
+            Object::ClosureDescriptor(_) => unreachable!(),
+            Object::StructDescriptor(_) => unreachable!(),
         };
         Ok(prop)
     }
@@ -1156,7 +1156,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
         let instance = obj;
         let mut instance = unsafe { instance.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &mut *instance {
+        if let Object::Instance(instance) = &mut *instance {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             // Fast path (inline cache hit)
@@ -1174,7 +1174,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Slow path (inline cache miss)
             let name = name.unbox().as_ptr().unwrap();
-            let name = VesStrView::new(name);
+            let name = StrView::new(name);
             let method = match instance.methods().get_slot_index(&name) {
                 Some(slot) => {
                     let method = instance
@@ -1228,7 +1228,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             return Err(self.error(format!("{:?} is not an object", obj.unbox())));
         }
         let mut instance = unsafe { obj.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &mut *instance {
+        if let Object::Instance(instance) = &mut *instance {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             // Fast path (inline cache hit)
@@ -1243,7 +1243,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Slow path (inline cache miss)
             let name = name.unbox().as_ptr().unwrap();
-            let name = VesStrView::new(name);
+            let name = StrView::new(name);
             let value = match instance.fields().get_slot_index(&name) {
                 Some(slot) => {
                     self.update_inst_ic_cache(struct_ptr, slot as u32);
@@ -1286,7 +1286,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             return Ok(());
         }
         let mut instance = unsafe { obj.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &mut *instance {
+        if let Object::Instance(instance) = &mut *instance {
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
 
             // Fast path (inline cache hit)
@@ -1301,7 +1301,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Slow path (inline cache miss)
             let name = name.unbox().as_ptr().unwrap();
-            let name = VesStrView::new(name);
+            let name = StrView::new(name);
             let value = match instance.fields().get_slot_index(&name) {
                 Some(slot) => {
                     self.update_inst_ic_cache(struct_ptr, slot as u32);
@@ -1339,7 +1339,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             return Err(self.error(format!("{:?} is not an object", obj.unbox())));
         }
         let mut obj = unsafe { obj.unbox_pointer() }.0;
-        if let VesObject::Instance(instance) = &mut *obj {
+        if let Object::Instance(instance) = &mut *obj {
             // Fast path
             let struct_ptr = instance.ty_ptr().ptr().as_ptr() as u64;
             if struct_ptr == ptr {
@@ -1353,7 +1353,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
             // Slow path
             let name = name.unbox().as_ptr().unwrap();
-            let name = VesStrView::new(name);
+            let name = StrView::new(name);
             let slot = match instance.fields().get_slot_index(&name) {
                 Some(slot) => slot,
                 None => {

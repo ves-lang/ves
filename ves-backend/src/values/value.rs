@@ -3,10 +3,11 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 use ves_error::{FileId, VesError};
 
-use crate::{gc::VesRef, VesObject};
+use crate::{gc::VesRef, Object};
 
 use super::{
-    ves_fn::ClosureDescriptor, ves_int::VesInt, ves_str::VesStr, ves_struct::StructDescriptor,
+    functions::ClosureDescriptor, native::BigInt, strings::ImmutableString,
+    structs::StructDescriptor,
 };
 
 use derive_enum_methods::*;
@@ -93,16 +94,15 @@ impl Value {
             Value::Bool(_) => TypeId(2),
             Value::None => TypeId(3),
             Value::Ref(v) => match &**v {
-                VesObject::Str(_) => TypeId(4),
-                VesObject::Int(_) => TypeId(5),
-                VesObject::Fn(_)
-                | VesObject::FnBound(_)
-                | VesObject::FnNative(_)
-                | VesObject::Closure(_) => TypeId(6),
-                VesObject::Instance(v) => TypeId(v.ty_ptr().ptr().as_ptr() as usize),
-                VesObject::Struct(_) => TypeId(v.ptr().as_ptr() as usize),
-                VesObject::StructDescriptor(_) => unreachable!(),
-                VesObject::ClosureDescriptor(_) => unreachable!(),
+                Object::Str(_) => TypeId(4),
+                Object::Int(_) => TypeId(5),
+                Object::Fn(_) | Object::FnBound(_) | Object::FnNative(_) | Object::Closure(_) => {
+                    TypeId(6)
+                }
+                Object::Instance(v) => TypeId(v.ty_ptr().ptr().as_ptr() as usize),
+                Object::Struct(_) => TypeId(v.ptr().as_ptr() as usize),
+                Object::StructDescriptor(_) => unreachable!(),
+                Object::ClosureDescriptor(_) => unreachable!(),
             },
         }
     }
@@ -117,27 +117,27 @@ impl Value {
         }
     }
 
-    pub fn as_str(&self) -> Option<&VesStr> {
+    pub fn as_str(&self) -> Option<&ImmutableString> {
         if let Self::Ref(v) = self {
-            if let VesObject::Str(v) = &**v {
+            if let Object::Str(v) = &**v {
                 return Some(v);
             }
         }
         None
     }
 
-    pub fn as_bigint(&self) -> Option<&VesInt> {
+    pub fn as_bigint(&self) -> Option<&BigInt> {
         if let Self::Ref(v) = self {
-            if let VesObject::Int(v) = &**v {
+            if let Object::Int(v) = &**v {
                 return Some(v);
             }
         }
         None
     }
 
-    pub fn as_bigint_mut(&mut self) -> Option<&mut VesInt> {
+    pub fn as_bigint_mut(&mut self) -> Option<&mut BigInt> {
         if let Self::Ref(v) = self {
-            if let VesObject::Int(v) = &mut **v {
+            if let Object::Int(v) = &mut **v {
                 return Some(v);
             }
         }
@@ -146,7 +146,7 @@ impl Value {
 
     pub fn as_closure_descriptor(&self) -> Option<&ClosureDescriptor> {
         if let Self::Ref(v) = self {
-            if let VesObject::ClosureDescriptor(d) = &**v {
+            if let Object::ClosureDescriptor(d) = &**v {
                 return Some(d);
             }
         }
@@ -155,25 +155,25 @@ impl Value {
 
     pub fn as_struct_descriptor(&self) -> Option<&StructDescriptor> {
         if let Self::Ref(v) = self {
-            if let VesObject::StructDescriptor(d) = &**v {
+            if let Object::StructDescriptor(d) = &**v {
                 return Some(d);
             }
         }
         None
     }
 
-    pub fn as_struct_mut(&mut self) -> Option<&mut super::ves_struct::VesStruct> {
+    pub fn as_struct_mut(&mut self) -> Option<&mut super::structs::Struct> {
         if let Self::Ref(v) = self {
-            if let VesObject::Struct(s) = &mut **v {
+            if let Object::Struct(s) = &mut **v {
                 return Some(s);
             }
         }
         None
     }
 
-    pub fn as_instance(&self) -> Option<&super::ves_struct::VesInstance> {
+    pub fn as_instance(&self) -> Option<&super::structs::Instance> {
         if let Self::Ref(v) = self {
-            if let VesObject::Instance(i) = &**v {
+            if let Object::Instance(i) = &**v {
                 return Some(i);
             }
         }
@@ -182,25 +182,22 @@ impl Value {
 
     /// # Safety
     /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is an instance.
-    pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::ves_struct::VesInstance {
-        crate::unwrap_unchecked!(VesObject::Instance, &mut **self.as_ref_unchecked_mut())
+    pub unsafe fn as_instance_mut_unchecked(&mut self) -> &mut super::structs::Instance {
+        crate::unwrap_unchecked!(Object::Instance, &mut **self.as_ref_unchecked_mut())
     }
 
     /// # Safety
     /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is a struct.
-    pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::ves_struct::VesStruct {
-        crate::unwrap_unchecked!(VesObject::Struct, &mut **self.as_ref_unchecked_mut())
+    pub unsafe fn as_struct_mut_unchecked(&mut self) -> &mut super::structs::Struct {
+        crate::unwrap_unchecked!(Object::Struct, &mut **self.as_ref_unchecked_mut())
     }
 
     /// # Safety
     /// The caller *must* ensure that the value (1) contains a reference and (2) the reference is a struct descriptor.
     pub unsafe fn as_struct_descriptor_mut_unchecked(
         &mut self,
-    ) -> &mut super::ves_struct::StructDescriptor {
-        crate::unwrap_unchecked!(
-            VesObject::StructDescriptor,
-            &mut **self.as_ref_unchecked_mut()
-        )
+    ) -> &mut super::structs::StructDescriptor {
+        crate::unwrap_unchecked!(Object::StructDescriptor, &mut **self.as_ref_unchecked_mut())
     }
 }
 

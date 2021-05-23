@@ -12,6 +12,7 @@ use self::symbols::SymbolTable;
 pub mod call_frame;
 pub mod inline_cache;
 pub mod symbols;
+#[allow(clippy::module_inception)]
 pub mod vm;
 
 type Globals = (UnsafeCell<Vec<Option<NanBox>>>, Vec<String>);
@@ -116,7 +117,7 @@ pub mod suite {
         use crate::{
             emitter::{emit::Emitter, CompilationContext, VTables},
             gc::{DefaultGc, GcHandle, SharedPtr},
-            runtime::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
+            vm::{symbols::SymbolTable, vm::Vm, Context, VmGlobals},
         };
 
         pub fn compile_and_run(src: String) -> String {

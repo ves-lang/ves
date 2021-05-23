@@ -1,13 +1,13 @@
 use ves_error::VesFileDatabase;
 
-use crate::{emitter::opcode::Opcode, objects::ves_fn::VesFn};
+use crate::{emitter::opcode::Opcode, values::functions::Function};
 
 use super::builder::Chunk;
 
 const DEFAULT_INDENT: usize = 0;
 
 pub fn dis_func<N, S>(
-    func: &VesFn,
+    func: &Function,
     db: Option<&VesFileDatabase<N, S>>,
     indent: Option<usize>,
 ) -> String
