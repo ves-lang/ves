@@ -1,0 +1,29 @@
+struct Test(a, b, method, method) {
+    method(self) {}
+    add(self) {}
+    @add(self) {}
+}
+
+%output
+
+error: Attempted to re-declare the field `method`
+  ┌─ <source: #8400d4d27e95ec0d>:1:27
+  │
+1 │ struct Test(a, b, method, method) {
+  │                           ^^^^^^
+
+error: This method will shadow the field `method`
+  ┌─ <source: #8400d4d27e95ec0d>:2:5
+  │
+1 │ struct Test(a, b, method, method) {
+  │                   ------ Field declared on line 1
+2 │     method(self) {}
+  │     ^^^^^^
+
+error: Attempted to re-declare the method `@add`
+  ┌─ <source: #8400d4d27e95ec0d>:4:5
+  │
+3 │     add(self) {}
+  │     --- First declared on line 3
+4 │     @add(self) {}
+  │     ^^^^

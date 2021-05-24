@@ -114,6 +114,10 @@ pub enum VesErrorKind {
     AttemptedToShadowLocalVariable(Span),
     /// Attempted to use a global variable before its declaration.
     UsedGlobalBeforeDeclaration(Span),
+    /// Attempted to shadow a struct field with a method.
+    ShadowedField(Span),
+    /// Attempted to access an unknown property inside a struct method.
+    UnknownProperty { suggestion: Option<Span> },
     /// A module import error.
     Import,
     /// A `let` variable without an initializer

@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc};
+use std::{borrow::Cow, cell::Cell, collections::HashMap, rc::Rc};
 
 use ves_parser::{
     ast::{FnKind, VarKind},
@@ -127,5 +127,108 @@ impl VarUsage {
                 | NameKind::Param
                 | NameKind::Module
         )
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct StructInterface<'a> {
+    pub fields: HashMap<Cow<'a, str>, Span>,
+    pub methods: HashMap<Cow<'a, str>, Span>,
+}
+
+impl<'a> StructInterface<'a> {
+    #[inline]
+    pub fn has_property(&self, name: &str) -> bool {
+        self.fields.contains_key(name) || self.methods.contains_key(name)
+    }
+}
+
+// Calculates the Jaro similarity between two sequences. The returned value
+/// is between 0.0 and 1.0 (higher value means more similar).
+///
+// Adapted from https://docs.rs/strsim/0.10.0/.
+fn jaro(a: &str, b: &str) -> f64 {
+    let a_len = a.chars().count();
+    let b_len = b.chars().count();
+
+    // The check for lengths of one here is to prevent integer overflow when
+    // calculating the search range.
+    if a_len == 0 && b_len == 0 {
+        return 1.0;
+    } else if a_len == 0 || b_len == 0 {
+        return 0.0;
+    } else if a_len == 1 && b_len == 1 {
+        return if a == b { 1.0 } else { 0.0 };
+    }
+
+    let search_range = (std::cmp::max(a_len, b_len) / 2) - 1;
+
+    let mut b_consumed = Vec::with_capacity(b_len);
+    for _ in 0..b_len {
+        b_consumed.push(false);
+    }
+    let mut matches = 0.0;
+
+    let mut transpositions = 0.0;
+    let mut b_match_index = 0;
+
+    for (i, a_elem) in a.chars().enumerate() {
+        let min_bound =
+            // prevent integer wrapping
+            if i > search_range {
+                std::cmp::max(0, i - search_range)
+            } else {
+                0
+            };
+
+        let max_bound = std::cmp::min(b_len - 1, i + search_range);
+
+        if min_bound > max_bound {
+            continue;
+        }
+
+        for (j, b_elem) in b.chars().enumerate() {
+            if min_bound <= j && j <= max_bound && a_elem == b_elem && !b_consumed[j] {
+                b_consumed[j] = true;
+                matches += 1.0;
+
+                if j < b_match_index {
+                    transpositions += 1.0;
+                }
+                b_match_index = j;
+
+                break;
+            }
+        }
+    }
+
+    if matches == 0.0 {
+        0.0
+    } else {
+        (1.0 / 3.0)
+            * ((matches / a_len as f64)
+                + (matches / b_len as f64)
+                + ((matches - transpositions) / matches))
+    }
+}
+
+/// The Jaro-Winkler metric adapted from https://docs.rs/strsim/.
+pub fn string_distance(a: &str, b: &str) -> f64 {
+    let jaro_distance = jaro(a, b);
+
+    // Don't limit the length of the common prefix
+    let prefix_length = a
+        .chars()
+        .zip(b.chars())
+        .take_while(|&(ref a_elem, ref b_elem)| a_elem == b_elem)
+        .count();
+
+    let jaro_winkler_distance =
+        jaro_distance + (0.1 * prefix_length as f64 * (1.0 - jaro_distance));
+
+    if jaro_winkler_distance <= 1.0 {
+        jaro_winkler_distance
+    } else {
+        1.0
     }
 }

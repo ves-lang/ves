@@ -1,4 +1,9 @@
-use std::{borrow::Cow, cell::Cell, collections::HashSet, rc::Rc};
+use std::{
+    borrow::Cow,
+    cell::Cell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use ves_error::{ErrCtx, FileId, VesError, VesErrorKind};
 use ves_parser::{
@@ -7,8 +12,13 @@ use ves_parser::{
     Span,
 };
 
-use crate::resolver_definitions::{LoopKind, NameKind, ScopeKind, VarUsage};
+use crate::resolver_definitions::{
+    string_distance, LoopKind, NameKind, ScopeKind, StructInterface, VarUsage,
+};
 use crate::{env::Env, registry::ModuleRegistry};
+
+/// Two fields or methods will be determined to be similar if their normalized levenshtein score is >= this value.
+const SIMILARITY_THRESHOLD: f64 = 0.90;
 
 // TODO: probably need to add more tests for labels vs magic methods and improve errors
 // such as duplicate methods in case of `@add` and `add` (because they use the same
@@ -34,7 +44,7 @@ pub struct Resolver<'a> {
     /// The name of the function currently being resolved.
     function_name: Option<Cow<'a, str>>,
     /// The name of the struct currently being resolved.
-    struct_name: Option<Cow<'a, str>>,
+    r#struct: Option<StructInterface<'a>>,
 }
 
 impl<'a> Resolver<'a> {
@@ -42,7 +52,7 @@ impl<'a> Resolver<'a> {
     pub fn new() -> Self {
         Self {
             function_name: None,
-            struct_name: None,
+            r#struct: None,
             loop_kind: LoopKind::None,
             scope_kind: ScopeKind::Global,
             is_in_struct: false,
@@ -599,6 +609,65 @@ impl<'a> Resolver<'a> {
                     self.pop(ex);
                 }
 
+                let mut all_fields = HashMap::new();
+                let mut all_methods: HashMap<_, Span> = HashMap::new();
+                for field in fields
+                    .positional
+                    .iter()
+                    .map(|f| &f.0)
+                    .chain(fields.default.iter().map(|f| &f.0))
+                    .chain(fields.rest.iter())
+                {
+                    if all_fields.contains_key(&field.lexeme) {
+                        Self::error(
+                            format!("Attempted to re-declare the field `{}`", field.lexeme),
+                            field.span.clone(),
+                            ex,
+                        );
+                    } else {
+                        all_fields.insert(field.lexeme.clone(), field.span.clone());
+                    }
+                }
+
+                for method in methods.iter() {
+                    // This is faster for structs with < 7 methods, and as fast or slightly slower
+                    let name = if method.name.lexeme.starts_with('@') {
+                        method.name.lexeme.trim_start_matches('@').into()
+                    } else {
+                        method.name.lexeme.clone()
+                    };
+
+                    if let Some(f) = all_fields.get(&name) {
+                        Self::error_of_kind(
+                            VesErrorKind::ShadowedField(f.clone()),
+                            format!("This method will shadow the field `{}`", name),
+                            method.name.span.clone(),
+                            ex,
+                        );
+                    }
+
+                    if let Some(span) = all_methods.get(&name) {
+                        Self::error_of_kind(
+                            // Not actually a global_before_declaration error, just reusing it for formatting
+                            VesErrorKind::UsedGlobalBeforeDeclaration(span.clone()),
+                            format!(
+                                "Attempted to re-declare the method `{}`",
+                                method.name.lexeme
+                            ),
+                            method.name.span.clone(),
+                            ex,
+                        );
+                    } else {
+                        all_methods.insert(method.name.lexeme.clone(), method.name.span.clone());
+                    }
+                }
+
+                let prev_struct = self.r#struct.take();
+                self.r#struct = Some(StructInterface {
+                    fields: all_fields,
+                    methods: all_methods,
+                });
+
                 for (_, field, _) in fields.default.iter_mut() {
                     self.resolve_expr(field, true, registry, ex);
                 }
@@ -607,6 +676,7 @@ impl<'a> Resolver<'a> {
                     self.resolve_function(method, false, registry, ex);
                 }
 
+                self.r#struct = prev_struct;
                 self.pop(ex);
             }
             ExprKind::Fn(box ref mut r#fn) => {
@@ -636,6 +706,10 @@ impl<'a> Resolver<'a> {
             ExprKind::GetProp(prop) => {
                 self.resolve_expr(&mut prop.node, true, registry, ex);
                 if let ExprKind::Variable(name) = &prop.node.kind {
+                    if name.kind == TokenKind::Self_ && self.r#struct.is_some() {
+                        let ty = self.r#struct.as_ref().unwrap();
+                        self.check_property_access(ty, &prop.field, ex);
+                    }
                     if let Some(VarUsage {
                         kind: NameKind::Module,
                         source_module: Some(module),
@@ -660,6 +734,12 @@ impl<'a> Resolver<'a> {
             ExprKind::SetProp(prop) => {
                 self.resolve_expr(&mut prop.value, true, registry, ex);
                 self.resolve_expr(&mut prop.node, true, registry, ex);
+                if let ExprKind::Variable(name) = &prop.node.kind {
+                    if name.kind == TokenKind::Self_ && self.r#struct.is_some() {
+                        let ty = self.r#struct.as_ref().unwrap();
+                        self.check_property_access(ty, &prop.field, ex);
+                    }
+                }
             }
             ExprKind::GetItem(get) => {
                 self.resolve_expr(&mut get.node, true, registry, ex);
@@ -705,6 +785,38 @@ impl<'a> Resolver<'a> {
             }
             ExprKind::Grouping(ref mut expr) => self.resolve_expr(expr, true, registry, ex),
             ExprKind::Lit(_) => {}
+        }
+    }
+
+    fn check_property_access(&self, ty: &StructInterface<'a>, prop: &Token<'a>, ex: &mut ErrCtx) {
+        if !ty.has_property(&*prop.lexeme) {
+            let suggestion = ty
+                .fields
+                .iter()
+                .chain(ty.methods.iter())
+                .map(|(name, span)| {
+                    let name = if let Some(stripped) = name.strip_prefix("@") {
+                        stripped
+                    } else {
+                        &name[..]
+                    };
+                    let score = string_distance(&*prop.lexeme, name);
+                    (name, span, score)
+                })
+                .max_by_key(|(_, _, score)| (score * 100.0) as usize);
+            let suggestion = match suggestion {
+                Some((_, span, score)) if score > SIMILARITY_THRESHOLD => Some(span.clone()),
+                _ => None,
+            };
+            Self::error_of_kind(
+                VesErrorKind::UnknownProperty { suggestion },
+                format!(
+                    "Attempted to access an undeclared property or method: `{}`",
+                    prop.lexeme
+                ),
+                prop.span.clone(),
+                ex,
+            );
         }
     }
 
@@ -984,4 +1096,6 @@ pub mod tests {
     test_err!(t16_struct_doesnt_declare_as_sub_expr);
     test_err!(t17_fn_struct_dont_declare_local);
     test_err!(t18_unknown_magic);
+    test_err!(t19_property_redeclaration);
+    test_err!(t20_unknown_property);
 }

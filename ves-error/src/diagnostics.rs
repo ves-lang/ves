@@ -29,6 +29,8 @@ pub fn build_diagnostic<
         | FnBeforeMethod
         | UsedGlobalBeforeDeclaration(_)
         | AttemptedToShadowLocalVariable(_)
+        | ShadowedField(_)
+        | UnknownProperty { .. }
         | Import
         | BadMagicMethod => Diagnostic::error(),
         UnusedLocal => Diagnostic::warning(),
@@ -55,6 +57,10 @@ pub fn build_diagnostic<
         d = attempted_to_shadow_unused_diag(db, d, &e);
     } else if let UsedGlobalBeforeDeclaration(_) = e.kind {
         d = used_global_before_declaration_diag(db, d, &e);
+    } else if let ShadowedField(_) = e.kind {
+        d = shadowed_field_diag(db, d, &e);
+    } else if let UnknownProperty { .. } = e.kind {
+        d = unknown_property_diag(db, d, &e);
     }
 
     if let Some(code) = e.function.clone() {
@@ -163,4 +169,40 @@ fn used_global_before_declaration_diag<N: AsRef<str> + std::fmt::Display + Clone
         first,
         Label::secondary(e.file_id, span).with_message(format!("First declared on line {}", line)),
     ])
+}
+
+fn shadowed_field_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    db: &VesFileDatabase<N, S>,
+    mut diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    let first = diag.labels.pop().unwrap();
+    let span = match &e.kind {
+        crate::VesErrorKind::ShadowedField(span) => span.clone(),
+        _ => unreachable!(),
+    };
+    let line = db.line_index(e.file_id, span.start).unwrap() + 1;
+    diag.with_labels(vec![
+        first,
+        Label::secondary(e.file_id, span).with_message(format!("Field declared on line {}", line)),
+    ])
+}
+
+fn unknown_property_diag<N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>>(
+    db: &VesFileDatabase<N, S>,
+    diag: Diagnostic<FileId>,
+    e: &VesError,
+) -> Diagnostic<FileId> {
+    let suggestion = match &e.kind {
+        crate::VesErrorKind::UnknownProperty { suggestion } => suggestion.clone(),
+        _ => unreachable!(),
+    };
+    if let Some(span) = suggestion {
+        let name = &db.source(e.file_id).unwrap()[span.clone()];
+        diag.with_labels(vec![Label::secondary(e.file_id, span).with_message(
+            format!("A property with a similar name exists: `{}`", name),
+        )])
+    } else {
+        diag
+    }
 }

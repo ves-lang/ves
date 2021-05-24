@@ -1,0 +1,61 @@
+struct Test(apples, quinoa) {
+    method(self) {
+        self.applse = 5;
+    }
+
+    other(self) {
+        self.method_34();
+        self.quinoa = self.apples + 1;
+        self.addd(5);
+    }
+
+    third(self) {
+        self.this_method_doesnt_exist();
+        return self.this_property_doesnt_exist;
+    }
+
+    @add(self, _other) {
+        (self).method37();
+    }
+}
+
+%output
+
+error: Attempted to access an undeclared property or method: `applse`
+  ┌─ <source: #7bec15b63de37b3d>:3:14
+  │
+1 │ struct Test(apples, quinoa) {
+  │             ------ A property with a similar name exists: `apples`
+2 │     method(self) {
+3 │         self.applse = 5;
+  │              ^^^^^^
+
+error: Attempted to access an undeclared property or method: `method_34`
+  ┌─ <source: #7bec15b63de37b3d>:7:14
+  │
+2 │     method(self) {
+  │     ------ A property with a similar name exists: `method`
+  ·
+7 │         self.method_34();
+  │              ^^^^^^^^^
+
+error: Attempted to access an undeclared property or method: `addd`
+   ┌─ <source: #7bec15b63de37b3d>:9:14
+   │
+ 9 │         self.addd(5);
+   │              ^^^^
+   ·
+17 │     @add(self, _other) {
+   │     ---- A property with a similar name exists: `@add`
+
+error: Attempted to access an undeclared property or method: `this_method_doesnt_exist`
+   ┌─ <source: #7bec15b63de37b3d>:13:14
+   │
+13 │         self.this_method_doesnt_exist();
+   │              ^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Attempted to access an undeclared property or method: `this_property_doesnt_exist`
+   ┌─ <source: #7bec15b63de37b3d>:14:21
+   │
+14 │         return self.this_property_doesnt_exist;
+   │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^
