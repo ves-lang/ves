@@ -273,6 +273,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     self.call(args as usize)?;
                 }
                 Opcode::Defer => unimplemented!(),
+                Opcode::InvokeDefer => unimplemented!(),
                 Opcode::Interpolate(n) => self.interpolate(n)?,
                 Opcode::CreateArray(_) => unimplemented!(),
                 Opcode::CreateEmptyMap => unimplemented!(),

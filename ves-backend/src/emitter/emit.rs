@@ -27,6 +27,11 @@ struct Local<'a> {
     depth: usize,
 }
 
+struct Defer {
+    depth: usize,
+    span: Span,
+}
+
 /// An capture stores the index of a value which should be captured
 /// into a closure.
 ///
@@ -61,6 +66,7 @@ struct State<'a> {
     fn_kind: Option<FnKind>,
     builder: BytecodeBuilder,
     locals: Vec<Local<'a>>,
+    defers: Vec<Defer>,
     captures: Vec<CaptureInfo>,
     globals: Rc<HashMap<String, u32>>,
     scope_depth: usize,
@@ -89,6 +95,7 @@ impl<'a> State<'a> {
             control_labels: HashMap::new(),
             labels: Vec::new(),
             globals,
+            defers: Vec::new(),
             scope_depth: 0,
             label_id: 0,
             struct_name: None,
@@ -117,6 +124,7 @@ impl<'a> State<'a> {
         self.locals
             .drain(self.locals.len() - n_locals..self.locals.len());
         self.op_pop(n_locals as u32, scope_span);
+        self.emit_defer_calls_for_scope();
         n_locals as u32
     }
 
@@ -138,6 +146,23 @@ impl<'a> State<'a> {
             .drain(self.locals.len() - n_locals..self.locals.len());
         // but only pop n_locals - preserve
         self.op_pop((n_locals - preserve) as u32, scope_span);
+        self.emit_defer_calls_for_scope();
+    }
+
+    fn emit_defer_calls_for_scope(&mut self) {
+        let mut n_defers = 0;
+        for defer in self.defers.iter().rev() {
+            if defer.depth <= self.scope_depth {
+                break;
+            }
+            n_defers += 1;
+        }
+        for defer in self
+            .defers
+            .drain(self.defers.len() - n_defers..self.defers.len())
+        {
+            self.builder.op(Opcode::InvokeDefer, defer.span);
+        }
     }
 
     fn is_global_scope(&self) -> bool {
@@ -873,7 +898,11 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         for arg in call.args.iter() {
             self.emit_expr(arg, true)?;
         }
-        self.state.builder.op(Opcode::Defer, span);
+        self.state.builder.op(Opcode::Defer, span.clone());
+        self.state.defers.push(Defer {
+            depth: self.state.scope_depth,
+            span,
+        });
         Ok(())
     }
 

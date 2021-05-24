@@ -102,6 +102,7 @@ where
             | Opcode::MapInsert
             | Opcode::CreateEmptyMap
             | Opcode::Defer
+            | Opcode::InvokeDefer
             | Opcode::Spread
             | Opcode::CreateError
             | Opcode::Try

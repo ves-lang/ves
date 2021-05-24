@@ -1,0 +1,149 @@
+defer { print("test") }
+
+// Scope 1
+{
+    fn test() {}
+    defer test()
+    { 
+        fn test2() {}
+        defer test()
+        defer test2()
+    }
+}
+
+if (false) { 
+    defer { }
+}
+
+for _ in 0..10 {
+    defer { }
+    return
+}
+
+fn test3() {
+    defer {}
+    defer {}
+    defer {}
+
+    if (false) { 
+        defer {}
+        return
+    }
+
+    return
+}
+
+
+%output
+
+|0000| GetConst(<fn [defer@1:7]>)
+|0001| Defer
+|0002| GetConst(<fn test>)
+|0003| Copy
+|0004| Pop
+|0005| GetLocal(0)
+|0006| Defer
+|0007| GetConst(<fn test2>)
+|0008| Copy
+|0009| Pop
+|0010| GetLocal(0)
+|0011| Defer
+|0012| GetLocal(1)
+|0013| Defer
+|0014| Pop
+|0015| InvokeDefer
+|0016| InvokeDefer
+|0017| Pop
+|0018| InvokeDefer
+|0019| PushNone
+|0020| PushFalse
+|0021| JumpIfFalse(27)
+|0022| Pop
+|0023| GetConst(<fn [defer@15:11]>)
+|0024| Defer
+|0025| InvokeDefer
+|0026| Jump(28)
+|0027| Pop
+|0028| Pop
+|0029| PushInt32(0)
+|0030| PushInt32(10)
+|0031| PushInt32(1)
+|0032| GetLocal(0)
+|0033| GetLocal(1)
+|0034| Compare
+|0035| Negate
+|0036| IsCmpLessThan
+|0037| JumpIfFalse(52)
+|0038| Pop
+|0039| Jump(46)
+|0040| GetLocal(0)
+|0041| GetLocal(2)
+|0042| Add
+|0043| SetLocal(0)
+|0044| Pop
+|0045| Jump(32)
+|0046| GetConst(<fn [defer@19:11]>)
+|0047| Defer
+|0048| PushNone
+|0049| Return
+|0050| InvokeDefer
+|0051| Jump(40)
+|0052| Pop
+|0053| PopN(3)
+|0054| GetConst(<fn test3>)
+|0055| SetGlobal(0)
+|0056| Pop
+|0057| PushNone
+|0058| Return
+>>>>>> [defer@1:7]
+|0000| GetConst(test)
+|0001| Print
+|0002| PushNone
+|0003| Return
+>>>>>> test
+|0000| PushNone
+|0001| Return
+>>>>>> test2
+|0000| PushNone
+|0001| Return
+>>>>>> [defer@15:11]
+|0000| PushNone
+|0001| Return
+>>>>>> [defer@19:11]
+|0000| PushNone
+|0001| Return
+>>>>>> test3
+|0000| GetConst(<fn [defer@24:11]>)
+|0001| Defer
+|0002| GetConst(<fn [defer@25:11]>)
+|0003| Defer
+|0004| GetConst(<fn [defer@26:11]>)
+|0005| Defer
+|0006| PushNone
+|0007| PushFalse
+|0008| JumpIfFalse(16)
+|0009| Pop
+|0010| GetConst(<fn [defer@29:15]>)
+|0011| Defer
+|0012| PushNone
+|0013| Return
+|0014| InvokeDefer
+|0015| Jump(17)
+|0016| Pop
+|0017| Pop
+|0018| PushNone
+|0019| Return
+|0020| PushNone
+|0021| Return
+>>>>>> [defer@24:11]
+|0000| PushNone
+|0001| Return
+>>>>>> [defer@25:11]
+|0000| PushNone
+|0001| Return
+>>>>>> [defer@26:11]
+|0000| PushNone
+|0001| Return
+>>>>>> [defer@29:15]
+|0000| PushNone
+|0001| Return
