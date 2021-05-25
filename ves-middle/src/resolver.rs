@@ -658,7 +658,7 @@ impl<'a> Resolver<'a> {
                             ex,
                         );
                     } else {
-                        all_methods.insert(method.name.lexeme.clone(), method.name.span.clone());
+                        all_methods.insert(Cow::Owned(name.into_owned()), method.name.span.clone());
                     }
                 }
 

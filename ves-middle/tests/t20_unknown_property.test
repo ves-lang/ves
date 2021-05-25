@@ -7,6 +7,7 @@ struct Test(apples, quinoa) {
         self.method_34();
         self.quinoa = self.apples + 1;
         self.addd(5);
+        if !self.done() {}
     }
 
     third(self) {
@@ -17,12 +18,14 @@ struct Test(apples, quinoa) {
     @add(self, _other) {
         (self).method37();
     }
+
+    @done(self) {}
 }
 
 %output
 
 error: Attempted to access an undeclared property or method: `applse`
-  ┌─ <source: #7bec15b63de37b3d>:3:14
+  ┌─ <source: #b7749aa7d0b57246>:3:14
   │
 1 │ struct Test(apples, quinoa) {
   │             ------ A property with a similar name exists: `apples`
@@ -31,7 +34,7 @@ error: Attempted to access an undeclared property or method: `applse`
   │              ^^^^^^
 
 error: Attempted to access an undeclared property or method: `method_34`
-  ┌─ <source: #7bec15b63de37b3d>:7:14
+  ┌─ <source: #b7749aa7d0b57246>:7:14
   │
 2 │     method(self) {
   │     ------ A property with a similar name exists: `method`
@@ -40,22 +43,22 @@ error: Attempted to access an undeclared property or method: `method_34`
   │              ^^^^^^^^^
 
 error: Attempted to access an undeclared property or method: `addd`
-   ┌─ <source: #7bec15b63de37b3d>:9:14
+   ┌─ <source: #b7749aa7d0b57246>:9:14
    │
  9 │         self.addd(5);
    │              ^^^^
    ·
-17 │     @add(self, _other) {
+18 │     @add(self, _other) {
    │     ---- A property with a similar name exists: `@add`
 
 error: Attempted to access an undeclared property or method: `this_method_doesnt_exist`
-   ┌─ <source: #7bec15b63de37b3d>:13:14
+   ┌─ <source: #b7749aa7d0b57246>:14:14
    │
-13 │         self.this_method_doesnt_exist();
+14 │         self.this_method_doesnt_exist();
    │              ^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: Attempted to access an undeclared property or method: `this_property_doesnt_exist`
-   ┌─ <source: #7bec15b63de37b3d>:14:21
+   ┌─ <source: #b7749aa7d0b57246>:15:21
    │
-14 │         return self.this_property_doesnt_exist;
+15 │         return self.this_property_doesnt_exist;
    │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^

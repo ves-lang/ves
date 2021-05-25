@@ -163,10 +163,7 @@ fn jaro(a: &str, b: &str) -> f64 {
 
     let search_range = (std::cmp::max(a_len, b_len) / 2) - 1;
 
-    let mut b_consumed = Vec::with_capacity(b_len);
-    for _ in 0..b_len {
-        b_consumed.push(false);
-    }
+    let mut b_consumed = vec![false; b_len];
     let mut matches = 0.0;
 
     let mut transpositions = 0.0;
