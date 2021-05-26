@@ -1,10 +1,11 @@
-use std::{borrow::Cow, cell::RefCell, collections::HashSet, usize};
+use std::{cell::RefCell, collections::HashSet, usize};
 
 use ves_error::VesError;
 
 use crate::{
     emitter::{emit::CaptureInfo, opcode::Opcode},
     gc::{GcHandle, GcObj, Roots, SharedPtr, Trace, VesGc},
+    value::Stringify,
     values::{
         functions::{ArgCountDiff, Args, FnBound, FnClosure},
         handle::Handle,
@@ -124,6 +125,7 @@ pub trait VmInterface {
         callee: Value,
         args: Vec<Value>,
     ) -> Result<Value, VesError>;
+    fn stringify(&mut self, value: &Value) -> Result<String, VesError>;
     fn create_error(&mut self, msg: String) -> VesError;
 }
 
@@ -181,6 +183,51 @@ impl<T: VesGc, W: std::io::Write> VmInterface for Vm<T, W> {
 
     fn create_error(&mut self, msg: String) -> VesError {
         self.error(msg)
+    }
+
+    /// TODO: there needs to be a mechanism (such as remembered pointers) to protect native objects from blowing up the rust stack when calling their stringify impls.
+    /// Consider the following code:
+    /// ```ignore
+    /// let a = [];
+    /// let b = [5];
+    /// a.push(b);
+    /// b[0] = a;
+    ///
+    /// print a;  // This line will cause a stack overflow, but should instead print something like `[[[...]]]`.
+    /// ```
+    fn stringify(&mut self, value: &Value) -> Result<String, VesError> {
+        let result = match value {
+            Value::Ref(obj) => {
+                if pset_check_pointer(obj) {
+                    return Ok("...".to_string());
+                }
+                pset_add_pointer(*obj);
+
+                let method = self.symbols.str;
+                let inst = self.inst();
+
+                let result = match self.get_magic_method(NanBox::from(*value), &method, inst) {
+                    Ok(Some(obj)) => {
+                        let stringified = self.execute(Some(*value), Value::Ref(obj), vec![]);
+                        stringified.and_then(|s| match s.as_ref().and_then(|r| r.as_str()) {
+                            Some(s) => Ok(s.clone_inner().into_owned()),
+                            None => {
+                                Err(
+                                    self.error(format!("The @str method must return a string, but returned an object of type {:?}", s))
+                                )
+                            }
+                        })
+                    }
+                    _ => (&**obj).stringify(self),
+                };
+
+                pset_remove_pointer(&obj);
+
+                result?
+            }
+            _ => value.to_string(),
+        };
+        Ok(result)
     }
 }
 
@@ -739,7 +786,7 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
     fn interpolate(&mut self, n: u32) -> Result<(), VesError> {
         let mut interpolated = String::with_capacity(16); // 16 characters
         for v in self.pop_n(n as usize).collect::<Vec<_>>() {
-            interpolated.extend(Some(self.stringify(&v.unbox())?.into_owned()));
+            interpolated.extend(Some(self.stringify(&v.unbox())?));
         }
         // TODO: intern the string
         let obj = self.alloc(interpolated.into());
@@ -1048,42 +1095,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         // The constant index inside CreateClosure always refers to a closure descriptor.
         // If this assert is triggered, it means there is a bug in the emit impl for functions.
         unreachable!()
-    }
-
-    /// TODO: there needs to be a mechanism (such as remembered pointers) to protect native objects from blowing up the rust stack when calling their stringify impls.
-    /// Consider the following code:
-    /// ```ignore
-    /// let a = [];
-    /// let b = [5];
-    /// a.push(b);
-    /// b[0] = a;
-    ///
-    /// print a;  // This line will cause a stack overflow, but should instead print something like `[[[...]]]`.
-    /// ```
-    fn stringify(&mut self, value: &Value) -> Result<Cow<'static, str>, VesError> {
-        let result = match value {
-            Value::Ref(_) => {
-                let method = self.symbols.str;
-                let inst = self.inst();
-
-                match self.get_magic_method(NanBox::from(*value), &method, inst) {
-                    Ok(Some(obj)) => {
-                        let stringified = self.execute(Some(*value), Value::Ref(obj), vec![])?;
-                        match stringified.as_ref().and_then(|r| r.as_str()) {
-                            Some(s) => s.clone_inner(),
-                            None => {
-                                return Err(
-                                    self.error(format!("The @str method must return a string, but returned an object of type {:?}", stringified))
-                                );
-                            }
-                        }
-                    }
-                    _ => value.to_string().into(),
-                }
-            }
-            _ => value.to_string().into(),
-        };
-        Ok(result)
     }
 
     /// Returns `true` if the property with the given name exists on the given object, without using the IC.

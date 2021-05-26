@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcObj},
+    value::Stringify,
     NanBox, Object,
 };
 use ahash::RandomState;
@@ -234,6 +235,15 @@ impl Instance {
     }
 }
 
+impl Stringify for Struct {
+    fn stringify(
+        &self,
+        _vm: &mut dyn crate::vm::vm::VmInterface,
+    ) -> std::result::Result<String, ves_error::VesError> {
+        Ok(self.to_string())
+    }
+}
+
 impl Display for Struct {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "<struct {}>", self.name.str())
@@ -257,6 +267,38 @@ struct DebugAsDisplay<'a, T: Debug + Display>(&'a T);
 impl<'a, T: Debug + Display> Debug for DebugAsDisplay<'a, T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         Display::fmt(self.0, f)
+    }
+}
+
+impl Stringify for Instance {
+    fn stringify(
+        &self,
+        vm: &mut dyn crate::vm::vm::VmInterface,
+    ) -> std::result::Result<String, ves_error::VesError> {
+        // TODO: better formatting
+        let mut fields = Vec::with_capacity(self.fields.slots().len());
+
+        // NOTE this nested loop is needed to maintain order without allocations
+        for (i0, value) in self.fields().slots().iter().enumerate() {
+            for (key, i1) in self.ty().fields.iter() {
+                if *i1 as usize == i0 {
+                    fields.push(format!("{}: {}", key.str(), vm.stringify(&value.unbox())?));
+                }
+            }
+        }
+        for (i0, _) in self.methods().slots().iter().enumerate() {
+            for (key, (i1, method)) in self.ty().vtable.iter() {
+                if *i1 as usize == i0 {
+                    fields.push(format!(
+                        "{}: {}",
+                        key.str(),
+                        vm.stringify(&Value::Ref(*method))?
+                    ));
+                }
+            }
+        }
+
+        Ok(format!("{} {{ {} }}", self.ty().name(), fields.join(", ")))
     }
 }
 

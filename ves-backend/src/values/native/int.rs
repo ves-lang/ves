@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     gc::{proxy_allocator::ProxyAllocator, GcHandle, GcObj, SharedPtr, VesGc},
-    value::RuntimeError,
+    value::{RuntimeError, Stringify},
     vm::vm::VmInterface,
 };
 use ahash::RandomState;
@@ -121,6 +121,15 @@ impl BigInt {
 
     pub fn props_mut(&mut self) -> &mut CacheLayer<IntVTableLookup, Value, ProxyAllocator> {
         &mut self.slots
+    }
+}
+
+impl Stringify for BigInt {
+    fn stringify(
+        &self,
+        _vm: &mut dyn VmInterface,
+    ) -> std::result::Result<String, ves_error::VesError> {
+        Ok(self.to_string())
     }
 }
 

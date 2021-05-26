@@ -795,7 +795,7 @@ impl<'a> Resolver<'a> {
                 .iter()
                 .chain(ty.methods.iter())
                 .map(|(name, span)| {
-                    let name = if let Some(stripped) = name.strip_prefix("@") {
+                    let name = if let Some(stripped) = name.strip_prefix('@') {
                         stripped
                     } else {
                         &name[..]

@@ -8,7 +8,7 @@ use std::{
 use ahash::RandomState;
 use derive_trace::Trace;
 
-use crate::{gc::GcObj, values::handle::Handle, Object};
+use crate::{gc::GcObj, value::Stringify, values::handle::Handle, Object};
 
 #[derive(Debug, Clone, Copy, Trace)]
 pub struct StrView {
@@ -80,6 +80,15 @@ impl std::ops::Deref for ImmutableString {
 
     fn deref(&self) -> &Self::Target {
         &*self.s
+    }
+}
+
+impl Stringify for ImmutableString {
+    fn stringify(
+        &self,
+        _vm: &mut dyn crate::vm::vm::VmInterface,
+    ) -> std::result::Result<String, ves_error::VesError> {
+        Ok(self.to_string())
     }
 }
 

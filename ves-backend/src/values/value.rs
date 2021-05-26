@@ -3,7 +3,7 @@ use std::fmt::{self, Debug, Display, Formatter};
 
 use ves_error::{FileId, VesError};
 
-use crate::{gc::VesRef, Object};
+use crate::{gc::VesRef, vm::vm::VmInterface, Object};
 
 use super::{
     functions::ClosureDescriptor, native::BigInt, strings::ImmutableString,
@@ -26,6 +26,10 @@ impl Debug for RuntimeError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
     }
+}
+
+pub trait Stringify {
+    fn stringify(&self, vm: &mut dyn VmInterface) -> std::result::Result<String, VesError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]

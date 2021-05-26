@@ -7,13 +7,12 @@ use std::{
     marker::PhantomData,
 };
 
-use ves_error::FileId;
+use ves_error::{FileId, VesError};
 
 use crate::{
     emitter::{builder::Chunk, emit::CaptureInfo},
     gc::{GcObj, Trace, Tracer},
-    object::FnNative,
-    value::{FromVes, IntoVes, RuntimeError},
+    value::{FromVes, IntoVes, RuntimeError, Stringify},
     vm::vm::VmInterface,
     NanBox, Object, Value,
 };
@@ -22,6 +21,19 @@ use super::handle::Handle;
 use super::strings::StrView;
 
 use derive_trace::Trace;
+
+pub trait FnNative: Trace {
+    fn call<'a>(&mut self, vm: &'a mut dyn VmInterface, args: Args<'a>) -> Result<Value, VesError>;
+    fn arity(&self) -> Arity;
+    fn name(&self) -> &Cow<'static, str>;
+    fn is_magic(&self) -> bool;
+}
+
+impl Stringify for &dyn FnNative {
+    fn stringify(&self, _vm: &mut dyn VmInterface) -> std::result::Result<String, VesError> {
+        Ok(format!("<fn native {} at {:p}", self.name(), self))
+    }
+}
 
 #[derive(Debug, Trace)]
 pub struct FnBound {
@@ -161,6 +173,22 @@ impl Function {
 unsafe impl Trace for Function {
     fn trace(&mut self, tracer: &mut dyn Tracer) {
         self.name.trace(tracer);
+    }
+}
+
+impl Stringify for Function {
+    fn stringify(&self, _vm: &mut dyn VmInterface) -> std::result::Result<String, VesError> {
+        Ok(self.to_string())
+    }
+}
+impl Stringify for FnBound {
+    fn stringify(&self, _vm: &mut dyn VmInterface) -> std::result::Result<String, VesError> {
+        Ok(self.to_string())
+    }
+}
+impl Stringify for FnClosure {
+    fn stringify(&self, _vm: &mut dyn VmInterface) -> std::result::Result<String, VesError> {
+        Ok(self.to_string())
     }
 }
 
@@ -437,7 +465,7 @@ where
     fn trace(&mut self, _tracer: &mut dyn Tracer) {}
 }
 
-impl<A, C> crate::object::FnNative for CallableWrapper<C, A>
+impl<A, C> FnNative for CallableWrapper<C, A>
 where
     C: for<'v> Callable<'v, A>,
     A: for<'v> TryFrom<Args<'v>, Error = RuntimeError>,

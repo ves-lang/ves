@@ -4,33 +4,24 @@ use std::{
     fmt::{self, Display, Formatter},
 };
 
-use ves_error::VesError;
-
 use crate::{
-    gc::Trace,
+    value::Stringify,
     values::{
         strings::ImmutableString,
         structs::{Instance, Struct},
     },
     vm::vm::VmInterface,
-    Value,
 };
 
 use super::{
-    functions::{Args, Arity, ClosureDescriptor, FnBound, FnClosure, Function},
+    functions::{ClosureDescriptor, FnBound, FnClosure, FnNative, Function},
     native::BigInt,
     structs::StructDescriptor,
 };
 
 use derive_enum_methods::*;
 use derive_trace::Trace;
-
-pub trait FnNative: Trace {
-    fn call<'a>(&mut self, vm: &'a mut dyn VmInterface, args: Args<'a>) -> Result<Value, VesError>;
-    fn arity(&self) -> Arity;
-    fn name(&self) -> &Cow<'static, str>;
-    fn is_magic(&self) -> bool;
-}
+use ves_error::VesError;
 
 #[derive(Trace, is_enum_variant, as_enum_variant, unchecked_enum_variant)]
 pub enum Object {
@@ -167,6 +158,24 @@ impl<F: FnNative + 'static> From<F> for Object {
 impl From<Box<dyn FnNative>> for Object {
     fn from(v: Box<dyn FnNative>) -> Self {
         Self::FnNative(v)
+    }
+}
+
+impl Stringify for Object {
+    fn stringify(&self, vm: &mut dyn VmInterface) -> std::result::Result<String, VesError> {
+        match self {
+            Object::Str(v) => v.stringify(vm),
+            Object::Int(v) => v.stringify(vm),
+            Object::Instance(v) => v.stringify(vm),
+            Object::Struct(v) => v.stringify(vm),
+            Object::Closure(v) => v.stringify(vm),
+            Object::Fn(v) => v.stringify(vm),
+            Object::FnNative(v) => (&**v).stringify(vm),
+            Object::FnBound(v) => v.stringify(vm),
+            Object::StructDescriptor(_) | Object::ClosureDescriptor(_) => {
+                unreachable!("Descriptors never appear on the stack")
+            }
+        }
     }
 }
 
