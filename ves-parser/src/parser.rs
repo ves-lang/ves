@@ -1396,7 +1396,7 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
                 }
                 TokenKind::LeftBracket => {
                     let key = self.expr(true)?;
-                    self.consume(&TokenKind::RightBracket, "Expected ']'")?;
+                    self.consume(&TokenKind::RightBracket, "Expected a ']' after the key")?;
                     ast::Expr {
                         span: expr.span.start..self.previous.span.end,
                         kind: ast::ExprKind::GetItem(box ast::GetItem { node: expr, key }),
@@ -1628,11 +1628,17 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // array literal
         if self.match_(&TokenKind::LeftBracket) {
             let span_start = self.previous.span.start;
-            let mut exprs = vec![self.spread_expr()?];
-            while self.match_(&TokenKind::Comma) {
+            let mut exprs = vec![];
+            if !self.check(&TokenKind::RightBracket) {
                 exprs.push(self.spread_expr()?);
+                while self.match_(&TokenKind::Comma) {
+                    exprs.push(self.spread_expr()?);
+                }
             }
-            self.consume(&TokenKind::RightBracket, "Expected ']'")?;
+            self.consume(
+                &TokenKind::RightBracket,
+                "Expected a ']' after the array elements",
+            )?;
             let span_end = self.current.span.end;
             return Ok(ast::Expr {
                 kind: ast::ExprKind::Array(exprs),
@@ -1642,9 +1648,12 @@ impl<'a, 'b, N: AsRef<str> + std::fmt::Display + Clone, S: AsRef<str>> Parser<'a
         // map literals (JS-style object literals)
         if self.match_(&TokenKind::LeftBrace) {
             let span_start = self.previous.span.start;
-            let mut entries = vec![self.parse_map_entry()?];
-            while self.match_(&TokenKind::Comma) {
+            let mut entries = vec![];
+            if !self.check(&TokenKind::RightBrace) {
                 entries.push(self.parse_map_entry()?);
+                while self.match_(&TokenKind::Comma) {
+                    entries.push(self.parse_map_entry()?);
+                }
             }
             self.consume(&TokenKind::RightBrace, "Expected '}'")?;
             let span_end = self.previous.span.end;

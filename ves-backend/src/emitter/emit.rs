@@ -1609,7 +1609,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         };
         match &incdec.expr.kind {
             ExprKind::GetProp(ref get) => {
-                self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
+                self.emit_expr(&get.node, true)?;
                 self.emit_get_prop(&get.node, &get.field, get.is_optional, span.clone())?;
                 self.state.builder.op(add_or_sub_one, span.clone());
                 let offset = self.state.builder.constant(

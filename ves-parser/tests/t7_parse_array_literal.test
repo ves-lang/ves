@@ -1,9 +1,13 @@
+[];
 [0, "a", none, a];
 [...v];
 [...do { [1,2,3] }];
 
 %output
 
+StmtKind::ExprStmt
+  expr: ExprKind::Array
+    values=
 StmtKind::ExprStmt
   expr: ExprKind::Array
     values=

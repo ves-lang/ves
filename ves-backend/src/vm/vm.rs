@@ -806,7 +806,6 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
             let name = StrView::new(*name.as_ref().unwrap());
             let has = self
                 .has_field_with_ic_bypass(name, &**object.unbox().as_ref().unwrap())
-                .map(|_| true)
                 .unwrap_or(false);
             self.push(has);
             Ok(())
@@ -1162,7 +1161,11 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let obj = self.pop();
 
         if !obj.is_ptr() {
-            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+            return Err(self.error(format!(
+                "Cannot call @{} on {:?} since it's not an object",
+                name.unbox().as_ptr().unwrap(),
+                obj.unbox()
+            )));
         }
 
         let instance = obj;
@@ -1236,7 +1239,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
 
         let obj = self.pop();
         if !obj.is_ptr() {
-            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+            return Err(self.error(format!(
+                "Cannot get a property on {:?} since it's not an object",
+                obj.unbox()
+            )));
         }
         let mut instance = unsafe { obj.unbox_pointer() }.0;
         if let Object::Instance(instance) = &mut *instance {
@@ -1347,7 +1353,10 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let value = *self.peek();
         let obj = *self.peek_at(1);
         if !obj.is_ptr() {
-            return Err(self.error(format!("{:?} is not an object", obj.unbox())));
+            return Err(self.error(format!(
+                "Cannot set a property on {:?} since it's not an object",
+                obj.unbox()
+            )));
         }
         let mut obj = unsafe { obj.unbox_pointer() }.0;
         if let Object::Instance(instance) = &mut *obj {

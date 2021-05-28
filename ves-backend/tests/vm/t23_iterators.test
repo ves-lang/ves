@@ -1,0 +1,272 @@
+fn _into_iterator(it) {
+    return if "iter" in it { it.iter() } else { it }
+}
+
+fn _collect(it) {
+    let arr = []
+    for e in it { arr.push(e) }
+    return arr
+}
+
+fn _fold(it, mut acc, f) {
+    while !it.done() {
+        acc = f(acc, it.next())
+    }
+    return acc
+}
+
+fn _all(it, p) {
+    mut result = true
+
+    while !it.done() {
+        let value = it.next()
+        result = result && p(value)
+        if !result { break; }
+    }
+
+    return result
+}
+
+fn _any(it, p) {
+    mut result = false
+
+    while !it.done() {
+        let value = it.next()
+        result = result || p(value)
+        if result { break }
+    }
+
+    return result
+}
+
+fn _find(it, p) {
+    while !it.done() {
+        let value = it.next()
+        if p(value) {
+            return value
+        }
+    }
+    return none
+}
+
+fn _count(it) {
+    mut count = 0
+
+    while !it.done() {
+        ++count
+        it.next()
+    }
+
+    return count
+}
+
+
+struct enumerate(it, current = 0) {
+    init {
+        self.it = _into_iterator(self.it)
+    }
+
+    @done(self) => self.it.done()
+
+    @next(self) {
+	    return if !self.done() {
+            [self.current++, self.it.next()]
+        }
+    }
+
+    @str(self) {
+        return f"<enumerate instance: {self.current}>";
+    }
+}
+
+struct apply(it, f) { 
+    init {
+        self.it = _into_iterator(self.it)
+    }
+
+    @done(self) => self.it.done()
+
+    @next(self) {
+        return if !self.done() { self.f(self.it.next()) }
+    }
+}
+
+
+struct filter(it, p) {
+    init {
+        self.it = _into_iterator(self.it)
+    }
+
+    @done(self) => self.it.done()
+
+    @next(self) {
+        mut value
+
+        // Skip until we find a matching item
+        while !self.done() {
+            value = self.it.next()
+            if self.p(value) { break }
+        }
+
+        return value
+    }
+}
+
+
+struct take(it, n, current = 0) { 
+    init {
+        self.it = _into_iterator(self.it)
+    }
+
+    @done(self) => self.current >= self.n || self.it.done()
+
+    @next(self) {
+        return if !self.done() {
+            ++self.current;
+            self.it.next()
+        }
+    }
+}
+
+
+struct zip(left, right) {
+    init {
+        self.left = _into_iterator(self.left)
+	    self.right = _into_iterator(self.right)
+    }
+
+    @iter(self) => self
+    @done(self) => self.left.done() || self.right.done()
+
+    @next(self) {
+        return if !self.done() {
+            let left = self.left.next()
+            let right = self.right.next();
+            [left, right]
+        }
+    }
+}
+
+
+struct chain(it, other)  {
+    init {
+        self.it = _into_iterator(self.it)
+        self.other = _into_iterator(self.other)
+    }
+
+    @done(self) => self.it.done() && self.other.done()
+
+    @next(self) {
+        return if !self.done() {
+            if !self.it.done() {
+                self.it.next()
+            } else {
+                self.other.next()
+            }
+        }
+    }
+}
+
+struct iterator(it)  {
+    init {
+        self.it = _into_iterator(self.it)
+    }
+    
+    @iter(self) => self
+    @done(self) => self.it.done()
+    @next(self) => self.it.next()
+    @str(self) =>  f"<iterator: {self.it}>"
+
+    enumerate(self) => iterator(enumerate(self))
+
+    map(self, f) => iterator(apply(self, f))
+
+    zip(self, it) => iterator(zip(self, it))
+
+    chain(self, it) => iterator(chain(self, it))
+
+    filter(self, p) => iterator(filter(self, p))
+
+    take(self, n) => iterator(take(self, n))
+
+    find(self, p) => _find(self, p)
+
+    any(self, p) => _any(self, p)
+
+    all(self, p) => _all(self, p)
+
+    count(self) => _count(self)
+
+    collect(self) => _collect(self)
+
+    fold(self, acc, f) => _fold(self, acc, f)
+
+    for_each(self, f) => self.map(f).collect()
+
+    sum(self, initial_value=0) {
+        return _fold(self, initial_value, fn (acc, x) => acc + x)
+    }
+
+    mul(self) {
+        return _fold(self, 1, fn (acc, x) => acc * x);
+    }
+}
+
+struct repeat(x)  {
+    @iter(self) => self
+    @done(self) => false
+    @next(self) => self.x
+}
+
+
+struct range(current, end=none, step=1)  {
+    init {
+        if !self.end { 
+            self.end = self.current
+            self.current = 0
+        }
+    }
+
+    @iter(self) => self
+    @done(self) => self.current >= self.end
+
+    @next(self) {
+        return if !self.done() {
+            self.current += self.step
+            self.current - self.step
+        }
+    }
+
+
+    array(self) => _collect(self)
+}
+
+let I = iterator;
+
+mut sum = 0
+for i in range(11) {
+    sum += i
+}
+print(sum)
+
+sum = I(range(11)).sum()
+print(sum)
+
+let even_sum = I(range(11))
+    .filter(fn(x) => x % 2 == 0)
+    .map(fn(x) => x * 10)
+    .sum()
+
+print(even_sum)
+
+let chain_count = I(range(10)).chain(range(10, 20)).count()
+print(chain_count)
+
+
+let found_90 = I(range(10)).map(fn(x) => x * 10).find(fn(x) => x == 90)
+print(found_90)
+
+let missing_90 = I(range(10)).take(7).map(fn(x) => x * 10).find(fn(x) => x == 90)
+print(missing_90)
+
+%output
