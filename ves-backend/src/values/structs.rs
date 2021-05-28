@@ -76,6 +76,8 @@ impl Eq for ViewKey {}
 #[derive(Debug, Trace)]
 pub struct StructDescriptor {
     pub name: StrView,
+    /// The initializer method of the struct.
+    pub init: Option<u32>,
     pub fields: Vec<StrView, ProxyAllocator>,
     // The indices of the methods' constant slots.
     pub methods: Vec<(u32, u32), ProxyAllocator>,
@@ -87,6 +89,7 @@ pub struct StructDescriptor {
 pub struct Struct {
     name: StrView,
     pub arity: Arity,
+    init: Option<GcObj>,
     fields: VesHashMap<ViewKey, u8>,
     vtable: VesHashMap<ViewKey, (u8, GcObj)>,
 }
@@ -96,12 +99,14 @@ impl Struct {
     pub fn new(
         name: StrView,
         arity: Arity,
+        init: Option<GcObj>,
         fields: &Vec<StrView, ProxyAllocator>,
         vtable_size: usize,
     ) -> Self {
         Self {
             name,
             arity,
+            init,
             vtable: VesHashMap::with_capacity_in(vtable_size, fields.allocator().clone()),
             fields: fields
                 .iter()
@@ -120,6 +125,11 @@ impl Struct {
 
     pub fn name(&self) -> &str {
         self.name.str()
+    }
+
+    #[inline]
+    pub fn init(&self) -> Option<&GcObj> {
+        self.init.as_ref()
     }
 
     /// Adds the given method to the struct's vtalbe.

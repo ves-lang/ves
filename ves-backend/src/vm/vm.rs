@@ -997,16 +997,12 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
                     {
                         // call initializer, if present
                         let instance = unsafe { instance.as_instance_unchecked_mut() };
-                        if let Some(init) = instance
-                            .methods_mut()
-                            .get_slot_value_mut(&self.symbols.init)
-                        {
-                            let init = unsafe { init.method.as_ref_unchecked_mut() };
+                        if let Some(mut init) = instance.ty().init().copied() {
                             let stack_index = self.stack.len() - 1;
                             let return_address = self.ip;
-                            let call_frame = match &mut **init {
+                            let call_frame = match &mut *init {
                                 Object::Fn(_) => {
-                                    let r#fn = Handle::new(*init, Object::as_fn_mut_unwrapped);
+                                    let r#fn = Handle::new(init, Object::as_fn_mut_unwrapped);
                                     let captures = std::ptr::null_mut();
                                     CallFrame::new(r#fn, captures, stack_index, return_address)
                                 }
@@ -1046,6 +1042,9 @@ impl<T: VesGc, W: std::io::Write> Vm<T, W> {
         let mut ty = Struct::new(
             descriptor.name,
             descriptor.arity,
+            descriptor
+                .init
+                .map(|c| self.const_at(c as usize).as_ptr().unwrap()),
             &descriptor.fields,
             descriptor.methods.len(),
         );

@@ -26,7 +26,7 @@ print(a3)
 
 %output
 
-First { a: A { a: 5, init: <fn A.init> }, b: B { b1: 4, b2: 5, init: <fn B.init> }, c: <C: custom @str = false>, method: <fn First.method> }
-A { a: A { a: 5, init: <fn A.init> }, init: <fn A.init> }
-A { a: A { a: ..., init: <fn A.init> }, init: <fn A.init> }
-A { a: <C: custom @str = A { a: A { a: ..., init: <fn A.init> }, init: <fn A.init> }>, init: <fn A.init> }
+First { a: A { a: 5 }, b: B { b1: 4, b2: 5 }, c: <C: custom @str = false>, method: <fn First.method> }
+A { a: A { a: 5 } }
+A { a: A { a: ... } }
+A { a: <C: custom @str = A { a: A { a: ... } }> }

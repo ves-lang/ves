@@ -52,7 +52,7 @@ impl<T: VesGc> VmBytes<T> {
         fields.push(StrView::new(gc.alloc_permanent("a")));
         fields.push(StrView::new(gc.alloc_permanent("b")));
         let name = StrView::new(gc.alloc_permanent("Fib"));
-        let ty = Struct::new(name, Arity::none(), &fields, 0);
+        let ty = Struct::new(name, Arity::none(), None, &fields, 0);
         let ty = gc.alloc_permanent(ty);
 
         Self {

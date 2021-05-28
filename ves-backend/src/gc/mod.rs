@@ -404,6 +404,12 @@ pub(crate) mod tests {
             stack.pop();
         }
 
-        Struct::new(crate::values::StrView::new(name), Arity::none(), &fields, 0)
+        Struct::new(
+            crate::values::StrView::new(name),
+            Arity::none(),
+            None,
+            &fields,
+            0,
+        )
     }
 }

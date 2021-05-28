@@ -1065,6 +1065,7 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         let descriptor = StructDescriptor {
             name: StrView::new(struct_name),
             fields,
+            init: None,
             methods: Vec::with_capacity_in(info.methods.len(), self.ctx.gc.proxy()),
             arity: Arity {
                 positional: info.fields.positional.len() as u32,
@@ -1094,12 +1095,8 @@ impl<'a, 'b, T: VesGc> Emitter<'a, 'b, T> {
         }
         // initializer
         if let Some(ref initializer) = info.initializer {
-            let name_index = self
-                .state
-                .builder
-                .constant(self.ctx.alloc_or_intern("init").into_ves(), span.clone())?;
             let fn_index = self.emit_fn_expr(&initializer.body, span.clone(), true, false)?;
-            descriptor.methods.push((name_index, fn_index));
+            descriptor.init = Some(fn_index);
         }
         if is_sub_expr {
             // close the temporary function local scope, but don't pop the value
