@@ -270,3 +270,10 @@ let missing_90 = I(range(10)).take(7).map(fn(x) => x * 10).find(fn(x) => x == 90
 print(missing_90)
 
 %output
+
+55
+55
+300
+20
+90
+none
